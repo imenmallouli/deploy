@@ -1,4 +1,4 @@
-# Conception
+﻿# Conception
 
 **Auteur** :imen mallouli 
 **Date** : 4 février 2026  
@@ -279,7 +279,295 @@ Le projet reste **évolutif** :
 - Les choix techniques (ex : TimescaleDB vs InfluxDB) peuvent être réévalués après prototypage
 - Les retours de l’encadrant sont intégrés à chaque itération
 
-### 6. Taille de l’Équipe et Type de Projet
+
+### 6. Break Down Diagram  Planification des Tâches
+
+#### 6.1 Work Breakdown Structure (WBS)
+
+```
+MALLOULIAUTO - Plateforme IoT Diagnostic Automobile
+
+ 1. INFRASTRUCTURE & CLOUD
+     1.1 Configuration Azure
+         1.1.1 Création compte Azure + Resource Group
+         1.1.2 Configuration VNet et sécurité réseau
+         1.1.3 Mise en place Load Balancer
+    
+     1.2 Conteneurisation Docker
+         1.2.1 Création Dockerfiles services
+         1.2.2 Docker Compose local dev
+         1.2.3 Container Registry Azure
+    
+     1.3 Orchestration Kubernetes
+         1.3.1 Cluster AKS setup
+         1.3.2 Manifests deployments (pods, services)
+         1.3.3 ConfigMaps et Secrets
+         1.3.4 Auto-scaling HPA configuration
+    
+     1.4 Infrastructure as Code
+          1.4.1 Scripts Terraform Azure
+          1.4.2 Variables et modules terraform
+          1.4.3 State backend Azure Storage
+
+ 2. BACKEND & API
+     2.1 Setup FastAPI
+         2.1.1 Structure projet Python
+         2.1.2 Configuration environnement variables
+         2.1.3 Logging et error handlers
+    
+     2.2 Ingestion Service
+         2.2.1 MQTT Broker (Mosquitto) setup
+         2.2.2 MQTT listener et subscribers
+         2.2.3 Validation schemas Pydantic
+         2.2.4 Deduplication Redis
+         2.2.5 Smart Router (SQL/NoSQL/TimeSeries)
+    
+     2.3 API Service
+         2.3.1 Endpoints REST /api/v1/*
+         2.3.2 JWT Authentication
+         2.3.3 RBAC (Role-Based Access Control)
+         2.3.4 Documentation OpenAPI/Swagger
+         2.3.5 Rate limiting et throttling
+    
+     2.4 Analytics Service
+         2.4.1 DTC code decoder
+         2.4.2 Anomaly detection temps réel
+         2.4.3 Alert generation
+         2.4.4 Recommendation engine
+         2.4.5 Recurring patterns detection
+    
+     2.5 Notification Service
+         2.5.1 Email integration (SMTP)
+         2.5.2 SMS API integration
+         2.5.3 WebSocket push notifications
+    
+     2.6 WebSocket Service
+          2.6.1 WebSocket server setup
+          2.6.2 Redis Pub/Sub integration
+          2.6.3 Subscription management
+
+ 3. STOCKAGE HYBRIDE
+     3.1 PostgreSQL
+         3.1.1 Installation et configuration
+         3.1.2 Schéma base de données
+         3.1.3 Migrations Alembic
+         3.1.4 Indexes et optimisation
+         3.1.5 Encryption pgcrypto
+    
+     3.2 MongoDB
+         3.2.1 MongoDB Atlas setup
+         3.2.2 Collections design (DTC, payloads)
+         3.2.3 Indexation stratégie
+         3.2.4 Field-level encryption
+    
+     3.3 TimescaleDB/InfluxDB
+         3.3.1 Choix final TimescaleDB vs InfluxDB
+         3.3.2 Hypertables configuration
+         3.3.3 Partitionnement temporel
+         3.3.4 Policies rétention (hot/warm/cold)
+    
+     3.4 Redis
+         3.4.1 Installation et sécurisation
+         3.4.2 Cache strategy
+         3.4.3 Pub/Sub channels
+    
+     3.5 Backup & Recovery
+          3.5.1 Scripts backup automatisés
+          3.5.2 Snapshots planifiés
+          3.5.3 Tests de restore
+
+ 4. DASHBOARD WEB (React.js)
+     4.1 Setup Projet Frontend
+         4.1.1 Create React App / Vite
+         4.1.2 Configuration TypeScript
+         4.1.3 Tailwind CSS setup
+         4.1.4 Routing React Router
+    
+     4.2 Authentification UI
+         4.2.1 Login page
+         4.2.2 JWT token management
+         4.2.3 Protected routes
+    
+     4.3 Dashboard Principal
+         4.3.1 Layout responsive
+         4.3.2 KPIs cards (véhicules, alertes, coûts)
+         4.3.3 WebSocket connection
+         4.3.4 Real-time updates
+    
+     4.4 Module Véhicules
+         4.4.1 Liste véhicules (table filtrable)
+         4.4.2 CRUD véhicules
+         4.4.3 Détails véhicule
+         4.4.4 Association dongles
+    
+     4.5 Module Diagnostics DTC
+         4.5.1 Liste codes DTC actifs
+         4.5.2 Historique DTC par véhicule
+         4.5.3 Détails code défaut
+         4.5.4 Recommandations actions
+    
+     4.6 Visualisations
+         4.6.1 Carte GPS Leaflet
+         4.6.2 Graphiques Chart.js
+         4.6.3 Courbes télémétrie
+         4.6.4 Heatmaps et analytics
+    
+     4.7 Système d'Alertes
+         4.7.1 Notification bannière
+         4.7.2 Historique alertes
+         4.7.3 Configuration seuils
+         4.7.4 Actions rapides
+    
+     4.8 Module Admin
+          4.8.1 Gestion utilisateurs
+          4.8.2 Rôles et permissions
+          4.8.3 Audit logs viewer
+
+ 5. DEVOPS & MONITORING
+     5.1 CI/CD
+         5.1.1 GitHub Actions workflows
+         5.1.2 Tests automatisés
+         5.1.3 Build et push images
+         5.1.4 Déploiement auto staging/prod
+    
+     5.2 Monitoring
+         5.2.1 Prometheus installation
+         5.2.2 Exporters configuration
+         5.2.3 Grafana dashboards
+         5.2.4 Alertes automatiques
+    
+     5.3 Logging
+         5.3.1 ELK Stack setup (ou Loki)
+         5.3.2 Log aggregation
+         5.3.3 Kibana dashboards
+    
+     5.4 Sécurité
+          5.4.1 TLS certificates
+          5.4.2 Secrets management
+          5.4.3 Security scanning
+
+ 6. TESTS & DOCUMENTATION
+      6.1 Tests Backend
+          6.1.1 Tests unitaires pytest
+          6.1.2 Tests intégration
+          6.1.3 Tests performance locust
+          6.1.4 Tests sécurité OWASP
+     
+      6.2 Tests Frontend
+          6.2.1 Tests unitaires Jest
+          6.2.2 Tests composants React Testing Library
+          6.2.3 Tests E2E Cypress
+     
+      6.3 Documentation
+           6.3.1 README complet
+           6.3.2 Documentation API
+           6.3.3 Guide déploiement
+           6.3.4 Architecture diagrams
+           6.3.5 User documentation
+```
+
+#### 6.2 Priorisation MoSCoW
+
+| Priorité | Catégorie | Composants |
+|----------|-----------|------------|
+| **MUST** (MVP Phase 1) | Infrastructure de base | Azure Setup, Docker, PostgreSQL, MongoDB, FastAPI API basique |
+| **MUST** (MVP Phase 1) | Ingestion données | MQTT Listener, Validation, Storage Router |
+| **MUST** (MVP Phase 1) | Dashboard minimal | Login, Liste véhicules, Visualisation DTC |
+| **SHOULD** (Phase 2) | Analytics avancées | Anomaly detection, Recommendations, Real-time alerts |
+| **SHOULD** (Phase 2) | Features dashboard | Graphiques Chart.js, Carte GPS, WebSocket updates |
+| **COULD** (Phase 3) | Optimisations | Kubernetes HPA, TimescaleDB, Advanced caching |
+| **COULD** (Phase 3) | Features bonus | Predictive maintenance, ML models, Mobile app |
+| **WON'T** (Hors scope) | Fonctionnalités futurs | Blockchain audit, Multi-cloud, IA avancée |
+
+#### 6.3 Timeline Estimée par Sprint (2 semaines/sprint)
+
+```
+Sprint 1 (S1-S2) - Infrastructure & Setup
+ Setup Azure environment
+ Docker containers configuration
+ PostgreSQL + MongoDB installation
+ FastAPI project structure
+
+Sprint 2 (S3-S4) - Ingestion & Storage
+ MQTT Broker setup
+ Ingestion Service development
+ Data validation et routing
+ Database schemas et migrations
+
+Sprint 3 (S5-S6) - API & Authentication
+ REST API endpoints
+ JWT authentication
+ RBAC implementation
+ OpenAPI documentation
+
+Sprint 4 (S7-S8) - Analytics & DTC
+ DTC decoder implementation
+ Analytics Service
+ Alert generation logic
+ Notification system
+
+Sprint 5 (S9-S10) - Dashboard Frontend
+ React setup + authentication UI
+ Dashboard layout
+ Vehicle management module
+ DTC diagnostics display
+
+Sprint 6 (S11-S12) - Visualizations & Real-time
+ Chart.js integration
+ Leaflet maps
+ WebSocket implementation
+ Real-time updates
+
+Sprint 7 (S13-S14) - DevOps & Monitoring
+ CI/CD pipelines
+ Prometheus + Grafana
+ ELK Stack logging
+ Kubernetes deployment
+
+Sprint 8 (S15-S16) - Tests & Documentation
+ Unit tests (backend + frontend)
+ Integration tests
+ Performance testing
+ Complete documentation
+```
+
+#### 6.4 Diagramme de Dépendances entre Tâches
+
+```mermaid
+graph TD
+    A[Infrastructure Azure] --> B[Docker Setup]
+    B --> C[Databases Setup]
+    C --> D[Backend FastAPI]
+    D --> E[Ingestion Service]
+    D --> F[API Service]
+    E --> G[Analytics Service]
+    F --> H[Dashboard Frontend]
+    G --> I[Notification Service]
+    F --> J[WebSocket Service]
+    H --> K[Visualizations]
+    J --> K
+    C --> L[Backup Systems]
+    D --> M[CI/CD Pipeline]
+    M --> N[Monitoring]
+    K --> O[Tests E2E]
+    N --> P[Production Deployment]
+```
+
+#### 6.5 Gantt Chart Simplifié
+
+| Tâches Principales | Semaine 1-2 | Semaine 3-4 | Semaine 5-6 | Semaine 7-8 | Semaine 9-10 | Semaine 11-12 | Semaine 13-14 | Semaine 15-16 |
+|-------------------|-------------|-------------|-------------|-------------|--------------|---------------|---------------|---------------|
+| Infrastructure & Cloud |  |  |  |  |  |  |  |  |
+| Ingestion & Storage |  |  |  |  |  |  |  |  |
+| API & Authentication |  |  |  |  |  |  |  |  |
+| Analytics & DTC |  |  |  |  |  |  |  |  |
+| Dashboard Frontend |  |  |  |  |  |  |  |  |
+| Visualizations & Real-time |  |  |  |  |  |  |  |  |
+| DevOps & Monitoring |  |  |  |  |  |  |  |  |
+| Tests & Documentation |  |  |  |  |  |  |  |  |
+
+
+### 7. Taille de l’Équipe et Type de Projet
 
 - **Taille équipe** : 1 seule personne (travail individuel)
 - **Type de projet** : projet académique PFE à forte complexité technique
@@ -1231,6 +1519,7 @@ DÉFAILLANT --> RETIRÉ : Dongle irréparable\nRetiré du service
 
 @enduml
 ```
+
 
 
 
