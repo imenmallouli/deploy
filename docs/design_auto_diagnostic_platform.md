@@ -25,7 +25,7 @@ Mon projet couvre quatre composantes techniques majeures :
 
 3. **Mise en place du système de stockage hybride** : Configuration et optimisation de PostgreSQL pour les données structurées (véhicules, utilisateurs, flottes), MongoDB pour les documents (codes DTC, payloads bruts), et TimescaleDB ou InfluxDB pour les séries temporelles (historiques de télémétrie), avec stratégies de partitionnement et rétention des données.
 
-4. **Développement du dashboard web administrateur** : Interface de gestion de flotte en React.js avec visualisations en temps réel ( graphiques de métriques avec Chart.js, tableaux de bord personnalisables), permettant aux gestionnaires de surveiller leur flotte, consulter les alertes, et planifier la maintenance.
+4. **Développement de l'application mobile administrateur** : Interface de gestion de flotte en React Native avec visualisations en temps réel (graphiques de métriques avec Victory Native, tableaux de bord personnalisables), permettant aux gestionnaires de surveiller leur flotte, consulter les alertes, et planifier la maintenance.
 
 L'objectif principal est de garantir une infrastructure **performante, sécurisée et évolutive**, capable de gérer la croissance de la flotte de 100 véhicules en phase initiale à plus de 10 000 véhicules à terme, tout en maintenant une latence d'ingestion inférieure à 5 secondes et une disponibilité de 99.5%.
 
@@ -77,10 +77,10 @@ L'objectif principal est de garantir une infrastructure **performante, sécuris�
 
 | Objectif | Critère de Succès |
 |----------|-------------------|
-| Interface intuitive | Dashboard responsive React + Tailwind CSS |
-| Graphiques interactifs | Chart.js ou Recharts pour métriques |
-| Performance web | Lighthouse score > 90 (performance) |
-| Compatibilité | Support Chrome, Firefox, Safari, Edge |
+| Interface intuitive | Appli mobile responsive React Native + NativeWind |
+| Graphiques interactifs | Victory Native ou react-native-svg pour métriques |
+| Performance mobile | Frame rate 60fps, bundle size < 50MB |
+| Compatibilité | Support iOS 14+, Android 8+ |
 
 #### 5.1 Fonctionnalités Détaillées du Dashboard Web
 
@@ -328,6 +328,67 @@ MALLOULIAUTO - Plateforme IoT Diagnostic Automobile
          2.3.3 RBAC (Role-Based Access Control)
          2.3.4 Documentation OpenAPI/Swagger
          2.3.5 Rate limiting et throttling
+         
+         2.3.6 Détail des Endpoints REST API
+         
+         **Gestion des Véhicules** (/api/v1/vehicles)
+         - GET    /api/v1/vehicles              → Liste tous les véhicules
+         - POST   /api/v1/vehicles              → Créer nouveau véhicule
+         - GET    /api/v1/vehicles/{id}         → Détails d'un véhicule
+         - PUT    /api/v1/vehicles/{id}         → Modifier véhicule
+         - DELETE /api/v1/vehicles/{id}         → Supprimer véhicule
+         - GET    /api/v1/vehicles/{id}/status  → État temps réel (GPS, km, DTC actifs)
+         
+         **Gestion des Codes DTC** (/api/v1/dtc)
+         - GET    /api/v1/dtc                   → Liste tous les DTC actifs
+         - GET    /api/v1/dtc/{vehicle_id}      → DTC d'un véhicule spécifique
+         - GET    /api/v1/dtc/{id}/history      → Historique d'un code DTC
+         - POST   /api/v1/dtc/clear             → Effacer codes DTC résolus
+         
+         **Alertes** (/api/v1/alerts)
+         - GET    /api/v1/alerts                → Liste alertes actives
+         - POST   /api/v1/alerts/ack            → Marquer alerte comme vue
+         - GET    /api/v1/alerts/{vehicle_id}   → Alertes d'un véhicule
+         
+         **Télémétrie** (/api/v1/telemetry)
+         - GET    /api/v1/telemetry/{vehicle_id}?start=...&end=...  → Données historiques
+         - GET    /api/v1/telemetry/{vehicle_id}/latest             → Dernières valeurs
+         
+         **Utilisateurs & Authentication** (/api/v1/users, /api/v1/auth)
+         - POST   /api/v1/auth/register         → Créer compte
+         - POST   /api/v1/auth/login            → Se connecter (retourne JWT)
+         - POST   /api/v1/auth/refresh          → Rafraîchir token JWT
+         - POST   /api/v1/auth/logout           → Déconnexion
+         - GET    /api/v1/users/me              → Info profil utilisateur
+         - PUT    /api/v1/users/me              → Modifier profil
+         - GET    /api/v1/users                 → Liste utilisateurs (Admin only)
+         - PUT    /api/v1/users/{id}/role       → Changer rôle (Admin only)
+         
+         **Flottes** (/api/v1/fleets)
+         - GET    /api/v1/fleets                → Liste flottes
+         - POST   /api/v1/fleets                → Créer flotte
+         - GET    /api/v1/fleets/{id}           → Détails flotte
+         - PUT    /api/v1/fleets/{id}           → Modifier flotte
+         - DELETE /api/v1/fleets/{id}           → Supprimer flotte
+         - GET    /api/v1/fleets/{id}/vehicles  → Véhicules d'une flotte
+         - POST   /api/v1/fleets/{id}/vehicles  → Ajouter véhicule à flotte
+         
+         **JWT Authentication Flow**
+         1. User POST /api/v1/auth/login → Reçoit access_token + refresh_token
+         2. App stocke tokens (AsyncStorage React Native)
+         3. Chaque requête envoie header: Authorization: Bearer {access_token}
+         4. Backend vérifie token + expiration (15min access, 7 jours refresh)
+         5. Si expiré → POST /api/v1/auth/refresh avec refresh_token
+         
+         **RBAC Permissions Matrix**
+         | Endpoint | Admin | Manager | Driver |
+         |----------|-------|---------|--------|
+         | GET /vehicles | ✅ Tous | ✅ Sa flotte | ✅ Son véhicule |
+         | POST /vehicles | ✅ | ✅ | ❌ |
+         | DELETE /vehicles | ✅ | ❌ | ❌ |
+         | GET /alerts | ✅ Tous | ✅ Sa flotte | ✅ Son véhicule |
+         | PUT /users/{id}/role | ✅ | ❌ | ❌ |
+         | GET /fleets | ✅ Tous | ✅ Ses flottes | ❌ |
     
      2.4 Analytics Service
          2.4.1 DTC code decoder
@@ -376,12 +437,12 @@ MALLOULIAUTO - Plateforme IoT Diagnostic Automobile
           3.5.2 Snapshots planifiés
           3.5.3 Tests de restore
 
- 4. DASHBOARD WEB (React.js)
+ 4. MOBILE APP (React Native)
      4.1 Setup Projet Frontend
-         4.1.1 Create React App / Vite
+         4.1.1 Expo / React Native CLI
          4.1.2 Configuration TypeScript
-         4.1.3 Tailwind CSS setup
-         4.1.4 Routing React Router
+         4.1.3 NativeWind / StyleSheet setup
+         4.1.4 Navigation React Navigation
     
      4.2 Authentification UI
          4.2.1 Login page
@@ -455,8 +516,8 @@ MALLOULIAUTO - Plateforme IoT Diagnostic Automobile
      
       6.2 Tests Frontend
           6.2.1 Tests unitaires Jest
-          6.2.2 Tests composants React Testing Library
-          6.2.3 Tests E2E Cypress
+          6.2.2 Tests composants React Native Testing Library
+          6.2.3 Tests E2E Detox
      
       6.3 Documentation
            6.3.1 README complet
@@ -495,10 +556,15 @@ Sprint 2 (S3-S4) - Ingestion & Storage
  Database schemas et migrations
 
 Sprint 3 (S5-S6) - API & Authentication
- REST API endpoints
- JWT authentication
- RBAC implementation
- OpenAPI documentation
+ REST API endpoints (30+ routes)
+   - Véhicules CRUD (GET/POST/PUT/DELETE /api/v1/vehicles)
+   - DTC & Alertes (GET /api/v1/dtc, /api/v1/alerts)
+   - Télémétrie (GET /api/v1/telemetry/{vehicle_id})
+   - Flottes (CRUD /api/v1/fleets)
+   - Utilisateurs (/api/v1/users, /api/v1/auth)
+ JWT authentication (access + refresh tokens, 15min/7j)
+ RBAC implementation (Admin/Manager/Driver permissions)
+ OpenAPI documentation (Swagger auto-généré)
 
 Sprint 4 (S7-S8) - Analytics & DTC
  DTC decoder implementation
@@ -506,8 +572,8 @@ Sprint 4 (S7-S8) - Analytics & DTC
  Alert generation logic
  Notification system
 
-Sprint 5 (S9-S10) - Dashboard Frontend
- React setup + authentication UI
+Sprint 5 (S9-S10) - Mobile App Frontend
+ React Native setup + authentication UI
  Dashboard layout
  Vehicle management module
  DTC diagnostics display
@@ -553,18 +619,165 @@ graph TD
     N --> P[Production Deployment]
 ```
 
-#### 6.5 Gantt Chart Simplifié
+#### 6.5 Diagramme de Gantt - Timeline du Projet
 
-| Tâches Principales | Semaine 1-2 | Semaine 3-4 | Semaine 5-6 | Semaine 7-8 | Semaine 9-10 | Semaine 11-12 | Semaine 13-14 | Semaine 15-16 |
-|-------------------|-------------|-------------|-------------|-------------|--------------|---------------|---------------|---------------|
-| Infrastructure & Cloud |  |  |  |  |  |  |  |  |
-| Ingestion & Storage |  |  |  |  |  |  |  |  |
-| API & Authentication |  |  |  |  |  |  |  |  |
-| Analytics & DTC |  |  |  |  |  |  |  |  |
-| Dashboard Frontend |  |  |  |  |  |  |  |  |
-| Visualizations & Real-time |  |  |  |  |  |  |  |  |
-| DevOps & Monitoring |  |  |  |  |  |  |  |  |
-| Tests & Documentation |  |  |  |  |  |  |  |  |
+```mermaid
+gantt
+    title Timeline Projet MALLOULIAUTO (16 semaines)
+    dateFormat YYYY-MM-DD
+    axisFormat %W
+    
+    section Sprint 1-2 (Infra)
+    Setup Azure & Cloud         :a1, 2026-02-01, 14d
+    Docker Configuration        :a2, after a1, 7d
+    PostgreSQL + MongoDB        :a3, after a1, 7d
+    FastAPI Structure           :a4, after a2, 7d
+    
+    section Sprint 3-4 (Ingestion)
+    MQTT Broker Setup           :b1, after a4, 7d
+    Ingestion Service           :b2, after b1, 10d
+    Data Validation & Routing   :b3, after b2, 7d
+    Database Schemas            :b4, after b1, 10d
+    
+    section Sprint 5-6 (API)
+    REST API Endpoints          :c1, after b3, 10d
+    JWT Authentication          :c2, after c1, 7d
+    RBAC Implementation         :c3, after c2, 7d
+    OpenAPI Documentation       :c4, after c1, 7d
+    
+    section Sprint 7-8 (Analytics)
+    DTC Decoder                 :d1, after c3, 10d
+    Analytics Service           :d2, after d1, 7d
+    Alert Generation            :d3, after d2, 7d
+    Notification System         :d4, after d3, 7d
+    
+    section Sprint 9-10 (Mobile)
+    React Native Setup          :e1, after d3, 7d
+    Authentication UI           :e2, after e1, 7d
+    Dashboard Layout            :e3, after e2, 10d
+    DTC Diagnostics Display     :e4, after e3, 7d
+    
+    section Sprint 11-12 (Visuals)
+    Victory Charts Integration  :f1, after e4, 7d
+    Maps Integration            :f2, after f1, 7d
+    WebSocket Real-time         :f3, after f2, 10d
+    Real-time Updates           :f4, after f3, 7d
+    
+    section Sprint 13-14 (DevOps)
+    CI/CD Pipelines             :g1, after f3, 10d
+    Prometheus + Grafana        :g2, after g1, 7d
+    ELK Stack Logging           :g3, after g1, 7d
+    Kubernetes Deployment       :g4, after g2, 7d
+    
+    section Sprint 15-16 (Tests)
+    Unit Tests Backend          :h1, after g3, 7d
+    Unit Tests Frontend         :h2, after g3, 7d
+    Integration Tests           :h3, after h1, 10d
+    Performance Testing         :h4, after h2, 7d
+    Documentation Complète      :h5, after h3, 7d
+```
+
+**Notes importantes :**
+- 🔴 **Chemins critiques** : Infrastructure → Ingestion → API → Analytics → Mobile App
+- ⚠️ **Tâches bloquantes** : Azure Setup, MQTT Broker, JWT Auth, React Native Setup
+- 📊 **Parallélisation possible** : Tests backend/frontend, CI/CD + Monitoring
+- 🎯 **Durée totale estimée** : 16 semaines (4 mois) pour 1 développeur full-stack
+
+#### 6.6 Effort Estimation (Estimation de l'Effort)
+
+| Catégorie WBS | Sous-tâches | Durée Estimée | Complexité | Charge (h) | Ressources Requises |
+|---------------|-------------|---------------|------------|-----------|---------------------|
+| **1. Infrastructure & Cloud** | | | | | |
+| 1.1 Configuration Azure | Setup compte, VNet, Load Balancer | 3 jours | Moyenne | 24h | Compte Azure, connaissances réseau |
+| 1.2 Conteneurisation Docker | Dockerfiles, Compose | 2 jours | Faible | 16h | Docker Desktop |
+| 1.3 Orchestration Kubernetes | AKS, manifests, HPA | 4 jours | Élevée | 32h | Kubernetes CLI, documentation |
+| 1.4 Infrastructure as Code | Terraform scripts | 3 jours | Moyenne | 24h | Terraform, Azure provider |
+| | | **12 jours** | | **96h** | |
+| **2. Backend & API** | | | | | |
+| 2.1 Setup FastAPI | Structure projet, config | 2 jours | Faible | 16h | Python 3.11, IDE |
+| 2.2 Ingestion Service | MQTT, validation, router | 5 jours | Élevée | 40h | Mosquitto, Redis |
+| 2.3 API Service | REST endpoints, JWT, RBAC | 5 jours | Élevée | 40h | FastAPI, SQLAlchemy |
+| 2.4 Analytics Service | DTC decoder, anomalies, alertes | 6 jours | Élevée | 48h | Business logic, DTC database |
+| 2.5 Notification Service | Email, SMS, WebSocket push | 3 jours | Moyenne | 24h | SMTP, Twilio API |
+| 2.6 WebSocket Service | Server, Pub/Sub | 3 jours | Moyenne | 24h | WebSockets lib, Redis |
+| | | **24 jours** | | **192h** | |
+| **3. Stockage Hybride** | | | | | |
+| 3.1 PostgreSQL | Install, schema, migrations | 3 jours | Moyenne | 24h | PostgreSQL 15, Alembic |
+| 3.2 MongoDB | Atlas setup, collections | 2 jours | Faible | 16h | MongoDB Atlas account |
+| 3.3 TimescaleDB/InfluxDB | Choix, hypertables, partitionnement | 4 jours | Élevée | 32h | TimescaleDB extension |
+| 3.4 Redis | Install, cache, Pub/Sub | 2 jours | Faible | 16h | Redis 7 |
+| 3.5 Backup & Recovery | Scripts, snapshots, tests | 2 jours | Moyenne | 16h | Cron jobs, storage |
+| | | **13 jours** | | **104h** | |
+| **4. Mobile App** | | | | | |
+| 4.1 Setup Projet Frontend | React Native, TypeScript, NativeWind | 2 jours | Faible | 16h | Node.js, npm/yarn, Expo |
+| 4.2 Authentification UI | Login, JWT, routes protégées | 2 jours | Faible | 16h | React Navigation |
+| 4.3 Dashboard Principal | Layout, KPIs, WebSocket | 3 jours | Moyenne | 24h | Zustand, Axios |
+| 4.4 Module Véhicules | CRUD, liste, détails | 3 jours | Moyenne | 24h | Forms, tables |
+| 4.5 Module Diagnostics DTC | Liste, historique, détails | 3 jours | Moyenne | 24h | API integration |
+| 4.6 Visualisations | Leaflet, Chart.js, courbes | 4 jours | Élevée | 32h | Leaflet, Chart.js libs |
+| 4.7 Système d'Alertes | Bannière, historique, config | 2 jours | Faible | 16h | Notifications component |
+| 4.8 Module Admin | Users, roles, audit logs | 2 jours | Moyenne | 16h | RBAC logic |
+| | | **21 jours** | | **168h** | |
+| **5. DevOps & Monitoring** | | | | | |
+| 5.1 CI/CD | GitHub Actions workflows | 2 jours | Moyenne | 16h | GitHub Actions, YAML |
+| 5.2 Monitoring | Prometheus, Grafana | 3 jours | Moyenne | 24h | Prometheus, Grafana |
+| 5.3 Logging | ELK Stack ou Loki | 3 jours | Moyenne | 24h | Elasticsearch, Kibana |
+| 5.4 Sécurité | TLS, secrets, scanning | 2 jours | Moyenne | 16h | Let's Encrypt, Vault |
+| | | **10 jours** | | **80h** | |
+| **6. Tests & Documentation** | | | | | |
+| 6.1 Tests Backend | pytest, intégration, performance | 4 jours | Moyenne | 32h | pytest, locust |
+| 6.2 Tests Frontend | Jest, RTL, Cypress E2E | 4 jours | Moyenne | 32h | Jest, Cypress |
+| 6.3 Documentation | README, API docs, guides | 2 jours | Faible | 16h | Markdown, OpenAPI |
+| | | **10 jours** | | **80h** | |
+| **TOTAL PROJET** | | **90 jours** | | **720h** | |
+
+#### 6.6.1 Répartition par Complexité
+
+| Niveau de Complexité | Nombre de Tâches | % du Projet | Charge Totale |
+|---------------------|------------------|-------------|---------------|
+| **Faible** | 10 tâches | 22% | 160h |
+| **Moyenne** | 18 tâches | 42% | 304h |
+| **Élevée** | 6 tâches | 36% | 256h |
+| **TOTAL** | 34 tâches | 100% | 720h |
+
+#### 6.6.2 Calcul Charge de Travail (1 personne)
+
+```
+Hypothèses :
+- 1 personne (travail individuel PFE)
+- 8 heures productives / jour
+- 5 jours / semaine = 40h / semaine
+- Marge sécurité : +20% (imprévus, bugs, apprentissage)
+
+Calcul :
+- 720h brutes
+- +20% (144h) = 864h totales
+- 864h  40h/semaine = 21.6 semaines  5 mois
+- Ou 108 jours ouvrés ( 22 semaines calendaires)
+```
+
+#### 6.6.3 Optimisations Possibles
+
+| Optimisation | Gain Temps | Commentaire |
+|--------------|-----------|-------------|
+| Utiliser templates Azure | -2 jours | ARM templates pré-configurés |
+| MongoDB Atlas (managed) | -1 jour | Évite installation manuelle |
+| UI Components library | -3 jours | Tailwind UI, Shadcn/ui |
+| Swagger auto-docs | -1 jour | Généré par FastAPI |
+| Docker Compose dev | -1 jour | Local dev simplifié |
+| **Gain total possible** | **-8 jours** | **Réduit à 82 jours** |
+
+#### 6.6.4 Points Critiques (Risques Temps)
+
+ **Tâches à surveiller** (susceptibles de dérapage) :
+
+1. **2.2 Ingestion Service** (40h) : Complexité MQTT + validation + routing
+2. **2.4 Analytics Service** (48h) : Logique métier DTC complexe
+3. **3.3 TimescaleDB** (32h) : Courbe apprentissage si nouveau
+4. **4.6 Visualisations** (32h) : Intégration cartes + graphiques délicate
+5. **1.3 Kubernetes** (32h) : Orchestration complexe pour débutants
+
+**Recommandation** : Prévoir **buffer +30%** sur ces tâches.
 
 
 ### 7. Taille de l’Équipe et Type de Projet
@@ -619,9 +832,9 @@ graph TD
                               ↓
 ┌──────────────────────────────────────────────────────────────────┐
 │  LAYER 6 - CLIENT APPLICATIONS                                  │
-│  ├─ Web Dashboard (React.js + Leaflet maps + Chart.js)          │
+│  ├─ Mobile App (React Native + react-native-maps + Victory)     │
 │  ├─ Admin Panel (user management, reports)                      │
-│  └─ Mobile App (managed by other team)                          │
+│  └─ Web Dashboard (managed by other team - optional)            │
 └──────────────────────────────────────────────────────────────────┘
                               ↓
 ┌──────────────────────────────────────────────────────────────────┐
@@ -688,10 +901,146 @@ Backend (Python FastAPI)
 | **TimescaleDB** | Time-series | Telemetry, GPS, temperature, RPM history | Time-group, aggregation |
 | **Redis** | Cache & PubSub | Session cache, real-time subscriptions | Key-value, Pub/Sub |
 
-#### 2.3 Dashboard Web (React Native)
+##### 2.2.1 Exemples de Requêtes/Réponses API
+
+**Exemple 1 : Récupérer les véhicules d'une flotte**
+```http
+GET /api/v1/fleets/fleet-123/vehicles
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "veh-001",
+      "vin": "1HGBH41JXMN109186",
+      "make": "Toyota",
+      "model": "Corolla",
+      "year": 2022,
+      "license_plate": "ABC-1234",
+      "status": "online",
+      "last_seen": "2026-02-06T10:30:00Z",
+      "location": {
+        "lat": 36.8065,
+        "lng": 10.1815
+      },
+      "active_dtc_count": 2,
+      "odometer_km": 45230
+    },
+    {
+      "id": "veh-002",
+      "vin": "2HGFG12859H543211",
+      "make": "Renault",
+      "model": "Megane",
+      "year": 2021,
+      "license_plate": "TUN-5678",
+      "status": "offline",
+      "last_seen": "2026-02-05T18:45:00Z",
+      "location": null,
+      "active_dtc_count": 0,
+      "odometer_km": 32100
+    }
+  ],
+  "count": 2
+}
+```
+
+**Exemple 2 : Récupérer les codes DTC d'un véhicule**
+```http
+GET /api/v1/dtc/veh-001
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+```json
+{
+  "success": true,
+  "vehicle_id": "veh-001",
+  "dtc_codes": [
+    {
+      "id": "dtc-12345",
+      "code": "P0420",
+      "description": "Catalyst System Efficiency Below Threshold (Bank 1)",
+      "severity": "warning",
+      "status": "active",
+      "first_detected": "2026-02-03T14:20:00Z",
+      "last_occurrence": "2026-02-06T09:15:00Z",
+      "occurrence_count": 8,
+      "recommended_action": "Vérifier convertisseur catalytique, possibilité de remplacement"
+    },
+    {
+      "id": "dtc-12346",
+      "code": "P0171",
+      "description": "System Too Lean (Bank 1)",
+      "severity": "critical",
+      "status": "active",
+      "first_detected": "2026-02-06T08:30:00Z",
+      "last_occurrence": "2026-02-06T10:25:00Z",
+      "occurrence_count": 3,
+      "recommended_action": "Vérifier injection carburant, capteur MAF, fuites d'air"
+    }
+  ],
+  "count": 2
+}
+```
+
+**Exemple 3 : Login & obtention du JWT**
+```http
+POST /api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "manager@mallouliauto.com",
+  "password": "SecurePass123!"
+}
+```
+```json
+{
+  "success": true,
+  "user": {
+    "id": "user-456",
+    "email": "manager@mallouliauto.com",
+    "name": "Ahmed Ben Ali",
+    "role": "manager",
+    "fleet_ids": ["fleet-123"]
+  },
+  "tokens": {
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoidXNlci00NTYiLCJyb2xlIjoibWFuYWdlciIsImV4cCI6MTY0MTA5ODQwMH0.xyz",
+    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoidXNlci00NTYiLCJ0eXBlIjoicmVmcmVzaCIsImV4cCI6MTY0MTcwMzIwMH0.abc",
+    "expires_in": 900,
+    "token_type": "Bearer"
+  }
+}
+```
+
+**Exemple 4 : Récupérer télémétrie historique**
+```http
+GET /api/v1/telemetry/veh-001?start=2026-02-05T00:00:00Z&end=2026-02-06T00:00:00Z&metrics=engine_temp,speed
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+```json
+{
+  "success": true,
+  "vehicle_id": "veh-001",
+  "metrics": {
+    "engine_temp": [
+      {"timestamp": "2026-02-05T08:00:00Z", "value": 85.5},
+      {"timestamp": "2026-02-05T08:05:00Z", "value": 88.2},
+      {"timestamp": "2026-02-05T08:10:00Z", "value": 90.1}
+    ],
+    "speed": [
+      {"timestamp": "2026-02-05T08:00:00Z", "value": 65},
+      {"timestamp": "2026-02-05T08:05:00Z", "value": 72},
+      {"timestamp": "2026-02-05T08:10:00Z", "value": 68}
+    ]
+  },
+  "count": 3
+}
+```
+
+#### 2.3 Mobile App (React Native)
 
 ```
-Web Dashboard (React.js + TypeScript)
+Mobile App (React Native + TypeScript)
 ├── Pages
 │   ├── Dashboard (home, KPI overview)
 │   ├── Fleet Map (Leaflet with vehicle markers)
@@ -851,10 +1200,10 @@ Web Dashboard (React.js + TypeScript)
 | **Cache** | Redis | 7+ |
 | **Message Queue** | RabbitMQ | 3.12+ |
 | **MQTT** | Eclipse Mosquitto | 2.0+ |
-| **Frontend** | React Native  | 5.0+ |
-| **Styling** | Tailwind CSS | 3.3+ |
-| **Maps** | Leaflet + OpenStreetMap | 1.9+ |
-| **Charts** | Chart.js ou Recharts | - |
+| **Frontend** | React Native  | 0.72+ |
+| **Styling** | NativeWind | 4.0+ |
+| **Maps** | react-native-maps | 1.7+ |
+| **Charts** | Victory Native ou react-native-svg | - |
 | **State Management** | Zustand | 4.4+ |
 | **HTTP Client** | Axios | 1.6+ |
 | **Container** | Docker | 24+ |
@@ -927,10 +1276,10 @@ Le système MALLOULIAUTO vise à fournir une **plateforme cloud complète** perm
 ✅ API REST sécurisée avec authentification JWT  
 ✅ Stockage hybride (PostgreSQL + MongoDB + TimescaleDB)  
 ✅ Système de notifications multi-canal  
-✅ Dashboard web administrateur (React.js)  
+✅ Application mobile administrateur (React Native)  
 ✅ Visualisations temps réel (graphiques)  
 ✅ Gestion des alertes et diagnostics  
-✅ Infrastructure cloud (AWS/Azure + Kubernetes)  
+✅ Infrastructure cloud (Azure + Kubernetes)  
 ✅ CI/CD et monitoring (GitHub Actions, Prometheus, Grafana)  
 
 **Ce qui N'EST PAS inclus (hors périmètre) :**
@@ -1519,6 +1868,7 @@ DÉFAILLANT --> RETIRÉ : Dongle irréparable\nRetiré du service
 
 @enduml
 ```
+
 
 
 
