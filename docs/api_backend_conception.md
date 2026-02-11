@@ -944,7 +944,6 @@ async def get_current_user(
 | **Authentification** | | | |
 | POST /auth/register | ✅ | ✅ | ✅ |
 | POST /auth/login | ✅ | ✅ | ✅ |
-| POST /auth/refresh | ✅ | ✅ | ✅ |
 | **Véhicules** | | | |
 | GET /vehicles | ✅ Tous | ✅ Ses flottes | ✅ Son véhicule |
 | POST /vehicles | ✅ | ✅ | ❌ |
