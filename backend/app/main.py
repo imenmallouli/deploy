@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 
-from app.api.v1 import health
+from app.api.v1 import  database, auth
+# Import les modèles pour enregistrer les tables
+from app.models import user
 
 app = FastAPI(
     title="Auto Diagnostic Platform API",
@@ -9,7 +11,9 @@ app = FastAPI(
 )
 
 # Inclure les routers
-app.include_router(health.router, prefix="/api/v1", tags=["Health"])
+
+app.include_router(database.router, prefix="/api/v1", tags=["Database"])
+app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
 
 
 @app.get("/")
