@@ -11,13 +11,13 @@ class UserRegister(BaseModel):
 
 
 class UserLogin(BaseModel):
-    """Schema pour se connecter"""
+    
     email: EmailStr
     password: str
 
 
 class UserResponse(BaseModel):
-    """Schema pour la réponse utilisateur"""
+  
     user_id: int
     email: str
     
