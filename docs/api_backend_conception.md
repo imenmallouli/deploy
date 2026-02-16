@@ -1601,6 +1601,11 @@ Ce document fournit une **roadmap complète** pour le développement de l'API et
 - [OWASP API Security](https://owasp.org/www-project-api-security/)
 
 ---
+comment vere swagger 
+http://127.0.0.1:8000/docs
+
+cd "c:\auto diagnostic platform\backend"
+uvicorn app.main:app --reload
 
 **Dernière mise à jour**: Février 10, 2026  
 **Auteur**: Imen Mallouli  

@@ -1,11 +1,12 @@
 
+from datetime import datetime
 from sqlalchemy import Column, Integer, String, DateTime
 
 from app.db.base import Base
 
 
 class User(Base):
-    """Modèle utilisateur pour l'authentification"""
+    
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)

@@ -10,7 +10,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 @router.post("/register")
 def register(user_data: UserRegister, db: Session = Depends(get_db)):
-    """Enregistrer un nouvel utilisateur"""
+    
     result = UserService.register_user(
      
         first_name=user_data.first_name,
@@ -24,7 +24,7 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
 
 @router.post("/login")
 def login(credentials: UserLogin, db: Session = Depends(get_db)):
-    """Connecter un utilisateur"""
+   
     result = UserService.login_user(
         db=db,
         email=credentials.email,
@@ -35,6 +35,5 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
 
 @router.get("/user/{user_id}")
 def get_user(user_id: int, db: Session = Depends(get_db)):
-    """Récupérer les informations d'un utilisateur"""
     result = UserService.get_user_by_id(db=db, user_id=user_id)
     return result
