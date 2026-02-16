@@ -16,11 +16,12 @@ JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "60"))
 class UserService:
 
     @staticmethod
-    def create_access_token(email: str, user_id: int) -> str:
+    def create_access_token(email: str, user_id: int, role: str) -> str:
         now = datetime.now(timezone.utc)
         payload = {
             "sub": email,
             "user_id": user_id,
+            "role": role,
             "iat": int(now.timestamp()),
             "exp": int((now + timedelta(minutes=JWT_EXPIRE_MINUTES)).timestamp())
         }
@@ -46,7 +47,7 @@ class UserService:
 
     @staticmethod
     def register_user(db: Session, first_name: str, last_name: str, 
-                     email: str, phone: str, password: str):
+                     email: str, role: str, phone: str, password: str):
       
         existing_user = db.query(User).filter(User.email == email).first()
         
@@ -57,6 +58,7 @@ class UserService:
             first_name=first_name,
             last_name=last_name,
             email=email,
+            role=role,
             phone=phone,
             password_hash=UserService.hash_password(password)
         )
@@ -70,7 +72,8 @@ class UserService:
             "message": "Utilisateur créé avec succès",
             "user_id": new_user.id,
             "email": new_user.email,
-            "access_token": UserService.create_access_token(new_user.email, new_user.id),
+            "role": new_user.role,
+            "access_token": UserService.create_access_token(new_user.email, new_user.id, new_user.role),
             "token_type": "bearer",
             "expires_in_minutes": JWT_EXPIRE_MINUTES
         }
@@ -94,8 +97,9 @@ class UserService:
             "message": "Connexion réussie",
             "user_id": user.id,
             "email": user.email,
+            "role": user.role,
             "first_name": user.first_name,
-            "access_token": UserService.create_access_token(user.email, user.id),
+            "access_token": UserService.create_access_token(user.email, user.id, user.role),
             "token_type": "bearer",
             "expires_in_minutes": JWT_EXPIRE_MINUTES
         }
@@ -112,6 +116,7 @@ class UserService:
             "status": "success",
             "user_id": user.id,
             "email": user.email,
+            "role": user.role,
             "first_name": user.first_name,
             "last_name": user.last_name,
             "phone": user.phone
