@@ -32,6 +32,7 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
         first_name=user_data.first_name,
         last_name=user_data.last_name,
         email=user_data.email,
+        role=user_data.role,
         phone=user_data.phone,
         password=user_data.password
     )

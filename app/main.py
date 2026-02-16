@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 
-from app.api.v1 import  database, auth
+from app.api.v1 import database, auth, fleet
 # Import les modèles pour enregistrer les tables
-from app.models import user
+from app.models import user, fleet as fleet_model
 
 app = FastAPI(
     title="Auto Diagnostic Platform API",
@@ -14,6 +14,7 @@ app = FastAPI(
 
 app.include_router(database.router, prefix="/api/v1", tags=["Database"])
 app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
+app.include_router(fleet.router, prefix="/api/v1", tags=["Fleets"])
 
 
 @app.get("/")

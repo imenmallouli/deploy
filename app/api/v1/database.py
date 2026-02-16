@@ -44,3 +44,30 @@ def list_tables(db: Session = Depends(get_db)):
             "status": "error",
             "message": str(e)
         }
+
+
+@router.post("/sync-schema")
+def sync_schema(db: Session = Depends(get_db)):
+    """Ajoute les colonnes nécessaires pour RBAC/flottes si elles n'existent pas."""
+    try:
+        db.execute(text("""
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'driver'
+        """))
+
+        db.execute(text("""
+            ALTER TABLE fleets
+            ADD COLUMN IF NOT EXISTS manager_id INTEGER REFERENCES users(id)
+        """))
+
+        db.commit()
+        return {
+            "status": "success",
+            "message": "Schéma synchronisé avec succès"
+        }
+    except Exception as e:
+        db.rollback()
+        return {
+            "status": "error",
+            "message": str(e)
+        }
