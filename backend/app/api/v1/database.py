@@ -97,6 +97,22 @@ def sync_schema(db: Session = Depends(get_db)):
             ADD COLUMN IF NOT EXISTS last_autopi_seen TIMESTAMP NULL
         """))
 
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS alerts (
+                id SERIAL PRIMARY KEY,
+                vehicle_id INTEGER NOT NULL REFERENCES vehicles(id),
+                type VARCHAR(50) NOT NULL,
+                severity VARCHAR(20) NOT NULL DEFAULT 'warning',
+                title VARCHAR(150) NOT NULL,
+                message VARCHAR(500) NOT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                acknowledged_at TIMESTAMP NULL,
+                acknowledged_by INTEGER NULL REFERENCES users(id),
+                note VARCHAR(500) NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+        """))
+
         db.commit()
         return {
             "status": "success",
