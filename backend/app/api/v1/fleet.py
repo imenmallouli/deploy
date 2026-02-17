@@ -23,7 +23,7 @@ def get_current_context(
         ) from exc
 
     user_id = payload.get("user_id")
-    role = payload.get("role", "driver")
+    role = (payload.get("role", "driver") or "driver").strip().lower()
 
     if not user_id:
         raise HTTPException(

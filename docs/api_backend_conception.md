@@ -1604,8 +1604,39 @@ Ce document fournit une **roadmap complète** pour le développement de l'API et
 comment vere swagger 
 http://127.0.0.1:8000/docs
 
+tester backend 
 cd "c:\auto diagnostic platform\backend"
-uvicorn app.main:app --reload
+  ".\.venv\Scripts\python.exe" -m uvicorn app.main:app --reload
+
+  curl -i http://127.0.0.1:8000/docs
+
+
+curl -s -X POST http://127.0.0.1:8000/api/v1/sync-schema
+
+
+
+  BASE="http://127.0.0.1:8000/api/v1"
+EMAIL="test.$(date +%s)@example.com"
+PASS="Test123!"
+
+# register
+curl -s -X POST "$BASE/auth/register" \
+  -H "Content-Type: application/json" \
+  -d "{\"first_name\":\"Test\",\"last_name\":\"User\",\"email\":\"$EMAIL\",\"phone\":\"12345678\",\"password\":\"$PASS\"}"
+
+# login
+LOGIN=$(curl -s -X POST "$BASE/auth/login" \
+  -H "Content-Type: application/json" \
+  -d "{\"email\":\"$EMAIL\",\"password\":\"$PASS\"}")
+
+echo "$LOGIN"
+
+on obtient reponse token puis vere auth/e avec barer token 
+
+
+puis les requete sql
+SELECT id, first_name, last_name, email, role FROM users ORDER BY id;
+SELECT id, name, description, manager_id FROM fleets ORDER BY id;
 
 **Dernière mise à jour**: Février 10, 2026  
 **Auteur**: Imen Mallouli  

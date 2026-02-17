@@ -17,11 +17,12 @@ class UserService:
 
     @staticmethod
     def create_access_token(email: str, user_id: int, role: str) -> str:
+        normalized_role = (role or "driver").strip().lower()
         now = datetime.now(timezone.utc)
         payload = {
             "sub": email,
             "user_id": user_id,
-            "role": role,
+            "role": normalized_role,
             "iat": int(now.timestamp()),
             "exp": int((now + timedelta(minutes=JWT_EXPIRE_MINUTES)).timestamp())
         }
@@ -30,6 +31,8 @@ class UserService:
     @staticmethod
     def decode_access_token(token: str) -> dict:
         try:
+            if token.lower().startswith("bearer "):
+                token = token.split(" ", 1)[1].strip()
             return jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
         except jwt.ExpiredSignatureError as exc:
             raise ValueError("Token expiré") from exc
@@ -48,6 +51,10 @@ class UserService:
     @staticmethod
     def register_user(db: Session, first_name: str, last_name: str, 
                      email: str, role: str, phone: str, password: str):
+        normalized_role = (role or "driver").strip().lower()
+        if normalized_role not in {"admin", "manager", "driver"}:
+            return {"status": "error", "message": "Rôle invalide"}
+
       
         existing_user = db.query(User).filter(User.email == email).first()
         
@@ -58,7 +65,7 @@ class UserService:
             first_name=first_name,
             last_name=last_name,
             email=email,
-            role=role,
+            role=normalized_role,
             phone=phone,
             password_hash=UserService.hash_password(password)
         )
@@ -72,7 +79,7 @@ class UserService:
             "message": "Utilisateur créé avec succès",
             "user_id": new_user.id,
             "email": new_user.email,
-            "role": new_user.role,
+            "role": normalized_role,
             "access_token": UserService.create_access_token(new_user.email, new_user.id, new_user.role),
             "token_type": "bearer",
             "expires_in_minutes": JWT_EXPIRE_MINUTES
@@ -97,7 +104,7 @@ class UserService:
             "message": "Connexion réussie",
             "user_id": user.id,
             "email": user.email,
-            "role": user.role,
+            "role": (user.role or "driver").strip().lower(),
             "first_name": user.first_name,
             "access_token": UserService.create_access_token(user.email, user.id, user.role),
             "token_type": "bearer",
