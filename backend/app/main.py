@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.api.v1 import alert, auth, database, fleet, vehicle
+from app.api.v1 import alert, auth, database, dtc, fleet, vehicle
 # Import les modèles pour enregistrer les tables
 from app.models import alert as alert_model
 from app.models import fleet as fleet_model
@@ -19,6 +19,7 @@ app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
 app.include_router(fleet.router, prefix="/api/v1", tags=["Fleets"])
 app.include_router(vehicle.router, prefix="/api/v1", tags=["Vehicles"])
 app.include_router(alert.router, prefix="/api/v1", tags=["Alerts"])
+app.include_router(dtc.router, prefix="/api/v1", tags=["DTC"])
 
 
 @app.get("/")
