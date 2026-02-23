@@ -20,3 +20,7 @@ class FleetResponse(BaseModel):
     name: str
     description: Optional[str] = None
     manager_id: Optional[int] = None
+
+
+class FleetVehicleAssign(BaseModel):
+    vehicle_id: int

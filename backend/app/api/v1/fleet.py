@@ -3,7 +3,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.schemas.fleet import FleetCreate, FleetUpdate
+from app.schemas.fleet import FleetCreate, FleetUpdate, FleetVehicleAssign
 from app.services.fleet_service import FleetService
 from app.services.user_service import UserService
 
@@ -72,6 +72,36 @@ def get_fleet(
         role=context["role"],
         user_id=context["user_id"],
         fleet_id=fleet_id,
+    )
+
+
+@router.get("/{fleet_id}/vehicles")
+def list_fleet_vehicles(
+    fleet_id: int,
+    context: dict = Depends(get_current_context),
+    db: Session = Depends(get_db)
+):
+    return FleetService.list_fleet_vehicles(
+        db=db,
+        role=context["role"],
+        user_id=context["user_id"],
+        fleet_id=fleet_id,
+    )
+
+
+@router.post("/{fleet_id}/vehicles")
+def add_vehicle_to_fleet(
+    fleet_id: int,
+    payload: FleetVehicleAssign,
+    context: dict = Depends(get_current_context),
+    db: Session = Depends(get_db)
+):
+    return FleetService.add_vehicle_to_fleet(
+        db=db,
+        role=context["role"],
+        user_id=context["user_id"],
+        fleet_id=fleet_id,
+        vehicle_id=payload.vehicle_id,
     )
 
 

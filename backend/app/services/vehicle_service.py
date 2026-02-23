@@ -2,6 +2,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.fleet import Fleet
+from app.models.user import User
 from app.models.vehicle import Vehicle
 
 
@@ -39,6 +40,18 @@ class VehicleService:
             existing_dongle = db.query(Vehicle).filter(Vehicle.dongle_id == dongle_id).first()
             if existing_dongle:
                 return {"status": "error", "message": "Dongle déjà existant"}
+
+        if fleet_id is not None:
+            fleet = db.query(Fleet).filter(Fleet.id == fleet_id).first()
+            if not fleet:
+                return {"status": "error", "message": "Flotte non trouvée"}
+
+        if driver_id is not None:
+            driver = db.query(User).filter(User.id == driver_id).first()
+            if not driver:
+                return {"status": "error", "message": "Driver non trouvé"}
+            if (driver.role or "").strip().lower() != "driver":
+                return {"status": "error", "message": "Utilisateur assigné n'est pas un driver"}
 
         vehicle = Vehicle(
             vin=vin,
@@ -112,36 +125,6 @@ class VehicleService:
         return {
             "status": "success",
             "vehicle": VehicleService._to_dict(vehicle),
-        }
-
-    @staticmethod
-    def get_vehicle_status(db: Session, role: str, user_id: int, vehicle_id: int):
-        vehicle_result = VehicleService.get_vehicle_by_id(
-            db=db,
-            role=role,
-            user_id=user_id,
-            vehicle_id=vehicle_id,
-        )
-
-        if vehicle_result.get("status") != "success":
-            return vehicle_result
-
-        vehicle = vehicle_result["vehicle"]
-        return {
-            "status": "success",
-            "vehicle_status": {
-                "vehicle_id": vehicle["id"],
-                "status": vehicle["status"],
-                "last_update": vehicle["last_autopi_seen"] or vehicle["updated_at"],
-                "telemetry": {
-                    "mileage": vehicle["mileage"],
-                },
-                "autopi": {
-                    "device_id": vehicle["autopi_device_id"],
-                    "unit_id": vehicle["autopi_unit_id"],
-                    "last_connection": vehicle["last_connection"],
-                },
-            },
         }
 
     @staticmethod
