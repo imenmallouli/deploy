@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from app.models.fleet import Fleet
+from app.models.vehicle import Vehicle
 
 
 class FleetService:
@@ -79,6 +80,83 @@ class FleetService:
                 "name": fleet.name,
                 "description": fleet.description,
                 "manager_id": fleet.manager_id,
+            },
+        }
+
+    @staticmethod
+    def list_fleet_vehicles(db: Session, role: str, user_id: int, fleet_id: int):
+        role = (role or "driver").strip().lower()
+
+        fleet = db.query(Fleet).filter(Fleet.id == fleet_id).first()
+        if not fleet:
+            return {"status": "error", "message": "Flotte non trouvée"}
+
+        if role == "driver":
+            return {"status": "error", "message": "Accès refusé"}
+
+        if role == "manager" and fleet.manager_id != user_id:
+            return {"status": "error", "message": "Accès refusé"}
+
+        vehicles = db.query(Vehicle).filter(Vehicle.fleet_id == fleet_id).order_by(Vehicle.id.desc()).all()
+        return {
+            "status": "success",
+            "fleet_id": fleet_id,
+            "count": len(vehicles),
+            "items": [
+                {
+                    "id": vehicle.id,
+                    "vin": vehicle.vin,
+                    "license_plate": vehicle.license_plate,
+                    "make": vehicle.make,
+                    "model": vehicle.model,
+                    "year": vehicle.year,
+                    "status": vehicle.status,
+                    "driver_id": vehicle.driver_id,
+                }
+                for vehicle in vehicles
+            ],
+        }
+
+    @staticmethod
+    def add_vehicle_to_fleet(db: Session, role: str, user_id: int, fleet_id: int, vehicle_id: int):
+        role = (role or "driver").strip().lower()
+
+        if role not in {"admin", "manager"}:
+            return {"status": "error", "message": "Accès refusé"}
+
+        fleet = db.query(Fleet).filter(Fleet.id == fleet_id).first()
+        if not fleet:
+            return {"status": "error", "message": "Flotte non trouvée"}
+
+        if role == "manager" and fleet.manager_id != user_id:
+            return {"status": "error", "message": "Accès refusé"}
+
+        vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
+        if not vehicle:
+            return {"status": "error", "message": "Véhicule non trouvé"}
+
+        if role == "manager" and vehicle.fleet_id is not None and vehicle.fleet_id != fleet_id:
+            current_fleet = db.query(Fleet).filter(Fleet.id == vehicle.fleet_id).first()
+            if not current_fleet or current_fleet.manager_id != user_id:
+                return {"status": "error", "message": "Accès refusé"}
+
+        vehicle.fleet_id = fleet_id
+        db.commit()
+        db.refresh(vehicle)
+
+        return {
+            "status": "success",
+            "message": "Véhicule ajouté à la flotte avec succès",
+            "fleet_id": fleet_id,
+            "vehicle": {
+                "id": vehicle.id,
+                "vin": vehicle.vin,
+                "license_plate": vehicle.license_plate,
+                "make": vehicle.make,
+                "model": vehicle.model,
+                "year": vehicle.year,
+                "status": vehicle.status,
+                "fleet_id": vehicle.fleet_id,
             },
         }
 
