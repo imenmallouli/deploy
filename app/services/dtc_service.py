@@ -3,7 +3,7 @@ from datetime import datetime
 from bson import ObjectId
 
 from app.db.mongodb import get_mongo_db
-from app.models.dtc import DtcEventModel
+from app.models.dtc import DtcEventModel, IotDeviceLogModel, ObdRawPayloadModel
 
 
 class DtcService:
@@ -80,6 +80,8 @@ class DtcService:
             return {"status": "error", "message": "Historique DTC introuvable"}
 
         history = []
+        clear_events = []
+        occurrences = []
         for doc in docs:
             start_date = doc.first_detected or doc.created_at
             end_date = doc.end_date or doc.resolved_at
@@ -95,6 +97,29 @@ class DtcService:
                 }
             )
 
+            occurrences.append(
+                {
+                    "id": doc.id,
+                    "first_detected": doc.first_detected,
+                    "last_occurrence": doc.last_occurrence,
+                    "created_at": doc.created_at,
+                    "resolved": bool(doc.resolved),
+                    "resolved_at": doc.resolved_at,
+                    "cleared_at": doc.cleared_at,
+                }
+            )
+
+            if doc.cleared_at:
+                clear_events.append(
+                    {
+                        "dtc_event_id": doc.id,
+                        "vehicle_id": doc.vehicle_id,
+                        "dtc_code": doc.code,
+                        "cleared_at": doc.cleared_at,
+                        "cleared_by": doc.cleared_by,
+                    }
+                )
+
         first = docs[0]
         return {
             "status": "success",
@@ -102,6 +127,8 @@ class DtcService:
             "vehicle_id": first.vehicle_id,
             "total_occurrences": len(docs),
             "history": history,
+            "occurrences": occurrences,
+            "clear_events": clear_events,
         }
 
     @staticmethod
@@ -133,6 +160,74 @@ class DtcService:
             "dtc_code": dtc_code,
             "matched_count": result.matched_count,
             "modified_count": result.modified_count,
+        }
+
+    @staticmethod
+    async def create_raw_obd_payload(payload: ObdRawPayloadModel, user_id: int):
+        db = get_mongo_db()
+
+        doc = payload.to_mongo()
+        doc["created_by"] = user_id
+
+        result = await db.obd_raw_payloads.insert_one(doc)
+        return {
+            "status": "success",
+            "message": "Payload OBD brut enregistré",
+            "id": str(result.inserted_id),
+        }
+
+    @staticmethod
+    async def list_raw_obd_payloads(limit: int = 50, vehicle_id: int | None = None):
+        db = get_mongo_db()
+
+        query: dict = {}
+        if vehicle_id is not None:
+            query["vehicle_id"] = vehicle_id
+
+        cursor = db.obd_raw_payloads.find(query).sort("_id", -1).limit(limit)
+        items = []
+        async for doc in cursor:
+            items.append(ObdRawPayloadModel.from_mongo(doc).model_dump(exclude_none=True))
+
+        return {
+            "status": "success",
+            "count": len(items),
+            "items": items,
+        }
+
+    @staticmethod
+    async def create_iot_device_log(payload: IotDeviceLogModel, user_id: int):
+        db = get_mongo_db()
+
+        doc = payload.to_mongo()
+        doc["created_by"] = user_id
+
+        result = await db.iot_device_logs.insert_one(doc)
+        return {
+            "status": "success",
+            "message": "Log technique IoT enregistré",
+            "id": str(result.inserted_id),
+        }
+
+    @staticmethod
+    async def list_iot_device_logs(limit: int = 50, vehicle_id: int | None = None, device_id: str | None = None):
+        db = get_mongo_db()
+
+        query: dict = {}
+        if vehicle_id is not None:
+            query["vehicle_id"] = vehicle_id
+        if device_id is not None:
+            query["device_id"] = device_id
+
+        cursor = db.iot_device_logs.find(query).sort("_id", -1).limit(limit)
+        items = []
+        async for doc in cursor:
+            items.append(IotDeviceLogModel.from_mongo(doc).model_dump(exclude_none=True))
+
+        return {
+            "status": "success",
+            "count": len(items),
+            "items": items,
         }
 
     @staticmethod

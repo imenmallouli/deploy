@@ -23,3 +23,20 @@ class DtcEventCreate(BaseModel):
 class DtcClearRequest(BaseModel):
     vehicle_id: int
     dtc_code: Optional[str] = Field(default=None, min_length=2, max_length=20)
+
+
+class ObdRawPayloadCreate(BaseModel):
+    vehicle_id: int
+    dongle_id: Optional[str] = None
+    payload: dict | list | str
+    received_at: Optional[str] = None
+
+
+class IotDeviceLogCreate(BaseModel):
+    vehicle_id: Optional[int] = None
+    device_id: str = Field(..., min_length=2, max_length=100)
+    event_type: str = Field(..., min_length=2, max_length=100)
+    level: Optional[str] = Field(default=None, max_length=20)
+    message: Optional[str] = None
+    metadata: Optional[dict] = None
+    event_at: Optional[str] = None
