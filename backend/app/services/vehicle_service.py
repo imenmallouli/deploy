@@ -1,6 +1,8 @@
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.db.mongodb import get_mongo_db
+from app.models.alert import Alert
 from app.models.fleet import Fleet
 from app.models.user import User
 from app.models.vehicle import Vehicle
@@ -265,6 +267,69 @@ class VehicleService:
             "status": "success",
             "message": "Données AutoPi synchronisées",
             "vehicle": VehicleService._to_dict(vehicle),
+        }
+
+    @staticmethod
+    async def get_vehicle_status(db: Session, role: str, user_id: int, vehicle_id: int):
+        vehicle_result = VehicleService.get_vehicle_by_id(
+            db=db,
+            role=role,
+            user_id=user_id,
+            vehicle_id=vehicle_id,
+        )
+
+        if vehicle_result.get("status") != "success":
+            return vehicle_result
+
+        vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
+        if not vehicle:
+            return {"status": "error", "message": "Véhicule non trouvé"}
+
+        db_mongo = get_mongo_db()
+
+        latest_telemetry_doc = await db_mongo.telemetry_data.find_one(
+            {"vehicle_id": vehicle_id},
+            sort=[("ts", -1)],
+        )
+
+        active_dtc_count = await db_mongo.dtc_events.count_documents(
+            {
+                "vehicle_id": vehicle_id,
+                "$or": [
+                    {"resolved": {"$exists": False}},
+                    {"resolved": False},
+                ],
+            }
+        )
+
+        active_alerts = (
+            db.query(Alert)
+            .filter(Alert.vehicle_id == vehicle_id, Alert.status == "pending")
+            .count()
+        )
+
+        telemetry_payload = None
+        last_update = vehicle.last_connection.isoformat() if vehicle.last_connection else None
+
+        if latest_telemetry_doc:
+            ts = latest_telemetry_doc.get("ts")
+            last_update = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+            telemetry_payload = {
+                "speed": latest_telemetry_doc.get("speed"),
+                "rpm": latest_telemetry_doc.get("rpm"),
+                "fuel_level": latest_telemetry_doc.get("fuel_level"),
+                "engine_temp": latest_telemetry_doc.get("engine_temp"),
+                "battery_voltage": latest_telemetry_doc.get("battery_voltage"),
+            }
+
+        return {
+            "status": "success",
+            "vehicle_id": vehicle.id,
+            "vehicle": VehicleService._to_dict(vehicle),
+            "last_update": last_update,
+            "telemetry": telemetry_payload,
+            "active_dtc_count": active_dtc_count,
+            "active_alerts": active_alerts,
         }
 
     @staticmethod

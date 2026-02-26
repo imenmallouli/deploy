@@ -84,6 +84,20 @@ def get_vehicle(
     )
 
 
+@router.get("/{vehicle_id}/status")
+async def get_vehicle_status(
+    vehicle_id: int,
+    context: dict = Depends(get_current_context),
+    db: Session = Depends(get_db)
+):
+    return await VehicleService.get_vehicle_status(
+        db=db,
+        role=context["role"],
+        user_id=context["user_id"],
+        vehicle_id=vehicle_id,
+    )
+
+
 @router.put("/{vehicle_id}")
 def update_vehicle(
     vehicle_id: int,
