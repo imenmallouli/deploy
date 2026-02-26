@@ -1,9 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 
-from app.api.v1 import alert, auth, database, dtc, fleet, vehicle
+from app.api.v1 import alert, auth, database, dtc, fleet, telemetry, vehicle
 # Import les modèles pour enregistrer les tables
 from app.models import alert as alert_model
 from app.models import fleet as fleet_model
+from app.models import telemetry as telemetry_model
 from app.models import user, vehicle as vehicle_model
 
 app = FastAPI(
@@ -20,6 +21,7 @@ app.include_router(fleet.router, prefix="/api/v1", tags=["Fleets"])
 app.include_router(vehicle.router, prefix="/api/v1", tags=["Vehicles"])
 app.include_router(alert.router, prefix="/api/v1", tags=["Alerts"])
 app.include_router(dtc.router, prefix="/api/v1", tags=["DTC"])
+app.include_router(telemetry.router, prefix="/api/v1", tags=["Telemetry"])
 
 
 @app.get("/")
@@ -30,3 +32,8 @@ def root():
         "version": "1.0.0",
         "docs": "/docs"
     }
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return Response(status_code=204)
