@@ -1,4 +1,25 @@
 services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: adp-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DB: ${MONGO_DB:-mallouliauto}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+
   postgres:
     image: postgres:16
     container_name: adp-postgres
@@ -13,39 +34,6 @@ services:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-mallouliauto}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  timescaledb:
-    image: timescale/timescaledb:latest-pg16
-    container_name: adp-timescaledb
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${TIMESCALE_DB:-mallouliauto}
-      POSTGRES_USER: ${TIMESCALE_USER:-postgres}
-      POSTGRES_PASSWORD: ${TIMESCALE_PASSWORD:-postgres}
-    ports:
-      - "5433:5432"
-    volumes:
-      - timescale_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${TIMESCALE_USER:-postgres} -d ${TIMESCALE_DB:-mallouliauto}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    container_name: adp-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -66,6 +54,4 @@ services:
 
 volumes:
   postgres_data:
-  timescale_data:
-  redis_data:
   mongo_data:
