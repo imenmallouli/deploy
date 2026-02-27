@@ -13,10 +13,12 @@ RUN pip install --no-cache-dir \
     python-dotenv \
     motor \
     pymongo \
+    PyJWT \
     pydantic \
     email-validator \
     python-jose \
-    passlib[bcrypt]
+    passlib[bcrypt] \
+    bcrypt==4.0.1
 
 COPY ./app ./app
 
