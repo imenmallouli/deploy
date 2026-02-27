@@ -1,7 +1,11 @@
 # Conception Frontend Détaillée — Auto Diagnostic Platform
 
 ## 1) Objectif
-Concevoir un frontend web inspiré des flux AutoPi (fleet/device/data) et aligné avec l’API backend actuelle.
+Concevoir deux frontends alignés avec l’API backend actuelle:
+- Web (dashboard opérationnel)
+- Mobile (React Native)
+
+Le design s’inspire des flux AutoPi (fleet/device/data).
 
 Objectifs UX:
 - Donner une vue opérationnelle rapide (dashboard + alertes + DTC + status véhicule).
@@ -32,20 +36,49 @@ Objectifs UX:
 
 ## 3) Architecture Frontend (recommandée)
 
-- Framework: React native 
+### 3.1 Frontend Web (admin/ops)
+- Framework: React + TypeScript (Vite)
 - Router: React Router
 - State server: TanStack Query (React Query)
+- State client: Zustand
 - UI: Tailwind + composants maison
 - Graphes: Recharts
-- Auth storage: access token en mémoire + fallback localStorage (MVP)
+- Auth storage: token en mémoire + fallback localStorage (MVP)
 
-Structure recommandée:
-- src/app (routing + providers)
-- src/pages (écrans)
-- src/features (modules: auth, vehicles, telemetry, dtc, alerts, fleets)
-- src/components (UI partagée)
-- src/lib/api (client HTTP + interceptors)
-- src/lib/auth (token, guard RBAC)
+Structure recommandée (web):
+- frontend-web/src/app (routing + providers)
+- frontend-web/src/pages (écrans)
+- frontend-web/src/features (auth, vehicles, telemetry, dtc, alerts, fleets)
+- frontend-web/src/components (UI partagée)
+- frontend-web/src/lib/api (client HTTP + interceptors)
+- frontend-web/src/lib/auth (token, guard RBAC)
+
+### 3.2 Frontend Mobile (driver/manager)
+- Framework: React Native (Expo) + TypeScript
+- Navigation: React Navigation (Stack + Bottom Tabs)
+- State server: TanStack Query (React Query)
+- State client: Zustand
+- UI: React Native Paper
+- Graphes: react-native-chart-kit (ou victory-native)
+- Auth storage: expo-secure-store (pas localStorage)
+
+Structure recommandée (mobile):
+- mobile-app/src/app (providers + bootstrap)
+- mobile-app/src/navigation (root stack + tabs)
+- mobile-app/src/screens (écrans)
+- mobile-app/src/features (auth, vehicles, telemetry, dtc, alerts, fleets)
+- mobile-app/src/components (UI partagée)
+- mobile-app/src/lib/api (axios + interceptors)
+- mobile-app/src/lib/auth (token + guards RBAC)
+
+### 3.3 Noyau partagé (optionnel mais conseillé)
+- shared/types (DTO API, types métier)
+- shared/constants (rôles, statuts, enums)
+- shared/validation (schémas communs)
+
+### 3.4 Compatibilité Node/Expo (Windows)
+- Recommandé: Node.js 20 LTS
+- Éviter Node 22 avec Expo pour limiter les erreurs Metro/AggregateError
 
 ---
 
