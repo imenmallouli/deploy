@@ -1608,7 +1608,7 @@ tester backend
 cd "c:\auto diagnostic platform\backend"
  ./.venv/Scripts/python.exe -m uvicorn app.main:app --reload
 docker run --rm -p 8000:8000 --env-file .env adp-backend:dev
-  curl -i http://127.0.0.1:8000/docs
+  curl -i http://127.0.0.1:8010/docs
 
 
 curl -s -X POST http://127.0.0.1:8000/api/v1/sync-schema

@@ -1,0 +1,211 @@
+import { apiClient } from './client';
+import type { AlertItem, ApiResult, DtcItem, Fleet, Vehicle } from './types';
+
+type LoginPayload = { email: string; password: string };
+type RegisterPayload = {
+  first_name: string;
+  last_name: string;
+  email: string;
+  role: string;
+  phone: string;
+  password: string;
+};
+
+export async function login(payload: LoginPayload) {
+  const { data } = await apiClient.post('/api/v1/auth/login', payload);
+  return data as ApiResult<{ access_token?: string; role?: string; email?: string; user_id?: number }>;
+}
+
+export async function register(payload: RegisterPayload) {
+  const { data } = await apiClient.post('/api/v1/auth/register', payload);
+  return data as ApiResult<{ access_token?: string; role?: string; email?: string; user_id?: number }>;
+}
+
+export async function listVehicles() {
+  const { data } = await apiClient.get('/api/v1/vehicles');
+  return data as ApiResult<{ items: Vehicle[]; count: number }>;
+}
+
+export async function createVehicle(payload: Partial<Vehicle>) {
+  const { data } = await apiClient.post('/api/v1/vehicles', payload);
+  return data as ApiResult<{ vehicle: Vehicle }>;
+}
+
+export async function getVehicle(vehicleId: number) {
+  const { data } = await apiClient.get(`/api/v1/vehicles/${vehicleId}`);
+  return data as ApiResult<{ vehicle: Vehicle }>;
+}
+
+export async function updateVehicle(vehicleId: number, payload: Partial<Vehicle>) {
+  const { data } = await apiClient.put(`/api/v1/vehicles/${vehicleId}`, payload);
+  return data as ApiResult<{ vehicle: Vehicle }>;
+}
+
+export async function deleteVehicle(vehicleId: number) {
+  const { data } = await apiClient.delete(`/api/v1/vehicles/${vehicleId}`);
+  return data as ApiResult<Record<string, never>>;
+}
+
+export async function getVehicleStatus(vehicleId: number) {
+  const { data } = await apiClient.get(`/api/v1/vehicles/${vehicleId}/status`);
+  return data;
+}
+
+export async function listFleets() {
+  const { data } = await apiClient.get('/api/v1/fleets');
+  return data as ApiResult<{ items: Fleet[]; count: number }>;
+}
+
+export async function createFleet(payload: Partial<Fleet>) {
+  const { data } = await apiClient.post('/api/v1/fleets', payload);
+  return data as ApiResult<{ fleet: Fleet }>;
+}
+
+export async function getFleet(fleetId: number) {
+  const { data } = await apiClient.get(`/api/v1/fleets/${fleetId}`);
+  return data as ApiResult<{ fleet: Fleet }>;
+}
+
+export async function listFleetVehicles(fleetId: number) {
+  const { data } = await apiClient.get(`/api/v1/fleets/${fleetId}/vehicles`);
+  return data as ApiResult<{ items: Vehicle[]; count: number; fleet_id: number }>;
+}
+
+export async function assignVehicleToFleet(fleetId: number, payload: { vehicle_id: number }) {
+  const { data } = await apiClient.post(`/api/v1/fleets/${fleetId}/vehicles`, payload);
+  return data as ApiResult<{ fleet_id: number; vehicle: Vehicle }>;
+}
+
+export async function updateFleet(fleetId: number, payload: Partial<Fleet>) {
+  const { data } = await apiClient.put(`/api/v1/fleets/${fleetId}`, payload);
+  return data as ApiResult<{ fleet: Fleet }>;
+}
+
+export async function deleteFleet(fleetId: number) {
+  const { data } = await apiClient.delete(`/api/v1/fleets/${fleetId}`);
+  return data as ApiResult<Record<string, never>>;
+}
+
+export async function listAlerts() {
+  const { data } = await apiClient.get('/api/v1/alerts');
+  return data as ApiResult<{ alerts: AlertItem[]; pending: number }>;
+}
+
+export async function listAlertsByVehicle(vehicleId: number) {
+  const { data } = await apiClient.get(`/api/v1/alerts/${vehicleId}`);
+  return data as ApiResult<{ alerts: AlertItem[]; pending: number }>;
+}
+
+export async function createAlert(payload: {
+  vehicle_id: number;
+  type: string;
+  severity: string;
+  title: string;
+  message: string;
+}) {
+  const { data } = await apiClient.post('/api/v1/alerts', payload);
+  return data as ApiResult<{ alert: AlertItem }>;
+}
+
+export async function ackAlert(payload: { alert_id: number; note?: string }) {
+  const { data } = await apiClient.post('/api/v1/alerts/ack', payload);
+  return data;
+}
+
+export async function listDtc(limit = 50) {
+  const { data } = await apiClient.get('/api/v1/dtc', { params: { limit } });
+  return data as ApiResult<{ items: DtcItem[]; count: number }>;
+}
+
+export async function pingDtc() {
+  const { data } = await apiClient.get('/api/v1/dtc/ping');
+  return data;
+}
+
+export async function listDtcByVehicle(vehicleId: number, limit = 50) {
+  const { data } = await apiClient.get(`/api/v1/dtc/${vehicleId}`, { params: { limit } });
+  return data as ApiResult<{ items: DtcItem[]; count: number; vehicle_id: number }>;
+}
+
+export async function getDtcHistory(dtcId: string) {
+  const { data } = await apiClient.get(`/api/v1/dtc/${dtcId}/history`);
+  return data;
+}
+
+export async function createDtc(payload: {
+  vehicle_id: number;
+  code: string;
+  severity?: string;
+  description?: string;
+}) {
+  const { data } = await apiClient.post('/api/v1/dtc', payload);
+  return data;
+}
+
+export async function clearDtc(payload: { vehicle_id: number; dtc_code?: string }) {
+  const { data } = await apiClient.post('/api/v1/dtc/clear', payload);
+  return data;
+}
+
+export async function createObdRawPayload(payload: {
+  vehicle_id: number;
+  dongle_id?: string;
+  payload: Record<string, unknown> | unknown[] | string;
+  received_at?: string;
+}) {
+  const { data } = await apiClient.post('/api/v1/dtc/obd/raw', payload);
+  return data;
+}
+
+export async function listObdRawPayloads(params: { limit?: number; vehicle_id?: number }) {
+  const { data } = await apiClient.get('/api/v1/dtc/obd/raw', { params });
+  return data;
+}
+
+export async function createIotLog(payload: {
+  vehicle_id?: number;
+  device_id: string;
+  event_type: string;
+  level?: string;
+  message?: string;
+  metadata?: Record<string, unknown>;
+  event_at?: string;
+}) {
+  const { data } = await apiClient.post('/api/v1/dtc/iot/logs', payload);
+  return data;
+}
+
+export async function listIotLogs(params: { limit?: number; vehicle_id?: number; device_id?: string }) {
+  const { data } = await apiClient.get('/api/v1/dtc/iot/logs', { params });
+  return data;
+}
+
+export async function getTelemetryHistory(params: {
+  vehicle_id: number;
+  start?: string;
+  end?: string;
+  interval?: string;
+  metrics?: string[];
+}) {
+  const { vehicle_id, ...rest } = params;
+  const { data } = await apiClient.get(`/api/v1/telemetry/${vehicle_id}`, { params: rest });
+  return data;
+}
+
+export async function pingTelemetry() {
+  const { data } = await apiClient.get('/api/v1/telemetry/ping');
+  return data;
+}
+
+export async function createTelemetry(payload: {
+  vehicle_id: number;
+  ts?: string;
+  speed?: number;
+  rpm?: number;
+  fuel_level?: number;
+  engine_temp?: number;
+  battery_voltage?: number;
+}) {
+  const { data } = await apiClient.post('/api/v1/telemetry', payload);
+  return data;
+}

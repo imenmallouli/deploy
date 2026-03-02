@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Response
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import alert, auth, database, dtc, fleet, telemetry, vehicle
 # Import les modèles pour enregistrer les tables
@@ -11,6 +12,15 @@ app = FastAPI(
     title="Auto Diagnostic Platform API",
     description="API pour le diagnostic automatique de véhicules",
     version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[],
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Inclure les routers

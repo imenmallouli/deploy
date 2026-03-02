@@ -1,0 +1,10 @@
+export { AlertsPage } from './AlertsPage';
+export { DashboardPage } from './DashboardPage';
+export { DtcPage } from './DtcPage';
+export { FleetsPage } from './FleetsPage';
+export { LoginPage } from './LoginPage';
+export { RegisterPage } from './RegisterPage';
+export { TelemetryPage } from './TelemetryPage';
+export { VehicleDetailsPage } from './VehicleDetailsPage';
+export { VehicleStatusPage } from './VehicleStatusPage';
+export { VehiclesPage } from './VehiclesPage';
