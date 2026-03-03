@@ -1,6 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createTelemetry, getTelemetryHistory, pingTelemetry } from '../lib/api/endpoints';
+import { getAccessToken } from '../lib/auth/session';
 
 export function TelemetryPage() {
   const [vehicleId, setVehicleId] = useState(1);
@@ -16,6 +17,21 @@ export function TelemetryPage() {
   const [interval, setInterval] = useState('1h');
   const [metrics, setMetrics] = useState('speed,rpm,fuel_level,engine_temp,battery_voltage');
 
+  const [liveConnected, setLiveConnected] = useState(false);
+  const [liveError, setLiveError] = useState('');
+  const [liveEvents, setLiveEvents] = useState<any[]>([]);
+  const wsRef = useRef<WebSocket | null>(null);
+
+  const wsUrl = useMemo(() => {
+    const base = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').trim();
+    const token = getAccessToken();
+    const wsBase = base.startsWith('https://')
+      ? base.replace('https://', 'wss://')
+      : base.replace('http://', 'ws://');
+    const query = token ? `?token=${encodeURIComponent(token)}` : '';
+    return `${wsBase}/api/v1/realtime/ws/vehicles/${vehicleId}${query}`;
+  }, [vehicleId]);
+
   const pingMutation = useMutation({ mutationFn: pingTelemetry });
 
   const createMutation = useMutation({ mutationFn: createTelemetry });
@@ -23,6 +39,54 @@ export function TelemetryPage() {
   const telemetryMutation = useMutation({
     mutationFn: getTelemetryHistory,
   });
+
+  useEffect(() => {
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
+
+  const connectLive = () => {
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+
+    setLiveError('');
+
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      setLiveConnected(true);
+    };
+
+    ws.onerror = () => {
+      setLiveError('Erreur WebSocket');
+    };
+
+    ws.onclose = () => {
+      setLiveConnected(false);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        setLiveEvents((prev) => [payload, ...prev].slice(0, 20));
+      } catch {
+        setLiveError('Message temps réel invalide');
+      }
+    };
+  };
+
+  const disconnectLive = () => {
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    setLiveConnected(false);
+  };
 
   return (
     <section>
@@ -93,6 +157,29 @@ export function TelemetryPage() {
       </form>
       <div className="panel">
         <pre className="json-preview">{JSON.stringify(telemetryMutation.data ?? {}, null, 2)}</pre>
+      </div>
+
+      <div className="panel form-grid">
+        <h3>Realtime Predictive Stream (WS /api/v1/realtime/ws/vehicles/{'{vehicle_id}'})</h3>
+        <input
+          type="number"
+          value={vehicleId}
+          onChange={(e) => setVehicleId(Number(e.target.value))}
+          required
+        />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn-primary" type="button" onClick={connectLive}>
+            Connect
+          </button>
+          <button className="btn-secondary" type="button" onClick={disconnectLive}>
+            Disconnect
+          </button>
+        </div>
+        <p className="subtitle">
+          Status: {liveConnected ? 'connected' : 'disconnected'}
+          {liveError ? ` - ${liveError}` : ''}
+        </p>
+        <pre className="json-preview">{JSON.stringify(liveEvents, null, 2)}</pre>
       </div>
     </section>
   );

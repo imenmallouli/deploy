@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import alert, auth, database, dtc, fleet, telemetry, vehicle
+from app.api.v1 import alert, auth, database, dtc, fleet, realtime, telemetry, vehicle
 # Import les modèles pour enregistrer les tables
 from app.models import alert as alert_model
 from app.models import fleet as fleet_model
@@ -32,6 +32,7 @@ app.include_router(vehicle.router, prefix="/api/v1", tags=["Vehicles"])
 app.include_router(alert.router, prefix="/api/v1", tags=["Alerts"])
 app.include_router(dtc.router, prefix="/api/v1", tags=["DTC"])
 app.include_router(telemetry.router, prefix="/api/v1", tags=["Telemetry"])
+app.include_router(realtime.router, prefix="/api/v1", tags=["Realtime"])
 
 
 @app.get("/")
