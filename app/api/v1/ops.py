@@ -4,6 +4,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.schemas.ops import (
     DeviceCreate,
     DeviceUpdate,
+    GeofenceCheckRequest,
     GeofenceCreate,
     GeofenceUpdate,
     GroupCreate,
@@ -66,6 +67,16 @@ async def update_geofence(item_id: str, payload: GeofenceUpdate, context: dict =
 async def delete_geofence(item_id: str, context: dict = Depends(get_current_context)):
     _ = context
     return await OpsService.delete_item("geofences", item_id)
+
+
+@router.post("/geofences/check")
+async def check_geofences(payload: GeofenceCheckRequest, context: dict = Depends(get_current_context)):
+    _ = context
+    return await OpsService.check_geofences(
+        latitude=payload.latitude,
+        longitude=payload.longitude,
+        vehicle_id=payload.vehicle_id,
+    )
 
 
 @router.get("/groups")

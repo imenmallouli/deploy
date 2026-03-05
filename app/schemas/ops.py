@@ -7,6 +7,10 @@ class GeofenceCreate(BaseModel):
     on_enter: str | None = None
     on_exit: str | None = None
     vehicle_count: int = 0
+    center_lat: float | None = None
+    center_lng: float | None = None
+    radius_m: float | None = None
+    enabled: bool = True
 
 
 class GeofenceUpdate(BaseModel):
@@ -15,6 +19,16 @@ class GeofenceUpdate(BaseModel):
     on_enter: str | None = None
     on_exit: str | None = None
     vehicle_count: int | None = None
+    center_lat: float | None = None
+    center_lng: float | None = None
+    radius_m: float | None = None
+    enabled: bool | None = None
+
+
+class GeofenceCheckRequest(BaseModel):
+    vehicle_id: int | None = None
+    latitude: float
+    longitude: float
 
 
 class GroupCreate(BaseModel):
