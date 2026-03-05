@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { listAlerts, listDtc, listVehicles } from '../lib/api/endpoints';
 
 export function DashboardPage() {
@@ -23,12 +24,17 @@ export function DashboardPage() {
       <div className="overview-layout">
         <div>
           <article className="panel getting-started-panel">
-            <h3>Getting started</h3>
+            <div className="getting-started-title-row">
+              <h3>Getting started</h3>
+              <span className="getting-started-info" aria-hidden="true">ⓘ</span>
+            </div>
             <ol>
-              <li>Create / Import vehicles and start managing them</li>
-              <li>Invite team members</li>
-              <li>Add details to vehicles in your fleet</li>
-              <li>Create and assign locations and geofences</li>
+              <li><Link className="getting-started-link" to="/vehicles/list">Create / Import vehicles and start managing them</Link></li>
+              <li><Link className="getting-started-link" to="/register">Invite team members</Link></li>
+              <li><Link className="getting-started-link" to="/vehicles/list">Add details to vehicles in your fleet</Link></li>
+              <li>
+                Create and assign <Link className="getting-started-link" to="/locations">locations</Link> and <Link className="getting-started-link" to="/vehicles/geofences">geofences</Link> to vehicles
+              </li>
             </ol>
           </article>
 

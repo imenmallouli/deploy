@@ -10,7 +10,7 @@ export function Sidebar() {
       <nav>
         <div className="nav-section">
           <div className="nav-list">
-            <NavLink to="/" end className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+            <NavLink to="/get-started" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
               Get started
             </NavLink>
           </div>
@@ -19,7 +19,7 @@ export function Sidebar() {
         <div className="nav-section">
           <p className="nav-section-title">Fleet Management</p>
           <div className="nav-list">
-            <NavLink to="/" end className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+            <NavLink to="/overview" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
               Overview
             </NavLink>
             <div className="nav-group">

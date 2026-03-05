@@ -55,44 +55,46 @@ export function RegisterPage() {
   };
 
   return (
-    <section className="auth-page">
-      <h2>Register</h2>
-      <p className="subtitle">Create a new account for fleet operations.</p>
-      <form className="auth-form" onSubmit={handleSubmit}>
-        <label>
-          First Name
-          <input value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
-        </label>
-        <label>
-          Last Name
-          <input value={lastName} onChange={(e) => setLastName(e.target.value)} required />
-        </label>
-        <label>
-          Email
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        </label>
-        <label>
-          Role
-          <select value={role} onChange={(e) => setRole(e.target.value)}>
-            <option value="driver">driver</option>
-            <option value="manager">manager</option>
-            <option value="admin">admin</option>
-          </select>
-        </label>
-        <label>
-          Phone
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} required />
-        </label>
-        <label>
-          Password
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-        </label>
-        {error ? <p className="form-error">{error}</p> : null}
-        <button type="submit" disabled={mutation.isPending}>{mutation.isPending ? 'Creating...' : 'Create Account'}</button>
-        <p className="auth-switch">
-          Already registered? <Link to="/login">Sign in</Link>
-        </p>
-      </form>
-    </section>
+    <div className="auth-screen">
+      <section className="auth-page">
+        <h2>Register</h2>
+        <p className="subtitle">Create a new account for fleet operations.</p>
+        <form className="auth-form" onSubmit={handleSubmit}>
+          <label>
+            First Name
+            <input value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+          </label>
+          <label>
+            Last Name
+            <input value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+          </label>
+          <label>
+            Email
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          </label>
+          <label>
+            Role
+            <select value={role} onChange={(e) => setRole(e.target.value)}>
+              <option value="driver">driver</option>
+              <option value="manager">manager</option>
+              <option value="admin">admin</option>
+            </select>
+          </label>
+          <label>
+            Phone
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} required />
+          </label>
+          <label>
+            Password
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          </label>
+          {error ? <p className="form-error">{error}</p> : null}
+          <button type="submit" disabled={mutation.isPending}>{mutation.isPending ? 'Creating...' : 'Create Account'}</button>
+          <p className="auth-switch">
+            Already registered? <Link to="/login">Sign in</Link>
+          </p>
+        </form>
+      </section>
+    </div>
   );
 }

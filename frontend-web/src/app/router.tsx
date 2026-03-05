@@ -9,6 +9,7 @@ import {
   DtcPage,
   FleetsPage,
   GeofencesPage,
+  GetStartedPage,
   GroupsPage,
   LoginPage,
   LocationsPage,
@@ -31,7 +32,9 @@ export const router = createBrowserRouter([
         path: '/',
         element: <AppLayout />,
         children: [
-          { index: true, element: <DashboardPage /> },
+          { index: true, element: <Navigate to="/get-started" replace /> },
+          { path: 'get-started', element: <GetStartedPage /> },
+          { path: 'overview', element: <DashboardPage /> },
           { path: 'vehicles', element: <Navigate to="/vehicles/list" replace /> },
           { path: 'vehicles/list', element: <VehiclesPage /> },
           { path: 'vehicles/geofences', element: <GeofencesPage /> },

@@ -212,12 +212,17 @@ export async function createTelemetry(payload: {
 
 export async function listGeofences(q?: string) {
   const { data } = await apiClient.get('/api/v1/geofences', { params: { q } });
-  return data as ApiResult<{ items: Array<{ id: string; name: string; description?: string; on_enter?: string; on_exit?: string; vehicle_count?: number }>; count: number }>;
+  return data as ApiResult<{ items: Array<{ id: string; name: string; description?: string; on_enter?: string; on_exit?: string; vehicle_count?: number; center_lat?: number; center_lng?: number; radius_m?: number; enabled?: boolean }>; count: number }>;
 }
 
-export async function createGeofence(payload: { name: string; description?: string; on_enter?: string; on_exit?: string; vehicle_count?: number }) {
+export async function createGeofence(payload: { name: string; description?: string; on_enter?: string; on_exit?: string; vehicle_count?: number; center_lat?: number; center_lng?: number; radius_m?: number; enabled?: boolean }) {
   const { data } = await apiClient.post('/api/v1/geofences', payload);
   return data;
+}
+
+export async function checkGeofences(payload: { vehicle_id?: number; latitude: number; longitude: number }) {
+  const { data } = await apiClient.post('/api/v1/geofences/check', payload);
+  return data as ApiResult<{ vehicle_id?: number; position: { latitude: number; longitude: number }; count: number; items: Array<{ geofence_id: string; name: string; distance_m: number; radius_m: number; inside: boolean; transition?: string }>; events: Array<Record<string, unknown>> }>;
 }
 
 export async function listGroups(q?: string) {

@@ -207,11 +207,10 @@ But: écran temps réel consolidé.
 Blocs:
 - Header status: healthy/warning/critical
 - Last update
-- Telemetry latest: speed, rpm, fuel_level, engine_temp, battery_voltage
+- Telemetry latest:speed, rpm, fuel_level, engine_temp, battery_voltage
 - DTC actifs: compteur + top 3 codes
 - Alertes actives: compteur pending
 - (Phase 2) GPS map + adresse
-
 API:
 - GET /api/v1/vehicles/{id}/status
 

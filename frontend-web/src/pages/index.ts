@@ -5,6 +5,7 @@ export { DevicesPage } from './DevicesPage';
 export { DtcPage } from './DtcPage';
 export { FleetsPage } from './FleetsPage';
 export { GeofencesPage } from './GeofencesPage';
+export { GetStartedPage } from './GetStartedPage';
 export { GroupsPage } from './GroupsPage';
 export { LoginPage } from './LoginPage';
 export { LocationsPage } from './LocationsPage';

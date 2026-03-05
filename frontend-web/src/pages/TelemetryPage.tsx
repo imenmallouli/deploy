@@ -94,7 +94,7 @@ export function TelemetryPage() {
       <p className="subtitle">Explore time-series metrics by vehicle and interval.</p>
 
       <div className="panel form-grid">
-        <h3>Ping Telemetry Mongo (GET /api/v1/telemetry/ping)</h3>
+        <h3>Ping Telemetry Mongo</h3>
         <button className="btn-primary" type="button" onClick={() => pingMutation.mutate()}>
           Ping Telemetry
         </button>
@@ -113,7 +113,7 @@ export function TelemetryPage() {
           battery_voltage: batteryVoltage === '' ? undefined : Number(batteryVoltage),
         });
       }}>
-        <h3>Create Telemetry (POST /api/v1/telemetry)</h3>
+        <h3>Create Telemetry </h3>
         <input type="number" value={vehicleId} onChange={(e) => setVehicleId(Number(e.target.value))} required />
         <input placeholder="Timestamp ISO (optional)" value={ts} onChange={(e) => setTs(e.target.value)} />
         <input type="number" placeholder="Speed" value={speed} onChange={(e) => setSpeed(e.target.value === '' ? '' : Number(e.target.value))} />
@@ -138,7 +138,7 @@ export function TelemetryPage() {
             .filter(Boolean),
         });
       }}>
-        <h3>Get Telemetry History (GET /api/v1/telemetry/{'{vehicle_id}'})</h3>
+        <h3>Get Telemetry History </h3>
         <input type="number" value={vehicleId} onChange={(e) => setVehicleId(Number(e.target.value))} required />
         <input placeholder="Start ISO (optional)" value={start} onChange={(e) => setStart(e.target.value)} />
         <input placeholder="End ISO (optional)" value={end} onChange={(e) => setEnd(e.target.value)} />
@@ -160,7 +160,7 @@ export function TelemetryPage() {
       </div>
 
       <div className="panel form-grid">
-        <h3>Realtime Predictive Stream (WS /api/v1/realtime/ws/vehicles/{'{vehicle_id}'})</h3>
+        <h3>Realtime Predictive Stream </h3>
         <input
           type="number"
           value={vehicleId}
