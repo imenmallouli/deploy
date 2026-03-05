@@ -1,6 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
-const pids = [
+type ObdRow = {
+  pid: string;
+  mode: string;
+  label: string;
+  unit: string;
+  category: string;
+};
+
+const pids: ObdRow[] = [
   { pid: '010C', mode: '01', label: 'Engine RPM', unit: 'rpm', category: 'Powertrain' },
   { pid: '010D', mode: '01', label: 'Vehicle Speed', unit: 'km/h', category: 'Powertrain' },
   { pid: '0105', mode: '01', label: 'Coolant Temperature', unit: '°C', category: 'Engine' },
@@ -16,9 +24,60 @@ const pids = [
 type UnitFilter = 'all' | 'rpm' | 'km/h' | '°C' | '%' | 'V' | 'code' | 'text' | '-';
 type CategoryFilter = 'all' | 'Powertrain' | 'Engine' | 'Fuel' | 'Electrical' | 'Diagnostics' | 'Vehicle Info';
 
+function normalizeImportedRow(input: Record<string, unknown>): ObdRow | null {
+  const pidValue = String(input.pid ?? '').trim();
+  const modeValue = String(input.mode ?? '').trim();
+  const labelValue = String(input.label ?? input.description ?? '').trim();
+  const unitValue = String(input.unit ?? '-').trim() || '-';
+  const categoryValue = String(input.category ?? 'Diagnostics').trim() || 'Diagnostics';
+
+  if (!pidValue || !modeValue || !labelValue) {
+    return null;
+  }
+
+  return {
+    pid: pidValue,
+    mode: modeValue,
+    label: labelValue,
+    unit: unitValue,
+    category: categoryValue,
+  };
+}
+
+function parseCsv(content: string): ObdRow[] {
+  const lines = content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length < 2) {
+    return [];
+  }
+
+  const headers = lines[0].split(',').map((header) => header.trim().toLowerCase());
+  const dataRows: ObdRow[] = [];
+
+  for (let index = 1; index < lines.length; index += 1) {
+    const parts = lines[index].split(',').map((value) => value.trim());
+    const raw: Record<string, unknown> = {};
+    headers.forEach((header, headerIndex) => {
+      raw[header] = parts[headerIndex] ?? '';
+    });
+
+    const normalized = normalizeImportedRow(raw);
+    if (normalized) {
+      dataRows.push(normalized);
+    }
+  }
+
+  return dataRows;
+}
+
 export function ObdLibraryPage() {
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
+  const [libraryRows, setLibraryRows] = useState<ObdRow[]>(pids);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [unitFilterDraft, setUnitFilterDraft] = useState<UnitFilter>('all');
@@ -36,7 +95,7 @@ export function ObdLibraryPage() {
 
   const rows = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return pids.filter((row) => {
+    return libraryRows.filter((row) => {
       const unitMatch = unitFilter === 'all' || row.unit === unitFilter;
       const categoryMatch = categoryFilter === 'all' || row.category === categoryFilter;
       const queryMatch = !query
@@ -47,7 +106,7 @@ export function ObdLibraryPage() {
         || row.category.toLowerCase().includes(query);
       return unitMatch && categoryMatch && queryMatch;
     });
-  }, [search, unitFilter, categoryFilter]);
+  }, [search, unitFilter, categoryFilter, libraryRows]);
 
   const handleSearch = () => {
     setSearch(searchInput.trim());
@@ -77,6 +136,56 @@ export function ObdLibraryPage() {
     setActionMessage('OBD library refreshed.');
   };
 
+  const handleImportClick = () => {
+    importInputRef.current?.click();
+  };
+
+  const handleImportFile: React.ChangeEventHandler<HTMLInputElement> = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const content = await file.text();
+      let importedRows: ObdRow[] = [];
+
+      if (file.name.toLowerCase().endsWith('.json')) {
+        const parsed = JSON.parse(content) as unknown;
+        if (Array.isArray(parsed)) {
+          importedRows = parsed
+            .map((entry) => (typeof entry === 'object' && entry ? normalizeImportedRow(entry as Record<string, unknown>) : null))
+            .filter((entry): entry is ObdRow => entry !== null);
+        }
+      } else {
+        importedRows = parseCsv(content);
+      }
+
+      if (importedRows.length === 0) {
+        setActionMessage('No valid rows found in import file.');
+        return;
+      }
+
+      setLibraryRows((prev) => {
+        const merged = [...prev];
+        for (const imported of importedRows) {
+          const key = `${imported.pid}|${imported.mode}`.toLowerCase();
+          const existingIndex = merged.findIndex((row) => `${row.pid}|${row.mode}`.toLowerCase() === key);
+          if (existingIndex >= 0) {
+            merged[existingIndex] = imported;
+          } else {
+            merged.push(imported);
+          }
+        }
+        return merged;
+      });
+
+      setActionMessage(`Imported ${importedRows.length} row(s) from ${file.name}.`);
+    } catch {
+      setActionMessage('Import failed. Use a valid JSON or CSV file.');
+    } finally {
+      event.target.value = '';
+    }
+  };
+
   const toggleColumn = (column: keyof typeof visibleColumns) => {
     setVisibleColumns((prev) => ({ ...prev, [column]: !prev[column] }));
   };
@@ -101,7 +210,15 @@ export function ObdLibraryPage() {
           <button className="btn-link" type="button" onClick={() => setColumnsOpen((value) => !value)}>Columns</button>
           <button className="btn-link" type="button" onClick={handleSearch}>Search</button>
           <div style={{ flex: 1 }} />
+          <button className="btn-link" type="button" onClick={handleImportClick}>Import</button>
           <button className="btn-link" type="button" onClick={handleRefresh}>Refresh</button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".json,.csv,text/csv,application/json"
+            onChange={handleImportFile}
+            style={{ display: 'none' }}
+          />
         </div>
 
         {filtersOpen && (

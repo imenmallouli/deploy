@@ -1,442 +1,228 @@
-# Conception Frontend Détaillée — Auto Diagnostic Platform
+# Conception Frontend Corrigée — MALLOULIAUTO Cloud
 
 ## 1) Objectif
-Concevoir deux frontends alignés avec l’API backend actuelle:
-- Web (dashboard opérationnel)
-- Mobile (React Native)
-
-Le design s’inspire des flux AutoPi (fleet/device/data).
+Définir une conception frontend alignée avec l’implémentation réelle du projet `frontend-web`.
 
 Objectifs UX:
-- Donner une vue opérationnelle rapide (dashboard + alertes + DTC + status véhicule).
-- Réduire le nombre de clics pour atteindre le statut temps réel d’un véhicule.
-- Respecter RBAC (admin, manager, driver).
+- Vue opérationnelle immédiate (fleet + devices + diagnostics + alertes).
+- Actions directes via toolbar (Search, Filters, Columns, Refresh, Create).
+- Intégration native avec l’API backend v1 (`/api/v1/...`) et Swagger/ReDoc.
 
 ---
 
-## 2) Périmètre MVP
+## 2) État actuel du scope (implémenté)
 
-### Inclus MVP
-- Authentification (login/register/logout)
-- Dashboard opérationnel
-- Véhicules (liste, détail, status)
-- Télémétrie historique
-- DTC (liste, création, historique, clear)
-- Alertes (liste, création, ack)
-- Flottes (liste)
+### Inclus aujourd’hui
+- Auth: Login, Register, Logout
+- Get Started
+- Fleet Management: Overview, Vehicles (list/details), Geofences, Groups, Locations, Diagnostics, Alerts
+- Device Management: Overview, Devices, OBD Library, Vehicle Status, Telemetry
+- Fleets (liste + opérations de base)
 
-### Hors MVP (phase 2)
-- Carte GPS temps réel avancée
-- Notifications push temps réel
-- Paramétrage utilisateur avancé
-- Reporting PDF/CSV
-- White-labeling complet
+### Partiellement implémenté
+- RBAC granulaire UI (rôle stocké mais règles UI incomplètes)
+- Temps réel (WebSocket présent sur Telemetry, pas généralisé à tous les modules)
 
----
-
-## 3) Architecture Frontend (recommandée)
-
-### 3.1 Frontend Web (admin/ops)
-- Framework: React + TypeScript (Vite)
-- Router: React Router
-- State server: TanStack Query (React Query)
-- State client: Zustand
-- UI: Tailwind + composants maison
-- Graphes: Recharts
-- Auth storage: token en mémoire + fallback localStorage (MVP)
-
-Structure recommandée (web):
-- frontend-web/src/app (routing + providers)
-- frontend-web/src/pages (écrans)
-- frontend-web/src/features (auth, vehicles, telemetry, dtc, alerts, fleets)
-- frontend-web/src/components (UI partagée)
-- frontend-web/src/lib/api (client HTTP + interceptors)
-- frontend-web/src/lib/auth (token, guard RBAC)
-
-### 3.2 Frontend Mobile (driver/manager)
-- Framework: React Native (Expo) + TypeScript
-- Navigation: React Navigation (Stack + Bottom Tabs)
-- State server: TanStack Query (React Query)
-- State client: Zustand
-- UI: React Native Paper
-- Graphes: react-native-chart-kit (ou victory-native)
-- Auth storage: expo-secure-store (pas localStorage)
-
-Structure recommandée (mobile):
-- mobile-app/src/app (providers + bootstrap)
-- mobile-app/src/navigation (root stack + tabs)
-- mobile-app/src/screens (écrans)
-- mobile-app/src/features (auth, vehicles, telemetry, dtc, alerts, fleets)
-- mobile-app/src/components (UI partagée)
-- mobile-app/src/lib/api (axios + interceptors)
-- mobile-app/src/lib/auth (token + guards RBAC)
-
-### 3.3 Noyau partagé (optionnel mais conseillé)
-- shared/types (DTO API, types métier)
-- shared/constants (rôles, statuts, enums)
-- shared/validation (schémas communs)
-
-### 3.4 Compatibilité Node/Expo (Windows)
-- Recommandé: Node.js 20 LTS
-- Éviter Node 22 avec Expo pour limiter les erreurs Metro/AggregateError
+### Hors scope actuel
+- Frontend mobile React Native (non présent dans ce workspace)
+- Reporting avancé PDF/CSV global
+- Notifications push complètes
 
 ---
 
-## 4) Plan des pages (10 pages)
+## 3) Stack technique réelle
 
-1. Login
-2. Register
-3. Dashboard
-4. Vehicles List
-5. Vehicle Details
-6. Vehicle Status
-7. Telemetry History
-8. DTC
-9. Alerts
-10. Fleets
+### 3.1 Frontend Web
+- React 18 + TypeScript + Vite
+- React Router (routing protégé)
+- TanStack Query (server state)
+- Axios (client API + interceptors auth)
+- Zustand installé (usage limité/optionnel)
+- UI CSS maison (`styles.css`) — pas de Tailwind actif
 
----
-
-## 5) Détail page par page
-
-## 5.1 Login
-But: connecter un utilisateur existant.
-
-Champs:
-- email (required)
-- password (required)
-
-Actions:
-- Se connecter
-- Lien vers Register
-
-Règles:
-- Afficher message d’erreur backend si credentials invalides.
-- Redirection vers Dashboard si succès.
-
-API:
-- POST /api/v1/auth/login
+### 3.2 Auth/session
+- Token stocké dans `localStorage`
+- Guard de route par session (`RequireAuth`)
+- Interceptor Axios:
+	- injecte `Authorization: Bearer <token>`
+	- sur 401/403: clear session + redirect `/login`
 
 ---
 
-## 5.2 Register
-But: créer un compte.
+## 4) Architecture frontend réelle
 
-Champs:
-- first_name (required)
-- last_name (required)
-- email (required)
-- role (required; default driver)
-- phone (required)
-- password (required)
+Structure:
+- `frontend-web/src/app` (layout, router, guard)
+- `frontend-web/src/components` (Sidebar, TopBar)
+- `frontend-web/src/pages` (pages métier)
+- `frontend-web/src/lib/api` (client + endpoints + types)
+- `frontend-web/src/lib/auth` (session)
+- `frontend-web/src/styles.css` (design system local)
 
-Actions:
-- Créer compte
-- Lien vers Login
-
-API:
-- POST /api/v1/auth/register
+Patterns UI utilisés:
+- Table + toolbar standardisée
+- Panneaux togglables: Filters / Columns / Actions
+- Feedback visible: loading, erreurs, succès, empty state
 
 ---
 
-## 5.3 Dashboard
-But: vue globale opérationnelle.
+## 5) Plan des routes (corrigé)
 
-Widgets:
-- KPI: nombre véhicules
-- KPI: alertes pending
-- KPI: DTC actifs
-- KPI: dernière synchro (timestamp)
-- Liste 5 dernières alertes
-- Liste 5 véhicules à surveiller (status warning/critical)
+Public:
+- `/login`
+- `/register`
 
-Navigation rapide:
-- Clic KPI alertes -> page Alerts
-- Clic KPI DTC -> page DTC
-- Clic véhicule -> Vehicle Status
+Protégé:
+- `/get-started`
+- `/overview`
+- `/vehicles/list`
+- `/vehicles/geofences`
+- `/vehicles/groups`
+- `/vehicles/:vehicleId`
+- `/locations`
+- `/diagnostics` (alias métier de DTC)
+- `/vehicle-status`
+- `/vehicle-status/:vehicleId`
+- `/devices/overview`
+- `/devices/list`
+- `/devices/obd-library`
+- `/telemetry`
+- `/dtc` (route additionnelle)
+- `/alerts`
+- `/fleets`
 
-APIs (batch):
-- GET /api/v1/vehicles
-- GET /api/v1/alerts?status=pending
-- GET /api/v1/dtc (limité)
-
----
-
-## 5.4 Vehicles List
-But: consulter et filtrer les véhicules.
-
-Composants:
-- Table colonnes: id, plate, make/model, year, mileage, status, last_connection
-- Search bar (VIN / plate / modèle)
-- Filtre status
-- Bouton Create Vehicle (admin/manager)
-
-Actions:
-- Voir détail
-- Voir status
-
-APIs:
-- GET /api/v1/vehicles
-- POST /api/v1/vehicles
+Redirections actives:
+- `/` -> `/get-started`
+- `/vehicles` -> `/vehicles/list`
+- `/devices` -> `/devices/list`
+- `/obd-library` -> `/devices/obd-library`
 
 ---
 
-## 5.5 Vehicle Details
-But: fiche technique du véhicule.
+## 6) Pages et comportement attendu
 
-Sections:
-- Identité: VIN, plate, make/model/year
-- Assignation: fleet_id, driver_id, dongle
-- Meta: created_at, updated_at
+### 6.1 Get Started
+- Tuiles `Documentation`, `API Reference`, `Support` reliées aux ressources projet
+- Section d’introduction + raccourcis opérationnels
 
-Actions:
-- Modifier véhicule (admin/manager)
-- Supprimer (admin)
-- Aller vers status
+### 6.2 Fleet Management
+- `Overview`: KPIs, blocs fleet/alerts, liens de démarrage
+- `Vehicles`: listing + création + édition/suppression via détails
+- `Geofences`: map + recherche + filtres + colonnes + création + check position
+- `Groups`: recherche + création
+- `Locations`: recherche/filtres/colonnes + création
+- `Diagnostics`/`DTC`: recherche, filtres date, clear/history, feedback
+- `Alerts`: stats, filtres, colonnes, actions, ack unitaire/multi-sélection
 
-APIs:
-- GET /api/v1/vehicles/{id}
-- PUT /api/v1/vehicles/{id}
-- DELETE /api/v1/vehicles/{id}
-
----
-
-## 5.6 Vehicle Status
-But: écran temps réel consolidé.
-
-Blocs:
-- Header status: healthy/warning/critical
-- Last update
-- Telemetry latest:speed, rpm, fuel_level, engine_temp, battery_voltage
-- DTC actifs: compteur + top 3 codes
-- Alertes actives: compteur pending
-- (Phase 2) GPS map + adresse
-API:
-- GET /api/v1/vehicles/{id}/status
+### 6.3 Device Management
+- `Devices Overview`: métriques globales devices
+- `Devices`: recherche, colonnes, refresh, création (`device_id`, `vehicle_id`, `status`, `vin`)
+- `OBD Library`: table OBD, filtres/colonnes, import JSON/CSV
+- `Vehicle Status`: synthèse statut véhicule
+- `Telemetry`: ping, création télémétrie, historique, stream WebSocket
 
 ---
 
-## 5.7 Telemetry History
-But: visualiser historique métriques.
+## 7) Contrats API utilisés côté frontend
 
-Filtres:
-- vehicle_id (required)
-- start (datetime)
-- end (datetime)
-- interval (1m, 5m, 1h, 1d)
-- metrics[] (multi-select)
+Auth:
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/register`
 
-Graphes:
-- Courbe par métrique
-- Tooltip timestamp + value
+Fleet/Vehicle:
+- `GET/POST /api/v1/vehicles`
+- `GET/PUT/DELETE /api/v1/vehicles/{id}`
+- `GET /api/v1/vehicles/{id}/status`
+- `GET/POST/PUT/DELETE /api/v1/fleets...`
 
-API:
-- GET /api/v1/telemetry/{vehicle_id}
+Diagnostics/Alerts/Telemetry:
+- `GET/POST /api/v1/dtc`
+- `GET /api/v1/dtc/{vehicle_id}`
+- `GET /api/v1/dtc/{dtc_id}/history`
+- `POST /api/v1/dtc/clear`
+- `GET/POST /api/v1/alerts`
+- `POST /api/v1/alerts/ack`
+- `GET/POST /api/v1/telemetry`
+- `GET /api/v1/telemetry/{vehicle_id}`
 
----
-
-## 5.8 DTC
-But: diagnostic et suivi DTC.
-
-Sections:
-- Liste DTC (table)
-- DTC par véhicule
-- Historique par code/id
-- Action clear (admin/manager)
-- Form create DTC (test/ingest)
-
-APIs:
-- GET /api/v1/dtc
-- GET /api/v1/dtc/{vehicle_id}
-- GET /api/v1/dtc/{dtc_id}/history
-- POST /api/v1/dtc
-- POST /api/v1/dtc/clear
+Ops (pages AutoPi-like):
+- `GET/POST /api/v1/geofences`
+- `POST /api/v1/geofences/check`
+- `GET/POST /api/v1/groups`
+- `GET/POST /api/v1/locations`
+- `GET/POST /api/v1/devices`
+- `GET /api/v1/devices/overview`
 
 ---
 
-## 5.9 Alerts
-But: traitement des alertes.
+## 8) RBAC (corrigé)
 
-Fonctions:
-- Liste filtrable (vehicle_id, type, severity, status)
-- Create alert (admin/manager)
-- Ack alert avec note
+### Réel aujourd’hui
+- Authentification appliquée globalement
+- Rôle stocké en session, mais contrôle fin des écrans/actions encore partiel
 
-APIs:
-- GET /api/v1/alerts
-- GET /api/v1/alerts/{vehicle_id}
-- POST /api/v1/alerts
-- POST /api/v1/alerts/ack
+### Cible recommandée
+- `admin`: accès complet
+- `manager`: création/modification opérationnelle sans administration sensible
+- `driver`: lecture limitée (véhicules/alertes/dtc autorisés)
 
----
-
-## 5.10 Fleets
-But: vision flotte.
-
-Fonctions:
-- Liste des flottes
-- (Phase 2) détail flotte + véhicules associés
-
-API:
-- GET /api/v1/fleets
+Actions à implémenter:
+- Guard par rôle sur routes sensibles
+- Masquage conditionnel des boutons `Create`, `Delete`, `Clear`, `Ack bulk`
 
 ---
 
-## 6) Navigation UX
+## 9) États UI / qualité
 
-Navigation principale (sidebar):
-- Dashboard
-- Vehicles
-- Vehicle Status (contextuel)
-- Telemetry
-- DTC
-- Alerts
-- Fleets
+Standards déjà utilisés:
+- `Loading` pendant requêtes
+- `No data to display` si liste vide
+- Messages de succès/erreur pour actions utilisateur
 
-Navigation contextuelle depuis Vehicle Details:
-- Onglets: Status | Telemetry | DTC | Alerts
-
-Header global:
-- Recherche véhicule
-- Profil utilisateur
-- Logout
+À uniformiser:
+- Même wording d’erreur/succès sur toutes les pages
+- Retry explicite là où les mutations sont critiques
 
 ---
 
-## 7) RBAC Frontend
+## 10) Écarts corrigés par rapport à l’ancienne conception
 
-Rôles backend: admin, manager, driver.
-
-Permissions UI:
-- admin: tout
-- manager: create vehicle, create/ack alert, clear DTC, visibilité flotte gérée
-- driver: lecture limitée (son véhicule, ses alertes/dtc/télémétrie)
-
-Comportement:
-- Les boutons non autorisés sont cachés.
-- Les routes non autorisées redirigent vers page 403 (ou Dashboard).
+- La conception n’est plus “2 frontends (web + mobile)” dans le scope actuel: le projet implémenté est web.
+- UI stack corrigée: CSS maison (pas Tailwind actif).
+- Plan des pages étendu avec modules réels: Get Started, Geofences, Groups, Locations, Devices Overview, OBD Library.
+- Navigation/routage mis à jour selon `router.tsx` réel.
+- RBAC reclassé en “partiellement implémenté” au lieu de “terminé”.
 
 ---
 
-## 8) Formulaires (détaillés)
+## 11) Roadmap réaliste (prochaine itération)
 
-## 8.1 Vehicle Form
-- vin: string(17)
-- license_plate: string
-- make: string
-- model: string
-- year: number
-- mileage: number >= 0
-- status: pending/healthy/warning/critical
-- dongle_id: string optionnel
+Sprint A — Consolidation:
+- Finaliser RBAC UI par rôle
+- Uniformiser feedback UX sur toutes les pages
+- Ajouter tests UI ciblés sur flux critiques
 
-Validation:
-- champs required non vides
-- year entre 1990 et année+1
+Sprint B — Data & temps réel:
+- Standardiser polling/refresh modules fleet/device
+- Étendre le temps réel (WebSocket) aux alertes/états critiques
 
-## 8.2 Telemetry Filter Form
-- vehicle_id: required
-- start/end: ISO datetime
-- interval: enum
-- metrics: array
-
-Validation:
-- start < end
-
-## 8.3 DTC Form
-- vehicle_id: required
-- code: required
-- severity: info/warning/critical
-- description: optionnel
-- resolved: bool (default false)
-
-## 8.4 Alert Form
-- vehicle_id: required
-- type: required
-- severity: required
-- title: required
-- message: required
-
-## 8.5 Ack Alert Form
-- alert_id: required
-- note: optionnel
+Sprint C — Produit:
+- Page Support interne (formulaire ticket)
+- Documentation interne frontend (guide usage écrans)
+- Préparer base mobile si besoin business validé
 
 ---
 
-## 9) Contrats API côté frontend
+## 12) Critères d’acceptation (version corrigée)
 
-Headers:
-- Authorization: Bearer <access_token>
-- Content-Type: application/json
-
-Gestion erreurs:
-- 401: token invalide/expiré -> logout + redirect login
-- 403: accès refusé -> toast + fallback route
-- 422: erreurs de validation -> affichage champ par champ
-- 500: erreur serveur -> message global + retry
+- Toutes les routes listées en section 5 sont navigables sans erreur.
+- Les pages toolbar (Alerts, DTC, Devices, Geofences, Locations, OBD Library) ont des boutons fonctionnels.
+- `Documentation`, `API Reference`, `Support` sur Get Started sont reliés à des ressources projet.
+- Le frontend reste aligné avec les endpoints disponibles dans `src/lib/api/endpoints.ts`.
+- Aucun crash sur erreurs API standards (401/403/422/500).
 
 ---
 
-## 10) États UI et feedback
+## 13) Note de design
 
-- Loading skeleton sur tables/cartes
-- Empty state explicite ("Aucune donnée")
-- Error state avec bouton retry
-- Toast succès (create/update/ack/clear)
-
----
-
-## 11) Performance et cache
-
-MVP:
-- React Query cacheTime 5 min pour listes
-- invalidation ciblée après mutation
-
-Phase 2:
-- Polling status véhicule toutes les 15-30s
-- WebSocket/SSE pour alertes temps réel
-
----
-
-## 12) Roadmap d’implémentation frontend
-
-Sprint FE-1:
-- Auth + Layout + Sidebar + Guards RBAC
-- Dashboard
-- Vehicles list + details
-
-Sprint FE-2:
-- Vehicle status
-- Telemetry history
-- DTC page
-- Alerts page
-
-Sprint FE-3:
-- Fleets
-- QA UX + responsive + optimisation
-
----
-
-## 13) Critères d’acceptation (MVP)
-
-- Login/Register fonctionnels
-- Navigation sans blocage entre modules
-- Vehicle status affiche telemetry + compte DTC + alertes
-- Telemetry history filtrable par interval/date
-- DTC clear disponible selon rôle
-- Alerts ack disponible selon rôle
-- Aucun crash sur erreurs backend standards
-
----
-
-## 14) Notes d’alignement avec AutoPi
-
-Inspirations retenues:
-- Priorité donnée au triptyque Device/Fleet/Data
-- Focus opérationnel: status en premier, détails ensuite
-- Vision “fleet management + device management + diagnostics”
-
-Adaptation projet:
-- Backend local actuel orienté endpoints API v1
-- Stack data effective: PostgreSQL + MongoDB
-- Conception MVP pragmatique pour avancer vite
+Le style visuel reste inspiré d’un flux type AutoPi (fleet/device/data), mais l’application est découplée d’AutoPi et reliée à l’écosystème MALLOULIAUTO (backend, docs, support) pour rester cohérente produit.

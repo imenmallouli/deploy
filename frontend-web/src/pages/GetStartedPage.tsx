@@ -7,6 +7,11 @@ export function GetStartedPage() {
   const vehiclesQuery = useQuery({ queryKey: ['vehicles'], queryFn: listVehicles });
   const alertsQuery = useQuery({ queryKey: ['alerts'], queryFn: listAlerts });
   const dtcQuery = useQuery({ queryKey: ['dtc'], queryFn: () => listDtc(20) });
+  const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').trim();
+  const swaggerUrl = `${apiBaseUrl.replace(/\/$/, '')}/docs`;
+  const documentationUrl = `${apiBaseUrl.replace(/\/$/, '')}/redoc`;
+  const supportEmail = (import.meta.env.VITE_SUPPORT_EMAIL || 'support@mallouliauto.local').trim();
+  const supportUrl = `mailto:${supportEmail}?subject=${encodeURIComponent('MALLOULIAUTO support request')}`;
 
   const totalVehicles = vehiclesQuery.data?.count ?? 0;
   const pendingAlerts = alertsQuery.data?.pending ?? 0;
@@ -38,9 +43,18 @@ export function GetStartedPage() {
 
       <h3 className="get-started-section-title">Shortcuts</h3>
       <div className="get-started-shortcuts">
-        <article className="get-started-tile"><span>📘</span><p>Documentation</p></article>
-        <article className="get-started-tile"><span>💻</span><p>API Reference</p></article>
-        <article className="get-started-tile"><span>🎧</span><p>Support</p></article>
+        <a className="get-started-tile" href={documentationUrl} target="_blank" rel="noreferrer">
+          <span>📘</span>
+          <p>Documentation</p>
+        </a>
+        <a className="get-started-tile" href={swaggerUrl} target="_blank" rel="noreferrer">
+          <span>💻</span>
+          <p>API Reference</p>
+        </a>
+        <a className="get-started-tile" href={supportUrl}>
+          <span>🎧</span>
+          <p>Support</p>
+        </a>
       </div>
 
       <h3 className="get-started-section-title">Telematics</h3>
