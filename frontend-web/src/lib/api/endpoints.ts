@@ -209,3 +209,48 @@ export async function createTelemetry(payload: {
   const { data } = await apiClient.post('/api/v1/telemetry', payload);
   return data;
 }
+
+export async function listGeofences(q?: string) {
+  const { data } = await apiClient.get('/api/v1/geofences', { params: { q } });
+  return data as ApiResult<{ items: Array<{ id: string; name: string; description?: string; on_enter?: string; on_exit?: string; vehicle_count?: number }>; count: number }>;
+}
+
+export async function createGeofence(payload: { name: string; description?: string; on_enter?: string; on_exit?: string; vehicle_count?: number }) {
+  const { data } = await apiClient.post('/api/v1/geofences', payload);
+  return data;
+}
+
+export async function listGroups(q?: string) {
+  const { data } = await apiClient.get('/api/v1/groups', { params: { q } });
+  return data as ApiResult<{ items: Array<{ id: string; name: string; vehicle_count?: number }>; count: number }>;
+}
+
+export async function createGroup(payload: { name: string; vehicle_count?: number }) {
+  const { data } = await apiClient.post('/api/v1/groups', payload);
+  return data;
+}
+
+export async function listLocations(q?: string) {
+  const { data } = await apiClient.get('/api/v1/locations', { params: { q } });
+  return data as ApiResult<{ items: Array<{ id: string; name: string; type?: string; latitude?: number; longitude?: number }>; count: number }>;
+}
+
+export async function createLocation(payload: { name: string; type?: string; latitude?: number; longitude?: number }) {
+  const { data } = await apiClient.post('/api/v1/locations', payload);
+  return data;
+}
+
+export async function listDevices(q?: string) {
+  const { data } = await apiClient.get('/api/v1/devices', { params: { q } });
+  return data as ApiResult<{ items: Array<{ id: string; device_id: string; vehicle_id?: number; vin?: string; status?: string }>; count: number }>;
+}
+
+export async function createDevice(payload: { device_id: string; vehicle_id?: number; vin?: string; status?: string }) {
+  const { data } = await apiClient.post('/api/v1/devices', payload);
+  return data;
+}
+
+export async function getDevicesOverview() {
+  const { data } = await apiClient.get('/api/v1/devices/overview');
+  return data as ApiResult<{ total: number; online: number; offline: number; warning: number }>;
+}

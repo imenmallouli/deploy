@@ -19,9 +19,10 @@ body {
 }
 
 .sidebar {
-  background: #0f172a;
-  color: #e5e7eb;
+  background: #f8fafc;
+  color: #1f2937;
   padding: 24px 16px;
+  border-right: 1px solid #e5e7eb;
 }
 
 .brand h1 {
@@ -31,8 +32,20 @@ body {
 
 .brand p {
   margin: 6px 0 20px;
-  color: #94a3b8;
+  color: #6b7280;
   font-size: 13px;
+}
+
+.nav-section {
+  margin-bottom: 18px;
+}
+
+.nav-section-title {
+  margin: 0 0 8px;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
 .nav-list {
@@ -42,19 +55,50 @@ body {
 }
 
 .nav-item {
-  color: #cbd5e1;
+  color: #374151;
   text-decoration: none;
   padding: 10px 12px;
   border-radius: 10px;
 }
 
 .nav-item:hover {
-  background: #1e293b;
+  background: #e5eef8;
 }
 
 .nav-item.active {
-  background: #1d4ed8;
-  color: white;
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-left: 3px solid #1d4ed8;
+}
+
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nav-sublist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 18px;
+}
+
+.nav-subitem {
+  color: #4b5563;
+  text-decoration: none;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
+.nav-subitem:hover {
+  background: #e5eef8;
+}
+
+.nav-subitem.active {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-left: 3px solid #1d4ed8;
 }
 
 .content-shell {
@@ -169,6 +213,141 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.overview-page h2 {
+  margin-bottom: 14px;
+}
+
+.overview-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.getting-started-panel ol {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 6px;
+  color: #374151;
+}
+
+.fleet-overview-panel,
+.open-alerts-panel {
+  margin-top: 12px;
+}
+
+.panel-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.panel-title-row h3 {
+  margin: 0;
+}
+
+.muted-note {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.overview-cards-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.overview-stat-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px;
+  min-height: 120px;
+  background: #f8fafc;
+}
+
+.overview-stat-card.is-highlight {
+  background: #eaf2ff;
+}
+
+.overview-stat-title {
+  margin: 0;
+  color: #4b5563;
+  font-size: 14px;
+}
+
+.overview-stat-value {
+  margin: 22px 0 0;
+  color: #111827;
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.fleet-tracking-panel {
+  min-height: 100%;
+}
+
+.fleet-map {
+  margin-top: 12px;
+  width: 100%;
+  min-height: 640px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.fleet-map.compact {
+  min-height: 300px;
+  margin-top: 0;
+}
+
+.map-panel,
+.table-shell {
+  margin-top: 12px;
+}
+
+.toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.diagnostics-shell {
+  padding: 20px;
+}
+
+.diagnostics-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.diagnostics-date {
+  min-width: 230px;
+}
+
+.diagnostics-table th,
+.diagnostics-table td {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.toolbar-input {
+  min-width: 280px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 9px;
+}
+
+.empty-cell {
+  text-align: center;
+  color: #9ca3af;
+  padding: 36px 8px;
+  font-size: 18px;
 }
 
 .vehicles-table {
@@ -384,6 +563,18 @@ h2 {
 
   .panel-grid {
     grid-template-columns: 1fr;
+  }
+
+  .overview-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-cards-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .fleet-map {
+    min-height: 420px;
   }
 
   .details-grid {
