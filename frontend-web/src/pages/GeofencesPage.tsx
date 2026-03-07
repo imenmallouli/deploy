@@ -8,6 +8,31 @@ function parseDecimal(value: string) {
   return Number(normalized);
 }
 
+function parseOptionalNumber(value: string): number | undefined {
+  const normalized = value.trim();
+  if (!normalized) return undefined;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function buildMapEmbedUrl(latitude?: number, longitude?: number) {
+  if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+    const lat = Number(latitude);
+    const lng = Number(longitude);
+    const lngDelta = 0.02;
+    const latDelta = 0.01;
+    const left = (lng - lngDelta).toFixed(6);
+    const bottom = (lat - latDelta).toFixed(6);
+    const right = (lng + lngDelta).toFixed(6);
+    const top = (lat + latDelta).toFixed(6);
+    const marker = `${lat.toFixed(6)}%2C${lng.toFixed(6)}`;
+
+    return `https://www.openstreetmap.org/export/embed.html?bbox=${left}%2C${bottom}%2C${right}%2C${top}&layer=mapnik&marker=${marker}`;
+  }
+
+  return 'https://www.openstreetmap.org/export/embed.html?bbox=-3.8%2C43.8%2C3.8%2C49.2&layer=mapnik';
+}
+
 function getErrorMessage(error: unknown) {
   const data = (error as { response?: { data?: { message?: string; detail?: string } } })?.response?.data;
   return data?.message ?? data?.detail ?? 'Create failed. Please try again.';
@@ -24,12 +49,12 @@ export function GeofencesPage() {
   const [description, setDescription] = useState('');
   const [onEnter, setOnEnter] = useState('');
   const [onExit, setOnExit] = useState('');
-  const [centerLatInput, setCenterLatInput] = useState('36.8065');
-  const [centerLngInput, setCenterLngInput] = useState('10.1815');
-  const [radiusMInput, setRadiusMInput] = useState('500');
-  const [checkVehicleId, setCheckVehicleId] = useState<number>(1);
-  const [checkLatInput, setCheckLatInput] = useState('36.8065');
-  const [checkLngInput, setCheckLngInput] = useState('10.1815');
+  const [centerLatInput, setCenterLatInput] = useState('');
+  const [centerLngInput, setCenterLngInput] = useState('');
+  const [radiusMInput, setRadiusMInput] = useState('');
+  const [checkVehicleId, setCheckVehicleId] = useState('');
+  const [checkLatInput, setCheckLatInput] = useState('');
+  const [checkLngInput, setCheckLngInput] = useState('');
   const [createFeedback, setCreateFeedback] = useState('');
   const [createError, setCreateError] = useState('');
   const [visibleColumns, setVisibleColumns] = useState({
@@ -73,8 +98,13 @@ export function GeofencesPage() {
   const radiusM = parseDecimal(radiusMInput);
   const checkLat = parseDecimal(checkLatInput);
   const checkLng = parseDecimal(checkLngInput);
+  const checkVehicleIdValue = parseOptionalNumber(checkVehicleId);
   const canCreate = name.trim().length > 0 && Number.isFinite(centerLat) && Number.isFinite(centerLng) && Number.isFinite(radiusM) && radiusM > 0;
+  const canCheck = Number.isFinite(checkLat) && Number.isFinite(checkLng);
   const visibleCount = Object.values(visibleColumns).filter(Boolean).length;
+  const mapLatitude = Number.isFinite(checkLat) ? checkLat : Number.isFinite(centerLat) ? centerLat : undefined;
+  const mapLongitude = Number.isFinite(checkLng) ? checkLng : Number.isFinite(centerLng) ? centerLng : undefined;
+  const mapSrc = buildMapEmbedUrl(mapLatitude, mapLongitude);
 
   const handleCreate = () => {
     setCreateFeedback('');
@@ -120,7 +150,7 @@ export function GeofencesPage() {
         <iframe
           title="Geofences map"
           className="fleet-map compact"
-          src="https://www.openstreetmap.org/export/embed.html?bbox=-3.8%2C43.8%2C3.8%2C49.2&amp;layer=mapnik"
+          src={mapSrc}
         />
       </div>
 
@@ -183,10 +213,19 @@ export function GeofencesPage() {
         {createFeedback && <p className="muted-note">{createFeedback}</p>}
 
         <div className="toolbar-row">
-          <input className="toolbar-input" type="number" placeholder="Vehicle ID (optional)" value={checkVehicleId} onChange={(e) => setCheckVehicleId(Number(e.target.value))} />
+          <input className="toolbar-input" type="number" placeholder="Vehicle ID (optional)" value={checkVehicleId} onChange={(e) => setCheckVehicleId(e.target.value)} />
           <input className="toolbar-input" type="text" inputMode="decimal" placeholder="Position lat" value={checkLatInput} onChange={(e) => setCheckLatInput(e.target.value)} />
           <input className="toolbar-input" type="text" inputMode="decimal" placeholder="Position lng" value={checkLngInput} onChange={(e) => setCheckLngInput(e.target.value)} />
-          <button className="btn-link" type="button" onClick={() => checkMutation.mutate({ vehicle_id: checkVehicleId || undefined, latitude: checkLat, longitude: checkLng })}>
+          <button
+            className="btn-link"
+            type="button"
+            disabled={!canCheck || checkMutation.isPending}
+            onClick={() => checkMutation.mutate({
+              vehicle_id: checkVehicleIdValue,
+              latitude: checkLat,
+              longitude: checkLng,
+            })}
+          >
             Check position
           </button>
         </div>

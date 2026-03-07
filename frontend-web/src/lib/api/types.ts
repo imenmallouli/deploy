@@ -15,6 +15,10 @@ export type Vehicle = {
   fleet_id?: number | null;
   driver_id?: number | null;
   dongle_id?: string | null;
+  autopi_device_id?: string | null;
+  autopi_unit_id?: string | null;
+  last_connection?: string | null;
+  last_autopi_seen?: string | null;
 };
 
 export type Fleet = {

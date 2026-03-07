@@ -38,7 +38,6 @@ export function DtcPage() {
   const [dateInput, setDateInput] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [dateError, setDateError] = useState('');
-  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const [vehicleId, setVehicleId] = useState(1);
   const [code, setCode] = useState('P0420');
@@ -160,9 +159,6 @@ export function DtcPage() {
             onChange={(event) => setDateInput(event.target.value)}
           />
           <button className="btn-primary" type="button" onClick={handleSearch}>Search</button>
-          <button className="btn-link" type="button" onClick={() => setAdvancedOpen((v) => !v)}>
-            {advancedOpen ? 'Hide DTC tools' : 'Show DTC tools'}
-          </button>
         </div>
         {dateError && <p className="form-error">{dateError}</p>}
 
@@ -234,48 +230,6 @@ export function DtcPage() {
           <pre className="json-preview">{JSON.stringify(historyMutation.data ?? { status: 'loading' }, null, 2)}</pre>
         )}
 
-        {advancedOpen && (
-          <div className="panel form-grid" style={{ marginTop: 12 }}>
-            <h3>Advanced DTC Tools</h3>
-
-            <button className="btn-primary" type="button" onClick={() => pingMutation.mutate()}>
-              Ping DTC Mongo
-            </button>
-            <pre className="json-preview">{JSON.stringify(pingMutation.data ?? {}, null, 2)}</pre>
-
-            <input type="number" value={vehicleId} onChange={(e) => setVehicleId(Number(e.target.value))} required />
-            <input value={code} onChange={(e) => setCode(e.target.value)} required />
-            <select value={severity} onChange={(e) => setSeverity(e.target.value)}>
-              <option value="info">info</option>
-              <option value="warning">warning</option>
-              <option value="critical">critical</option>
-            </select>
-            <input placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
-
-            <button
-              className="btn-primary"
-              type="button"
-              onClick={() => createMutation.mutate({ vehicle_id: vehicleId, code, severity, description })}
-            >
-              Create DTC
-            </button>
-            <button
-              className="btn-link"
-              type="button"
-              onClick={() => byVehicleMutation.mutate({ id: vehicleId, limit: 100 })}
-            >
-              Load by Vehicle
-            </button>
-
-            <input value={dtcHistoryId} onChange={(e) => setDtcHistoryId(e.target.value)} />
-            <button className="btn-link" type="button" onClick={() => historyMutation.mutate(dtcHistoryId)}>
-              Load History
-            </button>
-
-            <pre className="json-preview">{JSON.stringify(byVehicleMutation.data ?? {}, null, 2)}</pre>
-            <pre className="json-preview">{JSON.stringify(historyMutation.data ?? {}, null, 2)}</pre>
-          </div>
-        )}
       </div>
     </section>
   );

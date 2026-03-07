@@ -30,7 +30,6 @@ export function DashboardPage() {
             </div>
             <ol>
               <li><Link className="getting-started-link" to="/vehicles/list">Create / Import vehicles and start managing them</Link></li>
-              <li><Link className="getting-started-link" to="/register">Invite team members</Link></li>
               <li><Link className="getting-started-link" to="/vehicles/list">Add details to vehicles in your fleet</Link></li>
               <li>
                 Create and assign <Link className="getting-started-link" to="/locations">locations</Link> and <Link className="getting-started-link" to="/vehicles/geofences">geofences</Link> to vehicles

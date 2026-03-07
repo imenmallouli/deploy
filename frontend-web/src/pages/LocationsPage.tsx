@@ -8,6 +8,24 @@ function parseDecimal(value: string) {
   return Number(normalized);
 }
 
+function buildMapEmbedUrl(latitude?: number, longitude?: number) {
+  if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+    const lat = Number(latitude);
+    const lng = Number(longitude);
+    const lngDelta = 0.02;
+    const latDelta = 0.01;
+    const left = (lng - lngDelta).toFixed(6);
+    const bottom = (lat - latDelta).toFixed(6);
+    const right = (lng + lngDelta).toFixed(6);
+    const top = (lat + latDelta).toFixed(6);
+    const marker = `${lat.toFixed(6)}%2C${lng.toFixed(6)}`;
+
+    return `https://www.openstreetmap.org/export/embed.html?bbox=${left}%2C${bottom}%2C${right}%2C${top}&layer=mapnik&marker=${marker}`;
+  }
+
+  return 'https://www.openstreetmap.org/export/embed.html?bbox=-3.8%2C43.8%2C3.8%2C49.2&layer=mapnik';
+}
+
 function getErrorMessage(error: unknown) {
   const data = (error as { response?: { data?: { message?: string; detail?: string } } })?.response?.data;
   return data?.message ?? data?.detail ?? 'Request failed. Please try again.';
@@ -33,6 +51,8 @@ export function LocationsPage() {
   const [longitudeInput, setLongitudeInput] = useState('');
   const [createError, setCreateError] = useState('');
   const [createSuccess, setCreateSuccess] = useState('');
+  const [locationError, setLocationError] = useState('');
+  const [isLocating, setIsLocating] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState({
     name: true,
     notes: true,
@@ -97,6 +117,10 @@ export function LocationsPage() {
   const latitudeValid = !latitudeProvided || Number.isFinite(latitude);
   const longitudeValid = !longitudeProvided || Number.isFinite(longitude);
   const sourceItems = locationsQuery.data?.items ?? [];
+  const firstMappableItem = sourceItems.find((item) => item.latitude != null && item.longitude != null);
+  const mapLatitude = Number.isFinite(latitude) ? latitude : firstMappableItem?.latitude;
+  const mapLongitude = Number.isFinite(longitude) ? longitude : firstMappableItem?.longitude;
+  const mapSrc = buildMapEmbedUrl(mapLatitude, mapLongitude);
   const items = sourceItems.filter((item) => {
     const resolvedAddress = locationMeta[item.id]?.address ?? (item.latitude != null && item.longitude != null ? `${item.latitude}, ${item.longitude}` : '');
     if (addressFilter === 'with') return Boolean(resolvedAddress);
@@ -120,6 +144,33 @@ export function LocationsPage() {
       latitude: latitudeProvided ? latitude : undefined,
       longitude: longitudeProvided ? longitude : undefined,
     });
+  };
+
+  const handleUseMyLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationError('Geolocation is not supported by this browser.');
+      return;
+    }
+
+    setLocationError('');
+    setIsLocating(true);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLatitudeInput(position.coords.latitude.toFixed(6));
+        setLongitudeInput(position.coords.longitude.toFixed(6));
+        setIsLocating(false);
+      },
+      (error) => {
+        setLocationError(error.message || 'Unable to fetch current location.');
+        setIsLocating(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    );
   };
 
   const handleSearch = () => {
@@ -152,7 +203,7 @@ export function LocationsPage() {
         <iframe
           title="Locations map"
           className="fleet-map compact"
-          src="https://www.openstreetmap.org/export/embed.html?bbox=-3.8%2C43.8%2C3.8%2C49.2&amp;layer=mapnik"
+          src={mapSrc}
         />
       </div>
 
@@ -214,6 +265,9 @@ export function LocationsPage() {
             <input className="toolbar-input" placeholder="On exit action (optional)" value={onExit} onChange={(e) => setOnExit(e.target.value)} />
             <input className="toolbar-input" type="text" inputMode="decimal" placeholder="Latitude (optional)" value={latitudeInput} onChange={(e) => setLatitudeInput(e.target.value)} />
             <input className="toolbar-input" type="text" inputMode="decimal" placeholder="Longitude (optional)" value={longitudeInput} onChange={(e) => setLongitudeInput(e.target.value)} />
+            <button className="btn-link" type="button" onClick={handleUseMyLocation} disabled={isLocating}>
+              {isLocating ? 'Locating...' : 'Use my location'}
+            </button>
             <button className="btn-primary" type="button" onClick={handleCreate} disabled={createMutation.isPending}>
               {createMutation.isPending ? 'Creating...' : 'Save'}
             </button>
@@ -221,6 +275,7 @@ export function LocationsPage() {
         )}
 
         {createError && <p className="form-error">{createError}</p>}
+        {locationError && <p className="form-error">{locationError}</p>}
         {createSuccess && <p className="muted-note">{createSuccess}</p>}
 
         <table className="vehicles-table">
