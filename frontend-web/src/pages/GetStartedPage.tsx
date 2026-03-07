@@ -10,8 +10,6 @@ export function GetStartedPage() {
   const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').trim();
   const swaggerUrl = `${apiBaseUrl.replace(/\/$/, '')}/docs`;
   const documentationUrl = `${apiBaseUrl.replace(/\/$/, '')}/redoc`;
-  const supportEmail = (import.meta.env.VITE_SUPPORT_EMAIL || 'support@mallouliauto.local').trim();
-  const supportUrl = `mailto:${supportEmail}?subject=${encodeURIComponent('MALLOULIAUTO support request')}`;
 
   const totalVehicles = vehiclesQuery.data?.count ?? 0;
   const pendingAlerts = alertsQuery.data?.pending ?? 0;
@@ -50,10 +48,6 @@ export function GetStartedPage() {
         <a className="get-started-tile" href={swaggerUrl} target="_blank" rel="noreferrer">
           <span>💻</span>
           <p>API Reference</p>
-        </a>
-        <a className="get-started-tile" href={supportUrl}>
-          <span>🎧</span>
-          <p>Support</p>
         </a>
       </div>
 

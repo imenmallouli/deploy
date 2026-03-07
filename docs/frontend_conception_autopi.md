@@ -21,12 +21,11 @@ Objectifs UX:
 
 ### Partiellement implémenté
 - RBAC granulaire UI (rôle stocké mais règles UI incomplètes)
-- Temps réel (WebSocket présent sur Telemetry, pas généralisé à tous les modules)
+
 
 ### Hors scope actuel
 - Frontend mobile React Native (non présent dans ce workspace)
-- Reporting avancé PDF/CSV global
-- Notifications push complètes
+
 
 ---
 
@@ -185,15 +184,7 @@ Standards déjà utilisés:
 
 ---
 
-## 10) Écarts corrigés par rapport à l’ancienne conception
 
-- La conception n’est plus “2 frontends (web + mobile)” dans le scope actuel: le projet implémenté est web.
-- UI stack corrigée: CSS maison (pas Tailwind actif).
-- Plan des pages étendu avec modules réels: Get Started, Geofences, Groups, Locations, Devices Overview, OBD Library.
-- Navigation/routage mis à jour selon `router.tsx` réel.
-- RBAC reclassé en “partiellement implémenté” au lieu de “terminé”.
-
----
 
 ## 11) Roadmap réaliste (prochaine itération)
 
