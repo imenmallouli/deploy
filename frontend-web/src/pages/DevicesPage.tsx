@@ -1,51 +1,32 @@
 import { useQuery } from '@tanstack/react-query';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { createDevice, listDevices } from '../lib/api/endpoints';
-
-function getErrorMessage(error: unknown) {
-  const data = (error as { response?: { data?: { message?: string; detail?: string } } })?.response?.data;
-  return data?.message ?? data?.detail ?? 'Request failed.';
-}
+import { Link } from 'react-router-dom';
+import { listDevices } from '../lib/api/endpoints';
 
 export function DevicesPage() {
-  const queryClient = useQueryClient();
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [columnsOpen, setColumnsOpen] = useState(false);
-  const [newDeviceId, setNewDeviceId] = useState('');
-  const [newVehicleId, setNewVehicleId] = useState('');
-  const [newStatus, setNewStatus] = useState('online');
-  const [newVin, setNewVin] = useState('');
+  const [statusFilterDraft, setStatusFilterDraft] = useState<'all' | 'online' | 'offline' | 'warning'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'online' | 'offline' | 'warning'>('all');
   const [actionMessage, setActionMessage] = useState('');
-  const [actionError, setActionError] = useState('');
   const [visibleColumns, setVisibleColumns] = useState({
-    deviceId: true,
-    vehicle: true,
+    name: true,
     status: true,
-    vin: true,
+    type: true,
+    unitId: true,
+    lastCommunication: true,
+    updateState: true,
   });
 
   const devicesQuery = useQuery({ queryKey: ['devices', search], queryFn: () => listDevices(search || undefined) });
-  const createMutation = useMutation({
-    mutationFn: createDevice,
-    onSuccess: () => {
-      setNewDeviceId('');
-      setNewVehicleId('');
-      setNewStatus('online');
-      setNewVin('');
-      setActionError('');
-      setActionMessage('Device created successfully.');
-      queryClient.invalidateQueries({ queryKey: ['devices'] });
-      queryClient.invalidateQueries({ queryKey: ['devices-overview'] });
-    },
-    onError: (error) => {
-      setActionMessage('');
-      setActionError(getErrorMessage(error));
-    },
-  });
 
-  const items = devicesQuery.data?.items ?? [];
+  const sourceItems = devicesQuery.data?.items ?? [];
+  const items = sourceItems.filter((device) => {
+    if (statusFilter === 'all') return true;
+    return String(device.status ?? '').toLowerCase() === statusFilter;
+  });
 
   const handleSearch = () => {
     setSearch(searchInput.trim());
@@ -59,35 +40,45 @@ export function DevicesPage() {
   };
 
   const handleRefresh = () => {
-    setActionError('');
     setActionMessage('Refreshing devices...');
-    devicesQuery.refetch().then(() => {
-      setActionMessage('Devices refreshed.');
-    }).catch((error) => {
-      setActionMessage('');
-      setActionError(getErrorMessage(error));
-    });
+    devicesQuery.refetch().then(() => setActionMessage('Devices refreshed.'));
   };
 
-  const handleCreate = () => {
-    setActionMessage('');
-    if (!newDeviceId.trim()) {
-      setActionError('Device ID is required.');
-      return;
-    }
+  const handleExportCsv = () => {
+    const lines = [
+      ['Name', 'Status', 'Type', 'Unit ID', 'Last Communication', 'Update State'].join(','),
+      ...items.map((device) => {
+        const raw = device as { updated_at?: string; created_at?: string };
+        const lastCommunication = raw.updated_at ?? raw.created_at ?? '';
+        const status = String(device.status ?? 'offline');
+        return [
+          device.device_id,
+          status,
+          '4G',
+          device.device_id,
+          lastCommunication,
+          'Up-to-date',
+        ].map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(',');
+      }),
+    ];
 
-    if (newVehicleId.trim() && Number.isNaN(Number(newVehicleId))) {
-      setActionError('Vehicle ID must be a number.');
-      return;
-    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'devices.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
-    setActionError('');
-    createMutation.mutate({
-      device_id: newDeviceId.trim(),
-      vehicle_id: newVehicleId.trim() ? Number(newVehicleId) : undefined,
-      status: newStatus.trim() || undefined,
-      vin: newVin.trim() || undefined,
-    });
+  const applyFilters = () => {
+    setStatusFilter(statusFilterDraft);
+    setFiltersOpen(false);
+  };
+
+  const resetFilters = () => {
+    setStatusFilterDraft('all');
+    setStatusFilter('all');
   };
 
   const toggleColumn = (column: keyof typeof visibleColumns) => {
@@ -100,62 +91,94 @@ export function DevicesPage() {
 
       <div className="panel table-shell">
         <div className="toolbar-row">
-          <input className="toolbar-input" placeholder="Search devices" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={handleSearchKeyDown} />
-          <button className="btn-link" type="button" onClick={handleSearch}>Search</button>
+          <input className="toolbar-input" placeholder="Search for devices" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={handleSearchKeyDown} />
+          <button className="btn-link" type="button" onClick={() => setFiltersOpen((open) => !open)}>Filters</button>
           <button className="btn-link" type="button" onClick={() => setColumnsOpen((v) => !v)}>Columns</button>
+          <button className="btn-link" type="button" onClick={handleSearch}>Search</button>
+          <div style={{ flex: 1 }} />
+          <button className="btn-link" type="button" onClick={handleExportCsv}>Export CSV</button>
           <button className="btn-link" type="button" onClick={handleRefresh} disabled={devicesQuery.isFetching}>Refresh</button>
-          <input className="toolbar-input" placeholder="New device ID" value={newDeviceId} onChange={(e) => setNewDeviceId(e.target.value)} />
-          <input className="toolbar-input" placeholder="Vehicle ID (optional)" value={newVehicleId} onChange={(e) => setNewVehicleId(e.target.value)} />
-          <select className="toolbar-input" value={newStatus} onChange={(e) => setNewStatus(e.target.value)}>
-            <option value="online">online</option>
-            <option value="offline">offline</option>
-            <option value="warning">warning</option>
-          </select>
-          <input className="toolbar-input" placeholder="VIN (optional)" value={newVin} onChange={(e) => setNewVin(e.target.value)} />
-          <button className="btn-primary" type="button" onClick={handleCreate} disabled={createMutation.isPending}>
-            {createMutation.isPending ? 'Creating...' : 'Create'}
-          </button>
         </div>
 
-        {columnsOpen && (
+        {filtersOpen && (
           <div className="panel" style={{ marginBottom: 12 }}>
             <div className="toolbar-row" style={{ marginBottom: 0 }}>
-              <button className="btn-link" type="button" onClick={() => toggleColumn('deviceId')}>Device ID {visibleColumns.deviceId ? '✓' : ''}</button>
-              <button className="btn-link" type="button" onClick={() => toggleColumn('vehicle')}>Vehicle {visibleColumns.vehicle ? '✓' : ''}</button>
-              <button className="btn-link" type="button" onClick={() => toggleColumn('status')}>Status {visibleColumns.status ? '✓' : ''}</button>
-              <button className="btn-link" type="button" onClick={() => toggleColumn('vin')}>VIN {visibleColumns.vin ? '✓' : ''}</button>
+              <select
+                className="toolbar-input"
+                value={statusFilterDraft}
+                onChange={(event) => setStatusFilterDraft(event.target.value as 'all' | 'online' | 'offline' | 'warning')}
+              >
+                <option value="all">Status: All</option>
+                <option value="online">Online only</option>
+                <option value="offline">Offline only</option>
+                <option value="warning">Warning only</option>
+              </select>
+              <button className="btn-link" type="button" onClick={resetFilters}>Reset</button>
+              <button className="btn-primary" type="button" onClick={applyFilters}>Apply</button>
             </div>
           </div>
         )}
 
-        {actionError && <p className="form-error">{actionError}</p>}
+        {columnsOpen && (
+          <div className="panel" style={{ marginBottom: 12 }}>
+            <div className="toolbar-row" style={{ marginBottom: 0 }}>
+              <button className="btn-link" type="button" onClick={() => toggleColumn('name')}>Name {visibleColumns.name ? '✓' : ''}</button>
+              <button className="btn-link" type="button" onClick={() => toggleColumn('status')}>Status {visibleColumns.status ? '✓' : ''}</button>
+              <button className="btn-link" type="button" onClick={() => toggleColumn('type')}>Type {visibleColumns.type ? '✓' : ''}</button>
+              <button className="btn-link" type="button" onClick={() => toggleColumn('unitId')}>Unit ID {visibleColumns.unitId ? '✓' : ''}</button>
+              <button className="btn-link" type="button" onClick={() => toggleColumn('lastCommunication')}>Last Communication {visibleColumns.lastCommunication ? '✓' : ''}</button>
+              <button className="btn-link" type="button" onClick={() => toggleColumn('updateState')}>Update State {visibleColumns.updateState ? '✓' : ''}</button>
+            </div>
+          </div>
+        )}
+
         {actionMessage && <p className="muted-note">{actionMessage}</p>}
 
         <table className="vehicles-table">
           <thead>
             <tr>
-              {visibleColumns.deviceId && <th>Device ID</th>}
-              {visibleColumns.vehicle && <th>Vehicle</th>}
+              <th><input type="checkbox" aria-label="Select all devices" /></th>
+              {visibleColumns.name && <th>Name</th>}
               {visibleColumns.status && <th>Status</th>}
-              {visibleColumns.vin && <th>VIN</th>}
+              {visibleColumns.type && <th>Type</th>}
+              {visibleColumns.unitId && <th>Unit ID</th>}
+              {visibleColumns.lastCommunication && <th>Last Communication</th>}
+              {visibleColumns.updateState && <th>Update State</th>}
             </tr>
           </thead>
           <tbody>
             {items.length === 0 && (
               <tr>
-                <td colSpan={Object.values(visibleColumns).filter(Boolean).length} className="empty-cell">No data to display</td>
+                <td colSpan={Object.values(visibleColumns).filter(Boolean).length + 1} className="empty-cell">No data to display</td>
               </tr>
             )}
             {items.map((device) => (
               <tr key={device.id}>
-                {visibleColumns.deviceId && <td>{device.device_id}</td>}
-                {visibleColumns.vehicle && <td>{device.vehicle_id ?? '-'}</td>}
-                {visibleColumns.status && <td>{device.status ?? '-'}</td>}
-                {visibleColumns.vin && <td>{device.vin ?? '-'}</td>}
+                <td><input type="checkbox" aria-label={`Select ${device.device_id}`} /></td>
+                {visibleColumns.name && (
+                  <td>
+                    <Link className="inline-link" to={`/devices/${encodeURIComponent(device.device_id)}`}>
+                      {device.device_id}
+                    </Link>
+                  </td>
+                )}
+                {visibleColumns.status && (
+                  <td>
+                    <span className={`status-pill ${String(device.status ?? 'offline').toLowerCase() === 'offline' ? 'critical' : String(device.status ?? '').toLowerCase() === 'warning' ? 'warning' : ''}`}>
+                      {String(device.status ?? 'offline')}
+                    </span>
+                  </td>
+                )}
+                {visibleColumns.type && <td>4G</td>}
+                {visibleColumns.unitId && <td>{device.device_id}</td>}
+                {visibleColumns.lastCommunication && <td>{(device as { updated_at?: string; created_at?: string }).updated_at ?? (device as { updated_at?: string; created_at?: string }).created_at ?? '-'}</td>}
+                {visibleColumns.updateState && <td>Up-to-date</td>}
               </tr>
             ))}
           </tbody>
         </table>
+
+        <p className="muted-note">Devices: {items.length}</p>
       </div>
     </section>
   );

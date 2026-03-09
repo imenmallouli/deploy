@@ -4,6 +4,7 @@ import { RequireAuth } from './RequireAuth';
 import {
   AlertsPage,
   DashboardPage,
+  DeviceDetailsPage,
   DeviceOverviewPage,
   DevicesPage,
   DtcPage,
@@ -13,7 +14,6 @@ import {
   GroupsPage,
   LoginPage,
   LocationsPage,
-  ObdLibraryPage,
   RegisterPage,
   TelemetryPage,
   VehicleDetailsPage,
@@ -46,7 +46,7 @@ export const router = createBrowserRouter([
           { path: 'vehicle-status/:vehicleId', element: <VehicleStatusPage /> },
           { path: 'devices/overview', element: <DeviceOverviewPage /> },
           { path: 'devices/list', element: <DevicesPage /> },
-          { path: 'devices/obd-library', element: <ObdLibraryPage /> },
+          { path: 'devices/:deviceId', element: <DeviceDetailsPage /> },
 
           { path: 'telemetry', element: <TelemetryPage /> },
           { path: 'dtc', element: <DtcPage /> },
@@ -54,7 +54,6 @@ export const router = createBrowserRouter([
           { path: 'fleets', element: <FleetsPage /> },
 
           { path: 'devices', element: <Navigate to="/devices/list" replace /> },
-          { path: 'obd-library', element: <Navigate to="/devices/obd-library" replace /> },
 
           { path: '*', element: <Navigate to="/" replace /> },
         ],

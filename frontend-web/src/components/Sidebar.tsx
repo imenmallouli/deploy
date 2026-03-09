@@ -59,9 +59,6 @@ export function Sidebar() {
             <NavLink to="/devices/list" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
               Devices
             </NavLink>
-            <NavLink to="/devices/obd-library" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-              OBD Library
-            </NavLink>
             <NavLink to="/vehicle-status" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
               Vehicle Status
             </NavLink>

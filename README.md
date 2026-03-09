@@ -29,3 +29,9 @@ npm run dev
 Pour lire un dongle ELM327 et envoyer les données vers `/api/v1/telemetry` et `/api/v1/dtc`, voir:
 
 - `docs/obd_gateway_mvp.md`
+
+## Guide Device / Dongle
+
+Pour travailler la partie Device (dongle) étape par étape, voir:
+
+- `docs/README_device_dongle.md`
