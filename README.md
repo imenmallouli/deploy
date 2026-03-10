@@ -35,3 +35,9 @@ Pour lire un dongle ELM327 et envoyer les données vers `/api/v1/telemetry` et `
 Pour travailler la partie Device (dongle) étape par étape, voir:
 
 - `docs/README_device_dongle.md`
+
+## Guide MQTT / Broker / Dongle (FR)
+
+Pour la partie MQTT (broker, topics, liaison données dongle vers backend) en détail:
+
+- `docs/README_mqtt_dongle_fr.md`
