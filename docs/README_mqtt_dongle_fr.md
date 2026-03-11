@@ -27,6 +27,60 @@ Dongle OBD -> MQTT Broker -> Bridge MQTT -> API Backend -> Frontend
 pip install paho-mqtt requests
 ```
 
+## 2.1) Plan de travail AVANT de brancher le dongle (recommandé)
+
+Quand le dongle n'est pas encore connecté à la voiture, valider d'abord tout le pipeline logiciel:
+
+1. **Backend + DB OK** (Docker up, `/docs` accessible)
+2. **Broker MQTT OK** (publish/subscribe local)
+3. **Bridge MQTT -> API OK** (`mqtt_gateway.py` en cours d'exécution)
+4. **Ingestion API OK** (données visibles via `GET /api/v1/telemetry/{vehicle_id}`)
+5. **Frontend OK** (page Telemetry/Diagnostics lit les données)
+
+Si ces 5 points passent, alors quand le dongle réel sera branché, il restera uniquement la partie port/connexion véhicule à résoudre.
+
+### Commandes rapides (sans dongle)
+
+#### A) Démarrer backend
+
+```bash
+cd "c:\auto diagnostic platform\backend"
+docker compose up -d --build
+```
+
+#### B) Démarrer broker MQTT
+
+```bash
+docker run -d --name mqtt-broker -p 1883:1883 eclipse-mosquitto:2
+```
+
+#### C) Lancer le bridge MQTT -> API
+
+```bash
+cd "c:\auto diagnostic platform\backend"
+.\.venv\Scripts\python.exe .\scripts\mqtt_gateway.py --mqtt-host 127.0.0.1 --mqtt-port 1883 --topic-prefix autodiag/devices --base-url http://127.0.0.1:8000 --email votre_email --password votre_mot_de_passe
+```
+
+#### D) Publier des messages de test (telemetry + dtc + heartbeat)
+
+```bash
+docker exec mqtt-broker sh -c "mosquitto_pub -h 127.0.0.1 -p 1883 -t 'autodiag/devices/ccb71376-cd13-b201-170e-c917fc1199ff/telemetry' -m '{\"vehicle_id\":1,\"speed\":62,\"rpm\":2200,\"fuel_level\":45,\"engine_temp\":91,\"battery_voltage\":12.5}'"
+
+docker exec mqtt-broker sh -c "mosquitto_pub -h 127.0.0.1 -p 1883 -t 'autodiag/devices/ccb71376-cd13-b201-170e-c917fc1199ff/dtc' -m '{\"vehicle_id\":1,\"code\":\"P0300\",\"description\":\"Random/Multiple Cylinder Misfire\",\"severity\":\"warning\"}'"
+
+docker exec mqtt-broker sh -c "mosquitto_pub -h 127.0.0.1 -p 1883 -t 'autodiag/devices/ccb71376-cd13-b201-170e-c917fc1199ff/heartbeat' -m '{\"device_id\":\"042f5956-5b4e-4f37-9e74-461f1997a567\",\"unit_id\":\"ccb71376-cd13-b201-170e-c917fc1199ff\",\"status\":\"online\"}'"
+```
+
+#### E) Vérifier ingestion
+
+```text
+GET /api/v1/telemetry/1
+GET /api/v1/dtc/1
+GET /api/v1/dtc/iot/logs?device_id=ccb71376-cd13-b201-170e-c917fc1199ff
+```
+
+> Important: laisser `start` / `end` vides lors des premiers tests (sinon risque de fenêtre temporelle vide).
+
 ---
 
 ## 3) Étape A — Démarrer un broker MQTT
@@ -64,6 +118,68 @@ Exemple avec `device_id = ccb71376`:
 - `autodiag/devices/ccb71376/telemetry`
 - `autodiag/devices/ccb71376/dtc`
 - `autodiag/devices/ccb71376/heartbeat`
+
+### Comment faire cette étape (pratique)
+
+1. Choisir un `device_id` unique (ex: `ccb71376`).
+2. Garder le préfixe projet fixe: `autodiag/devices/`.
+3. Utiliser exactement ces suffixes:
+  - `/telemetry` pour les mesures temps réel
+  - `/dtc` pour les codes défaut
+  - `/heartbeat` pour l'état du dongle
+4. Configurer le dongle/agent publisher avec ces 3 topics.
+5. Configurer le bridge pour `subscribe` sur:
+  - `autodiag/devices/+/telemetry`
+  - `autodiag/devices/+/dtc`
+  - `autodiag/devices/+/heartbeat`
+
+### Mapping Topic -> Endpoint Backend
+
+| Topic MQTT | Type de donnée | Endpoint backend |
+|---|---|---|
+| `autodiag/devices/{device_id}/telemetry` | Télémétrie (speed, rpm, fuel, temp...) | `POST /api/v1/telemetry` |
+| `autodiag/devices/{device_id}/dtc` | DTC (`P0xxx`, description, severity...) | `POST /api/v1/dtc` |
+| `autodiag/devices/{device_id}/heartbeat` | État device (`online/offline`, timestamp) | `POST /api/v1/dtc/iot/logs` (ou endpoint status dédié si ajouté) |
+
+### Exemple concret (device `ccb71376`)
+
+- Publisher envoie la télémétrie sur `autodiag/devices/ccb71376/telemetry`
+- Le bridge reçoit, parse JSON, puis appelle `POST /api/v1/telemetry`
+- Publisher envoie les défauts sur `autodiag/devices/ccb71376/dtc`
+- Le bridge reçoit, parse JSON, puis appelle `POST /api/v1/dtc`
+- Publisher envoie l'état sur `autodiag/devices/ccb71376/heartbeat`
+- Le bridge transforme en log IoT et appelle `POST /api/v1/dtc/iot/logs`
+
+### Étape suivante prête à lancer (avec vos IDs réels)
+
+IDs validés:
+- `Device ID`: `042f5956-5b4e-4f37-9e74-461f1997a567`
+- `Unit ID`: `ccb71376-cd13-b201-170e-c917fc1199ff`
+
+Topics à utiliser:
+- `autodiag/devices/ccb71376-cd13-b201-170e-c917fc1199ff/telemetry`
+- `autodiag/devices/ccb71376-cd13-b201-170e-c917fc1199ff/dtc`
+- `autodiag/devices/ccb71376-cd13-b201-170e-c917fc1199ff/heartbeat`
+
+1) Lancer un subscriber de contrôle (capture 3 messages):
+
+```bash
+docker exec mqtt-broker sh -c "mosquitto_sub -h 127.0.0.1 -p 1883 -t 'autodiag/devices/ccb71376-cd13-b201-170e-c917fc1199ff/#' -C 3 -v"
+```
+
+2) Publier les 3 messages de test (telemetry, dtc, heartbeat):
+
+```bash
+docker exec mqtt-broker sh -c "mosquitto_pub -h 127.0.0.1 -p 1883 -t 'autodiag/devices/ccb71376-cd13-b201-170e-c917fc1199ff/telemetry' -m '{\"vehicle_id\":1,\"ts\":\"2026-03-11T12:00:00Z\",\"speed\":58.2,\"rpm\":2100,\"fuel_level\":47.5,\"engine_temp\":92.1,\"battery_voltage\":13.7}'"
+
+docker exec mqtt-broker sh -c "mosquitto_pub -h 127.0.0.1 -p 1883 -t 'autodiag/devices/ccb71376-cd13-b201-170e-c917fc1199ff/dtc' -m '{\"vehicle_id\":1,\"code\":\"P0300\",\"description\":\"Random/Multiple Cylinder Misfire Detected\",\"severity\":\"warning\",\"last_occurrence\":\"2026-03-11T12:00:10Z\"}'"
+
+docker exec mqtt-broker sh -c "mosquitto_pub -h 127.0.0.1 -p 1883 -t 'autodiag/devices/ccb71376-cd13-b201-170e-c917fc1199ff/heartbeat' -m '{\"device_id\":\"042f5956-5b4e-4f37-9e74-461f1997a567\",\"unit_id\":\"ccb71376-cd13-b201-170e-c917fc1199ff\",\"status\":\"online\",\"ts\":\"2026-03-11T12:00:30Z\"}'"
+```
+
+3) Résultat attendu:
+- Le subscriber affiche les 3 topics avec leurs payloads JSON.
+- Si oui, le broker + topics sont corrects et vous pouvez passer au bridge MQTT -> API.
 
 ---
 
@@ -176,6 +292,39 @@ client.loop_forever()
 ```
 
 Ce bridge peut être ajouté plus tard dans `backend/scripts/mqtt_gateway.py`.
+
+Bridge prêt à l'emploi ajouté dans le projet:
+- `backend/scripts/mqtt_gateway.py`
+
+Lancement rapide (avec login API):
+
+```bash
+cd "c:\auto diagnostic platform\backend"
+.\.venv\Scripts\python.exe .\scripts\mqtt_gateway.py \
+  --mqtt-host 127.0.0.1 \
+  --mqtt-port 1883 \
+  --topic-prefix autodiag/devices \
+  --base-url http://127.0.0.1:8000 \
+  --email votre_email \
+  --password votre_mot_de_passe
+```
+
+Lancement avec token direct:
+
+```bash
+cd "c:\auto diagnostic platform\backend"
+.\.venv\Scripts\python.exe .\scripts\mqtt_gateway.py \
+  --mqtt-host 127.0.0.1 \
+  --mqtt-port 1883 \
+  --topic-prefix autodiag/devices \
+  --base-url http://127.0.0.1:8000 \
+  --token <JWT_TOKEN>
+```
+
+Comportement du script:
+- `.../telemetry` -> `POST /api/v1/telemetry`
+- `.../dtc` -> `POST /api/v1/dtc`
+- `.../heartbeat` -> `POST /api/v1/dtc/iot/logs`
 
 ---
 
