@@ -11,6 +11,22 @@ Puis ouvre:
 
 http://127.0.0.1:8000/docs
 
+Si tu as l'erreur `open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified`, lance plutôt:
+
+```powershell
+cd "c:\auto diagnostic platform\backend"
+powershell -ExecutionPolicy Bypass -File .\scripts\docker-up.ps1
+```
+
+Ce script démarre Docker Desktop automatiquement (si nécessaire), attend que le daemon soit prêt, puis lance `docker compose up -d --build`.
+
+Si tu utilises Git Bash, tu peux lancer:
+
+```bash
+cd "/c/auto diagnostic platform/backend"
+bash ./scripts/docker-up.sh
+```
+
 
 
 
