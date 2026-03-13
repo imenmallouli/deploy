@@ -221,6 +221,13 @@ class FleetService:
         if not fleet:
             return {"status": "error", "message": "Flotte non trouvée"}
 
+        # Détacher les véhicules avant de supprimer la flotte
+        db.query(Vehicle).filter(Vehicle.fleet_id == fleet_id).update({"fleet_id": None})
+
         db.delete(fleet)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            return {"status": "error", "message": "Impossible de supprimer: contrainte d'intégrité"}
         return {"status": "success", "message": "Flotte supprimée avec succès"}
