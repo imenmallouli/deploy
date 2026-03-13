@@ -1,0 +1,396 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot generator="Robot 7.1.1 (Python 3.13.4 on win32)" generated="2026-03-13T12:38:58.492820" rpa="false" schemaversion="5">
+<suite id="s1" name="Suites" source="C:\auto diagnostic platform\backend\tests\robot\suites">
+<suite id="s1-s1" name="Backend Smoke" source="C:\auto diagnostic platform\backend\tests\robot\suites\backend_smoke.robot">
+<kw name="Create API Session" owner="keywords" type="SETUP">
+<kw name="Create Session" owner="RequestsLibrary">
+<msg time="2026-03-13T12:38:58.643872" level="INFO">Creating Session using : alias=backend, url=http://127.0.0.1:8000, headers={},                     cookies={}, auth=None, timeout=None, proxies=None, verify=False,                     debug=0 </msg>
+<arg>backend</arg>
+<arg>${BASE_URL}</arg>
+<doc>Create Session: create a HTTP session to a server</doc>
+<status status="PASS" start="2026-03-13T12:38:58.643712" elapsed="0.000323"/>
+</kw>
+<status status="PASS" start="2026-03-13T12:38:58.643319" elapsed="0.000789"/>
+</kw>
+<test id="s1-s1-t1" name="Root Endpoint Returns Service Info" line="8">
+<kw name="GET On Session" owner="RequestsLibrary">
+<msg time="2026-03-13T12:38:58.649482" level="INFO">GET Request : url=http://127.0.0.1:8000/ 
+ path_url=/ 
+ headers={'User-Agent': 'python-requests/2.32.5', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive'} 
+ body=None 
+ </msg>
+<msg time="2026-03-13T12:38:58.649606" level="INFO">GET Response : url=http://127.0.0.1:8000/ 
+ status=200, reason=OK 
+ headers={'date': 'Fri, 13 Mar 2026 11:38:58 GMT', 'server': 'uvicorn', 'content-length': '89', 'content-type': 'application/json'} 
+ body={"status":"ok","message":"Auto Diagnostic Platform API","version":"1.0.0","docs":"/docs"} 
+ </msg>
+<msg time="2026-03-13T12:38:58.649710" level="INFO">${resp} = &lt;Response [200]&gt;</msg>
+<var>${resp}</var>
+<arg>backend</arg>
+<arg>/</arg>
+<doc>Sends a GET request on a previously created HTTP Session.</doc>
+<status status="PASS" start="2026-03-13T12:38:58.644593" elapsed="0.005137"/>
+</kw>
+<kw name="Should Be Equal As Integers" owner="BuiltIn">
+<msg time="2026-03-13T12:38:58.650605" level="INFO">Argument types are:
+&lt;class 'int'&gt;
+&lt;class 'str'&gt;</msg>
+<arg>${resp.status_code}</arg>
+<arg>200</arg>
+<doc>Fails if objects are unequal after converting them to integers.</doc>
+<status status="PASS" start="2026-03-13T12:38:58.650153" elapsed="0.000499"/>
+</kw>
+<kw name="Set Variable" owner="BuiltIn">
+<msg time="2026-03-13T12:38:58.651449" level="INFO">${data} = {'status': 'ok', 'message': 'Auto Diagnostic Platform API', 'version': '1.0.0', 'docs': '/docs'}</msg>
+<var>${data}</var>
+<arg>${resp.json()}</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="PASS" start="2026-03-13T12:38:58.651046" elapsed="0.000421"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${data['status']}</arg>
+<arg>ok</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="PASS" start="2026-03-13T12:38:58.651859" elapsed="0.000367"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${data['version']}</arg>
+<arg>1.0.0</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="PASS" start="2026-03-13T12:38:58.652521" elapsed="0.000299"/>
+</kw>
+<status status="PASS" start="2026-03-13T12:38:58.644161" elapsed="0.008993"/>
+</test>
+<test id="s1-s1-t2" name="Create Tables Endpoint Is Reachable" line="15">
+<kw name="Ensure Database Ready" owner="keywords">
+<kw name="POST On Session" owner="RequestsLibrary">
+<msg time="2026-03-13T12:38:58.663971" level="INFO">POST Request : url=http://127.0.0.1:8000/api/v1/create-tables 
+ path_url=/api/v1/create-tables 
+ headers={'User-Agent': 'python-requests/2.32.5', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive', 'Content-Length': '0'} 
+ body=None 
+ </msg>
+<msg time="2026-03-13T12:38:58.664045" level="INFO">POST Response : url=http://127.0.0.1:8000/api/v1/create-tables 
+ status=200, reason=OK 
+ headers={'date': 'Fri, 13 Mar 2026 11:38:58 GMT', 'server': 'uvicorn', 'content-length': '77', 'content-type': 'application/json'} 
+ body={"status":"success","message":"Tables créées avec succès dans PostgreSQL"} 
+ </msg>
+<msg time="2026-03-13T12:38:58.664163" level="INFO">${resp} = &lt;Response [200]&gt;</msg>
+<var>${resp}</var>
+<arg>backend</arg>
+<arg>${API_PREFIX}/create-tables</arg>
+<doc>Sends a POST request on a previously created HTTP Session.</doc>
+<status status="PASS" start="2026-03-13T12:38:58.654647" elapsed="0.009537"/>
+</kw>
+<kw name="Should Be Equal As Integers" owner="BuiltIn">
+<msg time="2026-03-13T12:38:58.664779" level="INFO">Argument types are:
+&lt;class 'int'&gt;
+&lt;class 'str'&gt;</msg>
+<arg>${resp.status_code}</arg>
+<arg>200</arg>
+<doc>Fails if objects are unequal after converting them to integers.</doc>
+<status status="PASS" start="2026-03-13T12:38:58.664355" elapsed="0.000475"/>
+</kw>
+<kw name="Set Variable" owner="BuiltIn">
+<msg time="2026-03-13T12:38:58.665260" level="INFO">${data} = {'status': 'success', 'message': 'Tables créées avec succès dans PostgreSQL'}</msg>
+<var>${data}</var>
+<arg>${resp.json()}</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="PASS" start="2026-03-13T12:38:58.664936" elapsed="0.000343"/>
+</kw>
+<kw name="Dictionary Should Contain Key" owner="Collections">
+<arg>${data}</arg>
+<arg>status</arg>
+<doc>Fails if ``key`` is not found from ``dictionary``.</doc>
+<status status="PASS" start="2026-03-13T12:38:58.665349" elapsed="0.000094"/>
+</kw>
+<status status="PASS" start="2026-03-13T12:38:58.654349" elapsed="0.011143"/>
+</kw>
+<status status="PASS" start="2026-03-13T12:38:58.653703" elapsed="0.012184"/>
+</test>
+<test id="s1-s1-t3" name="Register Login And Me Flow" line="18">
+<kw name="Ensure Database Ready" owner="keywords">
+<kw name="POST On Session" owner="RequestsLibrary">
+<msg time="2026-03-13T12:38:58.673652" level="INFO">POST Request : url=http://127.0.0.1:8000/api/v1/create-tables 
+ path_url=/api/v1/create-tables 
+ headers={'User-Agent': 'python-requests/2.32.5', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive', 'Content-Length': '0'} 
+ body=None 
+ </msg>
+<msg time="2026-03-13T12:38:58.673719" level="INFO">POST Response : url=http://127.0.0.1:8000/api/v1/create-tables 
+ status=200, reason=OK 
+ headers={'date': 'Fri, 13 Mar 2026 11:38:58 GMT', 'server': 'uvicorn', 'content-length': '77', 'content-type': 'application/json'} 
+ body={"status":"success","message":"Tables créées avec succès dans PostgreSQL"} 
+ </msg>
+<msg time="2026-03-13T12:38:58.673819" level="INFO">${resp} = &lt;Response [200]&gt;</msg>
+<var>${resp}</var>
+<arg>backend</arg>
+<arg>${API_PREFIX}/create-tables</arg>
+<doc>Sends a POST request on a previously created HTTP Session.</doc>
+<status status="PASS" start="2026-03-13T12:38:58.667393" elapsed="0.006443"/>
+</kw>
+<kw name="Should Be Equal As Integers" owner="BuiltIn">
+<msg time="2026-03-13T12:38:58.674302" level="INFO">Argument types are:
+&lt;class 'int'&gt;
+&lt;class 'str'&gt;</msg>
+<arg>${resp.status_code}</arg>
+<arg>200</arg>
+<doc>Fails if objects are unequal after converting them to integers.</doc>
+<status status="PASS" start="2026-03-13T12:38:58.673959" elapsed="0.000384"/>
+</kw>
+<kw name="Set Variable" owner="BuiltIn">
+<msg time="2026-03-13T12:38:58.674806" level="INFO">${data} = {'status': 'success', 'message': 'Tables créées avec succès dans PostgreSQL'}</msg>
+<var>${data}</var>
+<arg>${resp.json()}</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="PASS" start="2026-03-13T12:38:58.674456" elapsed="0.000371"/>
+</kw>
+<kw name="Dictionary Should Contain Key" owner="Collections">
+<arg>${data}</arg>
+<arg>status</arg>
+<doc>Fails if ``key`` is not found from ``dictionary``.</doc>
+<status status="PASS" start="2026-03-13T12:38:58.674903" elapsed="0.000115"/>
+</kw>
+<status status="PASS" start="2026-03-13T12:38:58.667232" elapsed="0.007839"/>
+</kw>
+<kw name="Get Unique Email" owner="keywords">
+<kw name="Get Current Date" owner="DateTime">
+<msg time="2026-03-13T12:38:58.675856" level="INFO">${timestamp} = 20260313123858675783</msg>
+<var>${timestamp}</var>
+<arg>result_format=%Y%m%d%H%M%S%f</arg>
+<doc>Returns current local or UTC time with an optional increment.</doc>
+<status status="PASS" start="2026-03-13T12:38:58.675700" elapsed="0.000173"/>
+</kw>
+<kw name="Set Variable" owner="BuiltIn">
+<msg time="2026-03-13T12:38:58.676035" level="INFO">${email} = robot_20260313123858675783@example.com</msg>
+<var>${email}</var>
+<arg>robot_${timestamp}@example.com</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="PASS" start="2026-03-13T12:38:58.675943" elapsed="0.000106"/>
+</kw>
+<return>
+<value>${email}</value>
+<status status="PASS" start="2026-03-13T12:38:58.676085" elapsed="0.000037"/>
+</return>
+<msg time="2026-03-13T12:38:58.676218" level="INFO">${email} = robot_20260313123858675783@example.com</msg>
+<var>${email}</var>
+<status status="PASS" start="2026-03-13T12:38:58.675528" elapsed="0.000705"/>
+</kw>
+<kw name="Register User" owner="keywords">
+<kw name="Create Dictionary" owner="BuiltIn">
+<msg time="2026-03-13T12:38:58.677399" level="INFO">${payload} = {'first_name': 'Robot', 'last_name': 'Framework', 'email': 'robot_20260313123858675783@example.com', 'role': 'admin', 'phone': '+212600000000', 'password': 'RobotPass123!'}</msg>
+<var>${payload}</var>
+<arg>first_name=Robot</arg>
+<arg>last_name=Framework</arg>
+<arg>email=${email}</arg>
+<arg>role=${role}</arg>
+<arg>phone=${DEFAULT_PHONE}</arg>
+<arg>password=${DEFAULT_PASSWORD}</arg>
+<doc>Creates and returns a dictionary based on the given ``items``.</doc>
+<status status="PASS" start="2026-03-13T12:38:58.676946" elapsed="0.000481"/>
+</kw>
+<kw name="POST On Session" owner="RequestsLibrary">
+<msg time="2026-03-13T12:38:58.930919" level="INFO">POST Request : url=http://127.0.0.1:8000/api/v1/auth/register 
+ path_url=/api/v1/auth/register 
+ headers={'User-Agent': 'python-requests/2.32.5', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive', 'Content-Length': '172', 'Content-Type': 'application/json'} 
+ body=b'{"first_name": "Robot", "last_name": "Framework", "email": "robot_20260313123858675783@example.com", "role": "admin", "phone": "+212600000000", "password": "RobotPass123!"}' 
+ </msg>
+<msg time="2026-03-13T12:38:58.931005" level="INFO">POST Response : url=http://127.0.0.1:8000/api/v1/auth/register 
+ status=200, reason=OK 
+ headers={'date': 'Fri, 13 Mar 2026 11:38:58 GMT', 'server': 'uvicorn', 'content-length': '433', 'content-type': 'application/json'} 
+ body={"status":"success","message":"Utilisateur créé avec succès","user_id":33,"email":"robot_20260313123858675783@example.com","role":"admin","access_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJyb2JvdF8yMDI2MDMxMzEyMzg1ODY3NTc4M0BleGFtcGxlLmNvbSIsInVzZXJfaWQiOjMzLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3NzM0MDE5MzgsImV4cCI6MTc3MzQwNTUzOH0.Wugdbm-gRaCOe8yz846yQIwhXH5POtyRgI-US-RCHWw","token_type":"bearer","expires_in_minutes":60} 
+ </msg>
+<msg time="2026-03-13T12:38:58.931109" level="INFO">${resp} = &lt;Response [200]&gt;</msg>
+<var>${resp}</var>
+<arg>backend</arg>
+<arg>${API_PREFIX}/auth/register</arg>
+<arg>json=${payload}</arg>
+<doc>Sends a POST request on a previously created HTTP Session.</doc>
+<status status="PASS" start="2026-03-13T12:38:58.677542" elapsed="0.253591"/>
+</kw>
+<kw name="Should Be Equal As Integers" owner="BuiltIn">
+<msg time="2026-03-13T12:38:58.931571" level="INFO">Argument types are:
+&lt;class 'int'&gt;
+&lt;class 'str'&gt;</msg>
+<arg>${resp.status_code}</arg>
+<arg>200</arg>
+<doc>Fails if objects are unequal after converting them to integers.</doc>
+<status status="PASS" start="2026-03-13T12:38:58.931249" elapsed="0.000360"/>
+</kw>
+<return>
+<value>${resp}</value>
+<status status="PASS" start="2026-03-13T12:38:58.931653" elapsed="0.000030"/>
+</return>
+<msg time="2026-03-13T12:38:58.931771" level="INFO">${register_resp} = &lt;Response [200]&gt;</msg>
+<var>${register_resp}</var>
+<arg>${email}</arg>
+<arg>admin</arg>
+<status status="PASS" start="2026-03-13T12:38:58.676614" elapsed="0.255171"/>
+</kw>
+<kw name="Set Variable" owner="BuiltIn">
+<msg time="2026-03-13T12:38:58.932533" level="INFO">${register_data} = {'status': 'success', 'message': 'Utilisateur créé avec succès', 'user_id': 33, 'email': 'robot_20260313123858675783@example.com', 'role': 'admin', 'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ...</msg>
+<var>${register_data}</var>
+<arg>${register_resp.json()}</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="PASS" start="2026-03-13T12:38:58.932110" elapsed="0.000463"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${register_data['status']}</arg>
+<arg>success</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="PASS" start="2026-03-13T12:38:58.932869" elapsed="0.000302"/>
+</kw>
+<kw name="Dictionary Should Contain Key" owner="Collections">
+<arg>${register_data}</arg>
+<arg>access_token</arg>
+<doc>Fails if ``key`` is not found from ``dictionary``.</doc>
+<status status="PASS" start="2026-03-13T12:38:58.933461" elapsed="0.000108"/>
+</kw>
+<kw name="Login User" owner="keywords">
+<kw name="Create Dictionary" owner="BuiltIn">
+<msg time="2026-03-13T12:38:58.934539" level="INFO">${payload} = {'email': 'robot_20260313123858675783@example.com', 'password': 'RobotPass123!'}</msg>
+<var>${payload}</var>
+<arg>email=${email}</arg>
+<arg>password=${DEFAULT_PASSWORD}</arg>
+<doc>Creates and returns a dictionary based on the given ``items``.</doc>
+<status status="PASS" start="2026-03-13T12:38:58.934099" elapsed="0.000459"/>
+</kw>
+<kw name="POST On Session" owner="RequestsLibrary">
+<msg time="2026-03-13T12:38:59.185503" level="INFO">POST Request : url=http://127.0.0.1:8000/api/v1/auth/login 
+ path_url=/api/v1/auth/login 
+ headers={'User-Agent': 'python-requests/2.32.5', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive', 'Content-Length': '80', 'Content-Type': 'application/json'} 
+ body=b'{"email": "robot_20260313123858675783@example.com", "password": "RobotPass123!"}' 
+ </msg>
+<msg time="2026-03-13T12:38:59.185573" level="INFO">POST Response : url=http://127.0.0.1:8000/api/v1/auth/login 
+ status=200, reason=OK 
+ headers={'date': 'Fri, 13 Mar 2026 11:38:58 GMT', 'server': 'uvicorn', 'content-length': '441', 'content-type': 'application/json'} 
+ body={"status":"success","message":"Connexion réussie","user_id":33,"email":"robot_20260313123858675783@example.com","role":"admin","first_name":"Robot","access_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJyb2JvdF8yMDI2MDMxMzEyMzg1ODY3NTc4M0BleGFtcGxlLmNvbSIsInVzZXJfaWQiOjMzLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3NzM0MDE5MzksImV4cCI6MTc3MzQwNTUzOX0.nRnFyYzRWNOltmj0k0L7jawWBAlWje1euddQ1oH359w","token_type":"bearer","expires_in_minutes":60} 
+ </msg>
+<msg time="2026-03-13T12:38:59.185692" level="INFO">${resp} = &lt;Response [200]&gt;</msg>
+<var>${resp}</var>
+<arg>backend</arg>
+<arg>${API_PREFIX}/auth/login</arg>
+<arg>json=${payload}</arg>
+<doc>Sends a POST request on a previously created HTTP Session.</doc>
+<status status="PASS" start="2026-03-13T12:38:58.934629" elapsed="0.251082"/>
+</kw>
+<kw name="Should Be Equal As Integers" owner="BuiltIn">
+<msg time="2026-03-13T12:38:59.186317" level="INFO">Argument types are:
+&lt;class 'int'&gt;
+&lt;class 'str'&gt;</msg>
+<arg>${resp.status_code}</arg>
+<arg>200</arg>
+<doc>Fails if objects are unequal after converting them to integers.</doc>
+<status status="PASS" start="2026-03-13T12:38:59.185841" elapsed="0.000524"/>
+</kw>
+<return>
+<value>${resp}</value>
+<status status="PASS" start="2026-03-13T12:38:59.186429" elapsed="0.000051"/>
+</return>
+<msg time="2026-03-13T12:38:59.186609" level="INFO">${login_resp} = &lt;Response [200]&gt;</msg>
+<var>${login_resp}</var>
+<arg>${email}</arg>
+<status status="PASS" start="2026-03-13T12:38:58.933907" elapsed="0.252723"/>
+</kw>
+<kw name="Set Variable" owner="BuiltIn">
+<msg time="2026-03-13T12:38:59.187636" level="INFO">${login_data} = {'status': 'success', 'message': 'Connexion réussie', 'user_id': 33, 'email': 'robot_20260313123858675783@example.com', 'role': 'admin', 'first_name': 'Robot', 'access_token': 'eyJhbGciOiJIUzI1NiIsInR...</msg>
+<var>${login_data}</var>
+<arg>${login_resp.json()}</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="PASS" start="2026-03-13T12:38:59.186988" elapsed="0.000669"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${login_data['status']}</arg>
+<arg>success</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="PASS" start="2026-03-13T12:38:59.187948" elapsed="0.000313"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${login_data['email']}</arg>
+<arg>${email}</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="PASS" start="2026-03-13T12:38:59.188753" elapsed="0.000316"/>
+</kw>
+<kw name="Get Me" owner="keywords">
+<kw name="Create Dictionary" owner="BuiltIn">
+<msg time="2026-03-13T12:38:59.189893" level="INFO">${headers} = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJyb2JvdF8yMDI2MDMxMzEyMzg1ODY3NTc4M0BleGFtcGxlLmNvbSIsInVzZXJfaWQiOjMzLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3NzM0MDE5MzksImV4cCI6MTc3M...</msg>
+<var>${headers}</var>
+<arg>Authorization=Bearer ${access_token}</arg>
+<doc>Creates and returns a dictionary based on the given ``items``.</doc>
+<status status="PASS" start="2026-03-13T12:38:59.189743" elapsed="0.000168"/>
+</kw>
+<kw name="GET On Session" owner="RequestsLibrary">
+<msg time="2026-03-13T12:38:59.194450" level="INFO">GET Request : url=http://127.0.0.1:8000/api/v1/auth/me 
+ path_url=/api/v1/auth/me 
+ headers={'User-Agent': 'python-requests/2.32.5', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive', 'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJyb2JvdF8yMDI2MDMxMzEyMzg1ODY3NTc4M0BleGFtcGxlLmNvbSIsInVzZXJfaWQiOjMzLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3NzM0MDE5MzksImV4cCI6MTc3MzQwNTUzOX0.nRnFyYzRWNOltmj0k0L7jawWBAlWje1euddQ1oH359w'} 
+ body=None 
+ </msg>
+<msg time="2026-03-13T12:38:59.194515" level="INFO">GET Response : url=http://127.0.0.1:8000/api/v1/auth/me 
+ status=200, reason=OK 
+ headers={'date': 'Fri, 13 Mar 2026 11:38:58 GMT', 'server': 'uvicorn', 'content-length': '166', 'content-type': 'application/json'} 
+ body={"status":"success","user_id":33,"email":"robot_20260313123858675783@example.com","role":"admin","first_name":"Robot","last_name":"Framework","phone":"+212600000000"} 
+ </msg>
+<msg time="2026-03-13T12:38:59.194635" level="INFO">${resp} = &lt;Response [200]&gt;</msg>
+<var>${resp}</var>
+<arg>backend</arg>
+<arg>${API_PREFIX}/auth/me</arg>
+<arg>headers=${headers}</arg>
+<doc>Sends a GET request on a previously created HTTP Session.</doc>
+<status status="PASS" start="2026-03-13T12:38:59.189978" elapsed="0.004684"/>
+</kw>
+<kw name="Should Be Equal As Integers" owner="BuiltIn">
+<msg time="2026-03-13T12:38:59.195308" level="INFO">Argument types are:
+&lt;class 'int'&gt;
+&lt;class 'str'&gt;</msg>
+<arg>${resp.status_code}</arg>
+<arg>200</arg>
+<doc>Fails if objects are unequal after converting them to integers.</doc>
+<status status="PASS" start="2026-03-13T12:38:59.194829" elapsed="0.000529"/>
+</kw>
+<return>
+<value>${resp}</value>
+<status status="PASS" start="2026-03-13T12:38:59.195410" elapsed="0.000048"/>
+</return>
+<msg time="2026-03-13T12:38:59.195566" level="INFO">${me_resp} = &lt;Response [200]&gt;</msg>
+<var>${me_resp}</var>
+<arg>${login_data['access_token']}</arg>
+<status status="PASS" start="2026-03-13T12:38:59.189370" elapsed="0.006213"/>
+</kw>
+<kw name="Set Variable" owner="BuiltIn">
+<msg time="2026-03-13T12:38:59.196411" level="INFO">${me_data} = {'status': 'success', 'user_id': 33, 'email': 'robot_20260313123858675783@example.com', 'role': 'admin', 'first_name': 'Robot', 'last_name': 'Framework', 'phone': '+212600000000'}</msg>
+<var>${me_data}</var>
+<arg>${me_resp.json()}</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="PASS" start="2026-03-13T12:38:59.195980" elapsed="0.000452"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${me_data['status']}</arg>
+<arg>success</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="PASS" start="2026-03-13T12:38:59.196705" elapsed="0.000385"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${me_data['email']}</arg>
+<arg>${email}</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="PASS" start="2026-03-13T12:38:59.197350" elapsed="0.000381"/>
+</kw>
+<status status="PASS" start="2026-03-13T12:38:58.666770" elapsed="0.531238"/>
+</test>
+<doc>Smoke tests API backend Auto Diagnostic Platform</doc>
+<status status="PASS" start="2026-03-13T12:38:58.523092" elapsed="0.675531"/>
+</suite>
+<status status="PASS" start="2026-03-13T12:38:58.494044" elapsed="0.705204"/>
+</suite>
+<statistics>
+<total>
+<stat pass="3" fail="0" skip="0">All Tests</stat>
+</total>
+<tag>
+</tag>
+<suite>
+<stat pass="3" fail="0" skip="0" id="s1" name="Suites">Suites</stat>
+<stat pass="3" fail="0" skip="0" id="s1-s1" name="Backend Smoke">Suites.Backend Smoke</stat>
+</suite>
+</statistics>
+<errors>
+</errors>
+</robot>
