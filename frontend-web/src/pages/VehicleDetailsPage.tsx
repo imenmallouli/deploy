@@ -1,0 +1,157 @@
+import { Link, useParams } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import { deleteVehicle, getVehicle, updateVehicle } from '../lib/api/endpoints';
+
+function parseOptionalNumber(value: string): number | undefined {
+  if (value.trim() === '') {
+    return undefined;
+  }
+
+  const parsedValue = Number(value);
+  return Number.isFinite(parsedValue) ? parsedValue : undefined;
+}
+
+export function VehicleDetailsPage() {
+  const { vehicleId } = useParams();
+  const queryClient = useQueryClient();
+  const id = Number(vehicleId);
+
+  const vehicleQuery = useQuery({
+    queryKey: ['vehicle', id],
+    queryFn: () => getVehicle(id),
+    enabled: Number.isFinite(id),
+  });
+
+  const [make, setMake] = useState('');
+  const [model, setModel] = useState('');
+  const [status, setStatus] = useState('');
+  const [vin, setVin] = useState('');
+  const [licensePlate, setLicensePlate] = useState('');
+  const [year, setYear] = useState('');
+  const [mileage, setMileage] = useState('');
+  const [fleetId, setFleetId] = useState('');
+  const [driverId, setDriverId] = useState('');
+  const [dongleId, setDongleId] = useState('');
+  const [autopiDeviceId, setAutopiDeviceId] = useState('');
+  const [autopiUnitId, setAutopiUnitId] = useState('');
+  const [formFeedback, setFormFeedback] = useState('');
+
+  const updateMutation = useMutation({
+    mutationFn: () => {
+      if (!Number.isFinite(id)) {
+        throw new Error('Vehicle ID invalide');
+      }
+
+      const payload: Record<string, unknown> = {};
+
+      if (status.trim() !== '') payload.status = status;
+
+      if (vin.trim() !== '') payload.vin = vin;
+      if (licensePlate.trim() !== '') payload.license_plate = licensePlate;
+      if (make.trim() !== '') payload.make = make;
+      if (model.trim() !== '') payload.model = model;
+
+      const yearValue = parseOptionalNumber(year);
+      if (yearValue !== undefined) payload.year = yearValue;
+
+      const mileageValue = parseOptionalNumber(mileage);
+      if (mileageValue !== undefined) payload.mileage = mileageValue;
+
+      const fleetIdValue = parseOptionalNumber(fleetId);
+      if (fleetIdValue !== undefined) payload.fleet_id = fleetIdValue;
+
+      const driverIdValue = parseOptionalNumber(driverId);
+      if (driverIdValue !== undefined) payload.driver_id = driverIdValue;
+
+      if (dongleId.trim() !== '') payload.dongle_id = dongleId;
+      if (autopiDeviceId.trim() !== '') payload.autopi_device_id = autopiDeviceId;
+      if (autopiUnitId.trim() !== '') payload.autopi_unit_id = autopiUnitId;
+
+      return updateVehicle(id, payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vehicle', id] });
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      setFormFeedback('Update réussi');
+    },
+    onError: (error: unknown) => {
+      const maybeAxiosError = error as { response?: { data?: { message?: string; detail?: string } }; message?: string };
+      const apiMessage = maybeAxiosError.response?.data?.message ?? maybeAxiosError.response?.data?.detail;
+      const fallbackMessage = maybeAxiosError.message ?? 'Échec de mise à jour';
+      setFormFeedback(apiMessage || fallbackMessage);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteVehicle(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      window.location.href = '/vehicles';
+    },
+  });
+
+  const vehicle = vehicleQuery.data?.vehicle;
+
+  return (
+    <section>
+      <h2>Vehicle Details</h2>
+      <p className="subtitle">Technical card and assignment data for vehicle #{vehicleId ?? '-'}</p>
+
+      <div className="panel details-grid">
+        <div>
+          <h3>Identity</h3>
+          <ul>
+            <li>VIN: {vehicle?.vin ?? '-'}</li>
+            <li>Plate: {vehicle?.license_plate ?? '-'}</li>
+            <li>Make / Model: {vehicle?.make ?? '-'} {vehicle?.model ?? ''}</li>
+            <li>Year: {vehicle?.year ?? '-'}</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Assignment</h3>
+          <ul>
+            <li>Fleet ID: {vehicle?.fleet_id ?? '-'}</li>
+            <li>Driver ID: {vehicle?.driver_id ?? '-'}</li>
+            <li>Dongle ID: {vehicle?.dongle_id ?? '-'}</li>
+          </ul>
+        </div>
+      </div>
+
+      <form className="panel form-grid" onSubmit={(e) => { e.preventDefault(); setFormFeedback(''); updateMutation.mutate(); }}>
+        <h3>Update vehicle</h3>
+        <input placeholder="VIN" value={vin} onChange={(e) => setVin(e.target.value)} />
+        <input placeholder="License plate" value={licensePlate} onChange={(e) => setLicensePlate(e.target.value)} />
+        <input placeholder="Make" value={make} onChange={(e) => setMake(e.target.value)} />
+        <input placeholder="Model" value={model} onChange={(e) => setModel(e.target.value)} />
+        <input type="number" placeholder="Year" value={year} onChange={(e) => setYear(e.target.value)} />
+        <input type="number" placeholder="Mileage" value={mileage} onChange={(e) => setMileage(e.target.value)} />
+        <input type="number" placeholder="Fleet ID" value={fleetId} onChange={(e) => setFleetId(e.target.value)} />
+        <input type="number" placeholder="Driver ID" value={driverId} onChange={(e) => setDriverId(e.target.value)} />
+        <input placeholder="Dongle ID" value={dongleId} onChange={(e) => setDongleId(e.target.value)} />
+        <input placeholder="AutoPi device ID" value={autopiDeviceId} onChange={(e) => setAutopiDeviceId(e.target.value)} />
+        <input placeholder="AutoPi unit ID" value={autopiUnitId} onChange={(e) => setAutopiUnitId(e.target.value)} />
+        <select value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="">Status</option>
+          <option value="pending">pending</option>
+          <option value="healthy">healthy</option>
+          <option value="warning">warning</option>
+          <option value="critical">critical</option>
+        </select>
+        <button type="submit" className="btn-primary" disabled={updateMutation.isPending}>
+          {updateMutation.isPending ? 'Saving...' : 'PUT Update'}
+        </button>
+        {formFeedback && <p className="subtitle">{formFeedback}</p>}
+      </form>
+
+      <div className="detail-actions">
+        <button type="button" className="btn-danger" onClick={() => deleteMutation.mutate()}>
+          DELETE Vehicle
+        </button>
+        <Link to={`/vehicle-status/${vehicleId ?? ''}`} className="btn-link">
+          Go to Status
+        </Link>
+      </div>
+    </section>
+  );
+}

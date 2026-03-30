@@ -1,0 +1,17 @@
+export { AlertsPage } from './AlertsPage';
+export { DashboardPage } from './DashboardPage';
+export { DeviceOverviewPage } from './DeviceOverviewPage';
+export { DeviceDetailsPage } from './DeviceDetailsPage';
+export { DevicesPage } from './DevicesPage';
+export { DtcPage } from './DtcPage';
+export { FleetsPage } from './FleetsPage';
+export { GeofencesPage } from './GeofencesPage';
+export { GetStartedPage } from './GetStartedPage';
+export { GroupsPage } from './GroupsPage';
+export { LoginPage } from './LoginPage';
+export { LocationsPage } from './LocationsPage';
+export { RegisterPage } from './RegisterPage';
+export { TelemetryPage } from './TelemetryPage';
+export { VehicleDetailsPage } from './VehicleDetailsPage';
+export { VehicleStatusPage } from './VehicleStatusPage';
+export { VehiclesPage } from './VehiclesPage';

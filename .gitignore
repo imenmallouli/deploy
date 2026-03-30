@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environnements virtuels
+.venv/
+venv/
+env/
+
+# Variables d'environnement
+.env
+backend/.env
+frontend-web/.env
+frontend-web/.env.local
+
+# Frontend cache / build
+frontend-web/.vite/
+frontend-web/dist/
+frontend-web/node_modules/
+*.tsbuildinfo
+frontend-web/tsconfig.app.tsbuildinfo
+frontend-web/tsconfig.node.tsbuildinfo
+
+# Mobile app
+mobile-app/node_modules/
+
+# Test reports
+backend/tests/robot/reports/
+
+# IDE / OS
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db
