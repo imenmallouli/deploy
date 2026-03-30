@@ -1,8 +1,33 @@
+"""
+MQTT Gateway: AutoPi Cloud → Auto Diagnostic Platform API
+
+This bridge subscribes to AutoPi's native MQTT topic structure
+(published by the MQTT Returner configured in AutoPi Cloud portal) and
+forwards incoming messages to the local backend REST API.
+
+AutoPi native topics (set via Device > Advanced Settings > MQTT > Returner):
+  obd/#          → OBD-II PID loggers  (@t = obd.<name>)
+  spm/bat        → Battery / voltage   (@t = obd.bat or spm.battery)
+  track/pos      → GPS position        (@t = track.pos)
+  acc/xyz        → Accelerometer       (@t = acc.xyz)
+  reactor        → Device events       (@t = event.*)
+  rpi/temp       → Device temperature  (@t = rpi.temp)
+
+AutoPi payload format:
+  { "@t": "<type>", "@ts": "2024-01-01T00:00:00Z", <fields…> }
+
+Run example:
+  python mqtt_gateway.py \\
+    --mqtt-host broker.emqx.io --mqtt-port 1883 \\
+    --vehicle-id 1 --autopi-device-id c917fc1199ff \\
+    --email you@example.com --password yourpass
+"""
+
 import argparse
 import importlib
 import json
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 
 def _load_requests_module() -> Any:
@@ -17,6 +42,29 @@ def _load_mqtt_module() -> Any:
         return importlib.import_module("paho.mqtt.client")
     except Exception as exc:
         raise RuntimeError("Dependency missing: install paho-mqtt (pip install paho-mqtt)") from exc
+
+
+# ---------------------------------------------------------------------------
+# Mapping: AutoPi @t type prefix → telemetry field name
+# ---------------------------------------------------------------------------
+_OBD_TELEMETRY_MAP = {
+    "obd.rpm":          "rpm",
+    "obd.speed":        "speed",
+    "obd.fuel":         "fuel_level",
+    "obd.fuel_level":   "fuel_level",
+    "obd.coolant":      "engine_temp",
+    "obd.coolant_temp": "engine_temp",
+    "obd.engine_temp":  "engine_temp",
+    "obd.bat":          "battery_voltage",
+    "obd.battery":      "battery_voltage",
+    "spm.battery":      "battery_voltage",
+}
+
+# @t prefixes that indicate a DTC fault code record
+_DTC_TYPE_PREFIXES = ("obd.dtc", "obd.fault", "obd.trouble")
+
+# @t prefixes that indicate the payload contains raw DTC codes list
+_DTC_CODES_KEY = "codes"  # AutoPi may return {"codes": ["P0300", ...], "@t": "obd.dtc", ...}
 
 
 class ApiClient:
@@ -48,98 +96,302 @@ class ApiClient:
 
 
 class MqttGateway:
-    def __init__(self, api_client: ApiClient, topic_prefix: str, qos: int, verbose: bool):
+    """
+    AutoPi-native MQTT bridge.
+
+    Two modes:
+    - AutoPi mode (default): subscribes to AutoPi's native topics
+      (obd/#, spm/bat, track/pos, acc/xyz, reactor, rpi/temp).
+    - Legacy mode (--topic-prefix given): keeps the old custom topic
+      structure (autodiag/devices/+/telemetry|dtc|heartbeat) for the
+      simulator client (gateway/mqtt_client.py).
+    """
+
+    # AutoPi native topic subscriptions
+    AUTOPI_TOPICS = [
+        "obd/#",
+        "spm/bat",
+        "track/pos",
+        "acc/xyz",
+        "reactor",
+        "rpi/temp",
+    ]
+
+    def __init__(
+        self,
+        api_client: ApiClient,
+        vehicle_id: int,
+        autopi_device_id: str,
+        qos: int,
+        verbose: bool,
+        topic_prefix: Optional[str] = None,
+    ):
         self.api_client = api_client
-        self.topic_prefix = topic_prefix.rstrip("/")
+        self.vehicle_id = vehicle_id
+        self.autopi_device_id = autopi_device_id
         self.qos = qos
         self.verbose = verbose
+        # Legacy mode when an explicit prefix was provided
+        self.legacy_mode = bool(topic_prefix)
+        self.topic_prefix = (topic_prefix or "").rstrip("/")
 
-    def _extract_device_id_from_topic(self, topic: str) -> str:
-        prefix = f"{self.topic_prefix}/"
-        if not topic.startswith(prefix):
-            return "unknown-device"
-
-        parts = topic[len(prefix):].split("/")
-        if len(parts) < 2:
-            return "unknown-device"
-
-        return parts[0]
+    # ------------------------------------------------------------------
+    # MQTT callbacks
+    # ------------------------------------------------------------------
 
     def on_connect(self, client, userdata, flags, reason_code, properties=None):
-        telemetry_topic = f"{self.topic_prefix}/+/telemetry"
-        dtc_topic = f"{self.topic_prefix}/+/dtc"
-        heartbeat_topic = f"{self.topic_prefix}/+/heartbeat"
-
-        client.subscribe(telemetry_topic, qos=self.qos)
-        client.subscribe(dtc_topic, qos=self.qos)
-        client.subscribe(heartbeat_topic, qos=self.qos)
-
         print(f"[MQTT] Connected (code={reason_code})")
-        print(f"[MQTT] Subscribed: {telemetry_topic}")
-        print(f"[MQTT] Subscribed: {dtc_topic}")
-        print(f"[MQTT] Subscribed: {heartbeat_topic}")
+
+        if self.legacy_mode:
+            # Old simulator topics
+            for suffix in ("telemetry", "dtc", "heartbeat"):
+                topic = f"{self.topic_prefix}/+/{suffix}"
+                client.subscribe(topic, qos=self.qos)
+                print(f"[MQTT] Subscribed (legacy): {topic}")
+        else:
+            # AutoPi native topics
+            for topic in self.AUTOPI_TOPICS:
+                client.subscribe(topic, qos=self.qos)
+                print(f"[MQTT] Subscribed (AutoPi): {topic}")
 
     def on_disconnect(self, client, userdata, disconnect_flags, reason_code, properties=None):
         print(f"[MQTT] Disconnected (code={reason_code})")
 
     def on_message(self, client, userdata, msg):
         topic = msg.topic
-        device_id = self._extract_device_id_from_topic(topic)
 
         try:
-            payload = json.loads(msg.payload.decode("utf-8"))
+            raw = msg.payload.decode("utf-8")
+            payload = json.loads(raw)
+            # AutoPi sometimes sends an array of objects
+            if isinstance(payload, list):
+                for item in payload:
+                    self._dispatch(topic, item)
+            else:
+                self._dispatch(topic, payload)
+        except json.JSONDecodeError as exc:
+            print(f"[MQTT] Invalid JSON on {topic}: {exc}  raw={msg.payload[:120]}")
         except Exception as exc:
-            print(f"[MQTT] Invalid JSON on {topic}: {exc}")
+            print(f"[FORWARD] Error topic={topic}: {exc}")
+
+    # ------------------------------------------------------------------
+    # Dispatch
+    # ------------------------------------------------------------------
+
+    def _dispatch(self, topic: str, payload: dict):
+        if self.legacy_mode:
+            self._dispatch_legacy(topic, payload)
+        else:
+            self._dispatch_autopi(topic, payload)
+
+    def _dispatch_autopi(self, topic: str, payload: dict):
+        """Route an AutoPi payload to the correct API endpoint."""
+        at = payload.get("@t", "")
+        ts = payload.get("@ts") or datetime.now(timezone.utc).isoformat()
+
+        # --- Battery / voltage ---
+        if at in ("obd.bat", "spm.battery", "obd.battery") or topic == "spm/bat":
+            self._forward_telemetry({"battery_voltage": payload.get("voltage")}, ts, topic)
             return
 
-        try:
-            if topic.endswith("/telemetry"):
-                self._handle_telemetry(payload, topic)
-            elif topic.endswith("/dtc"):
-                self._handle_dtc(payload, topic)
-            elif topic.endswith("/heartbeat"):
-                self._handle_heartbeat(payload, topic, device_id)
-            else:
-                if self.verbose:
-                    print(f"[MQTT] Ignored topic: {topic}")
-        except Exception as exc:
-            print(f"[FORWARD] Error for topic={topic}: {exc}")
+        # --- OBD PID that maps to a telemetry field ---
+        if at in _OBD_TELEMETRY_MAP:
+            field = _OBD_TELEMETRY_MAP[at]
+            value = payload.get("value") if "value" in payload else payload.get(field.split("_")[-1])
+            self._forward_telemetry({field: value}, ts, topic)
+            return
 
-    def _handle_telemetry(self, payload: dict, topic: str):
-        vehicle_id = payload.get("vehicle_id")
-        if vehicle_id is None:
-            raise RuntimeError("telemetry payload missing vehicle_id")
+        # --- Generic obd.* PID: try to map by field name ---
+        if at.startswith("obd.") and not any(at.startswith(p) for p in _DTC_TYPE_PREFIXES):
+            pid_name = at[4:]  # strip "obd."
+            value = payload.get("value")
+            if value is not None:
+                # Try direct field match in map by pid_name
+                matched_field = None
+                for key, field in _OBD_TELEMETRY_MAP.items():
+                    if key.endswith(pid_name):
+                        matched_field = field
+                        break
+                if matched_field:
+                    self._forward_telemetry({matched_field: value}, ts, topic)
+                else:
+                    # Unknown PID — store as IoT log so data is not lost
+                    self._forward_event(
+                        event_type=f"obd_pid.{pid_name}",
+                        level="info",
+                        message=f"{at}={value}",
+                        metadata=payload,
+                        ts=ts,
+                        topic=topic,
+                    )
+                return
 
-        if payload.get("ts") is None:
-            payload["ts"] = datetime.now(timezone.utc).isoformat()
+        # --- DTC fault codes ---
+        if any(at.startswith(p) for p in _DTC_TYPE_PREFIXES):
+            self._handle_autopi_dtc(payload, ts, topic)
+            return
 
-        result = self.api_client.post_telemetry(payload)
-        print(f"[FORWARD] telemetry OK topic={topic} status={result.get('status', 'unknown')}")
+        # --- GPS position ---
+        if at == "track.pos" or topic == "track/pos":
+            loc = payload.get("loc", {})
+            self._forward_event(
+                event_type="gps",
+                level="info",
+                message=f"lat={loc.get('lat')} lon={loc.get('lon')} sog={payload.get('sog')}",
+                metadata=payload,
+                ts=ts,
+                topic=topic,
+            )
+            return
 
-    def _handle_dtc(self, payload: dict, topic: str):
-        vehicle_id = payload.get("vehicle_id")
-        if vehicle_id is None:
-            raise RuntimeError("dtc payload missing vehicle_id")
+        # --- Accelerometer ---
+        if at == "acc.xyz" or topic == "acc/xyz":
+            self._forward_event(
+                event_type="accelerometer",
+                level="info",
+                message=f"x={payload.get('x')} y={payload.get('y')} z={payload.get('z')}",
+                metadata=payload,
+                ts=ts,
+                topic=topic,
+            )
+            return
 
-        result = self.api_client.post_dtc(payload)
-        print(f"[FORWARD] dtc OK topic={topic} status={result.get('status', 'unknown')}")
+        # --- Device events / reactor ---
+        if at.startswith("event.") or topic == "reactor":
+            tag = payload.get("@tag", at)
+            level = "warning" if "error" in tag or "fault" in tag else "info"
+            self._forward_event(
+                event_type="device_event",
+                level=level,
+                message=tag,
+                metadata=payload,
+                ts=ts,
+                topic=topic,
+            )
+            return
 
-    def _handle_heartbeat(self, payload: dict, topic: str, device_id: str):
-        status_value = str(payload.get("status", "unknown"))
-        event_at = payload.get("ts") or datetime.now(timezone.utc).isoformat()
+        # --- RPi temperature ---
+        if at == "rpi.temp" or topic == "rpi/temp":
+            self._forward_event(
+                event_type="system",
+                level="info",
+                message=f"rpi_temp={payload.get('value')}",
+                metadata=payload,
+                ts=ts,
+                topic=topic,
+            )
+            return
 
-        iot_payload = {
-            "vehicle_id": payload.get("vehicle_id"),
-            "device_id": payload.get("device_id") or payload.get("unit_id") or device_id,
-            "event_type": "heartbeat",
-            "level": "info",
-            "message": f"heartbeat status={status_value}",
-            "metadata": payload,
-            "event_at": event_at,
+        # --- Unknown ---
+        if self.verbose:
+            print(f"[MQTT] Unrecognised @t={at!r} topic={topic}  payload={str(payload)[:120]}")
+
+    def _handle_autopi_dtc(self, payload: dict, ts: str, topic: str):
+        """Forward AutoPi DTC data to POST /api/v1/dtc.
+
+        AutoPi may send a single code or a list under the 'codes' key.
+        """
+        codes = payload.get(_DTC_CODES_KEY)
+        if isinstance(codes, list):
+            for code in codes:
+                dtc = {
+                    "vehicle_id": self.vehicle_id,
+                    "code": str(code),
+                    "description": payload.get("description", ""),
+                    "first_detected": ts,
+                    "last_occurrence": ts,
+                }
+                result = self.api_client.post_dtc(dtc)
+                print(f"[FORWARD] dtc OK code={code} topic={topic} status={result.get('status', 'unknown')}")
+        else:
+            # Single code directly in payload
+            code = payload.get("code") or payload.get("@t", "unknown")
+            dtc = {
+                "vehicle_id": self.vehicle_id,
+                "code": str(code),
+                "description": payload.get("description", ""),
+                "first_detected": ts,
+                "last_occurrence": ts,
+            }
+            result = self.api_client.post_dtc(dtc)
+            print(f"[FORWARD] dtc OK code={code} topic={topic} status={result.get('status', 'unknown')}")
+
+    def _forward_telemetry(self, fields: dict, ts: str, topic: str):
+        """POST a partial telemetry record (merges vehicle_id and ts)."""
+        # Drop None values — only keep fields that have data
+        data = {k: v for k, v in fields.items() if v is not None}
+        if not data:
+            if self.verbose:
+                print(f"[SKIP] telemetry: all fields None for topic={topic}")
+            return
+
+        body = {"vehicle_id": self.vehicle_id, "ts": ts, **data}
+        result = self.api_client.post_telemetry(body)
+        field_names = ", ".join(data.keys())
+        print(f"[FORWARD] telemetry OK [{field_names}] topic={topic} status={result.get('status', 'unknown')}")
+
+    def _forward_event(self, event_type: str, level: str, message: str, metadata: dict, ts: str, topic: str):
+        """POST an IoT log entry to /api/v1/dtc/iot/logs."""
+        body = {
+            "vehicle_id": self.vehicle_id,
+            "device_id": self.autopi_device_id,
+            "event_type": event_type,
+            "level": level,
+            "message": message,
+            "metadata": metadata,
+            "event_at": ts,
         }
+        result = self.api_client.post_iot_log(body)
+        print(f"[FORWARD] event OK type={event_type} topic={topic} status={result.get('status', 'unknown')}")
 
-        result = self.api_client.post_iot_log(iot_payload)
-        print(f"[FORWARD] heartbeat->iot_log OK topic={topic} status={result.get('status', 'unknown')}")
+    # ------------------------------------------------------------------
+    # Legacy mode (simulator / old custom topics)
+    # ------------------------------------------------------------------
+
+    def _dispatch_legacy(self, topic: str, payload: dict):
+        device_id = self._legacy_extract_device_id(topic)
+
+        if topic.endswith("/telemetry"):
+            vehicle_id = payload.get("vehicle_id")
+            if vehicle_id is None:
+                raise RuntimeError("legacy telemetry payload missing vehicle_id")
+            if payload.get("ts") is None:
+                payload["ts"] = datetime.now(timezone.utc).isoformat()
+            result = self.api_client.post_telemetry(payload)
+            print(f"[FORWARD] telemetry OK topic={topic} status={result.get('status', 'unknown')}")
+
+        elif topic.endswith("/dtc"):
+            vehicle_id = payload.get("vehicle_id")
+            if vehicle_id is None:
+                raise RuntimeError("legacy dtc payload missing vehicle_id")
+            result = self.api_client.post_dtc(payload)
+            print(f"[FORWARD] dtc OK topic={topic} status={result.get('status', 'unknown')}")
+
+        elif topic.endswith("/heartbeat"):
+            status_value = str(payload.get("status", "unknown"))
+            event_at = payload.get("ts") or datetime.now(timezone.utc).isoformat()
+            iot_payload = {
+                "vehicle_id": payload.get("vehicle_id"),
+                "device_id": payload.get("device_id") or payload.get("unit_id") or device_id,
+                "event_type": "heartbeat",
+                "level": "info",
+                "message": f"heartbeat status={status_value}",
+                "metadata": payload,
+                "event_at": event_at,
+            }
+            result = self.api_client.post_iot_log(iot_payload)
+            print(f"[FORWARD] heartbeat->iot_log OK topic={topic} status={result.get('status', 'unknown')}")
+
+        else:
+            if self.verbose:
+                print(f"[MQTT] Ignored legacy topic: {topic}")
+
+    def _legacy_extract_device_id(self, topic: str) -> str:
+        prefix = f"{self.topic_prefix}/"
+        if not topic.startswith(prefix):
+            return "unknown-device"
+        parts = topic[len(prefix):].split("/")
+        return parts[0] if len(parts) >= 2 else "unknown-device"
 
 
 def login_and_get_token(base_url: str, email: str, password: str) -> str:
@@ -154,29 +406,52 @@ def login_and_get_token(base_url: str, email: str, password: str) -> str:
     token = data.get("access_token")
 
     if not token:
-        raise RuntimeError("Login OK mais access_token introuvable")
+        raise RuntimeError("Login succeeded but access_token not found in response")
 
     return token
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="MQTT broker -> Auto Diagnostic Platform API gateway")
+    parser = argparse.ArgumentParser(
+        description="AutoPi Cloud MQTT -> Auto Diagnostic Platform API gateway",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__,
+    )
 
-    parser.add_argument("--mqtt-host", default="127.0.0.1", help="MQTT broker host")
+    # MQTT connection
+    parser.add_argument("--mqtt-host", default="broker.emqx.io", help="MQTT broker host (default: broker.emqx.io)")
     parser.add_argument("--mqtt-port", type=int, default=1883, help="MQTT broker port")
-    parser.add_argument("--mqtt-username", default=None, help="MQTT username")
+    parser.add_argument("--mqtt-username", default=None, help="MQTT username (if broker requires auth)")
     parser.add_argument("--mqtt-password", default=None, help="MQTT password")
-    parser.add_argument("--mqtt-keepalive", type=int, default=60, help="MQTT keepalive")
+    parser.add_argument("--mqtt-keepalive", type=int, default=60, help="MQTT keepalive seconds")
 
-    parser.add_argument("--topic-prefix", default="autodiag/devices", help="MQTT topic prefix")
-    parser.add_argument("--qos", type=int, default=1, choices=[0, 1, 2], help="MQTT QoS")
+    # AutoPi device → platform mapping
+    parser.add_argument(
+        "--vehicle-id", type=int, default=1,
+        help="Platform vehicle_id to associate AutoPi data with (default: 1)",
+    )
+    parser.add_argument(
+        "--autopi-device-id", default="autopi-device",
+        help="AutoPi unit_id / client ID used to tag IoT log entries (e.g. c917fc1199ff)",
+    )
 
+    # Legacy mode (simulator)
+    parser.add_argument(
+        "--topic-prefix", default=None,
+        help="LEGACY: custom topic prefix (e.g. autodiag/devices). "
+             "When omitted, uses AutoPi native topics.",
+    )
+
+    # QoS
+    parser.add_argument("--qos", type=int, default=1, choices=[0, 1, 2], help="MQTT QoS level")
+
+    # Backend API
     parser.add_argument("--base-url", default="http://127.0.0.1:8000", help="Backend API base URL")
-    parser.add_argument("--token", default=None, help="JWT token")
-    parser.add_argument("--email", default=None, help="Email for API login")
-    parser.add_argument("--password", default=None, help="Password for API login")
+    parser.add_argument("--token", default=None, help="Pre-existing JWT token (skips login)")
+    parser.add_argument("--email", default=None, help="Email for automatic API login")
+    parser.add_argument("--password", default=None, help="Password for automatic API login")
 
-    parser.add_argument("--verbose", action="store_true", help="Verbose MQTT logs")
+    parser.add_argument("--verbose", action="store_true", help="Log unrecognised topics and skipped messages")
 
     return parser.parse_args()
 
@@ -185,6 +460,7 @@ def main():
     mqtt = _load_mqtt_module()
     args = parse_args()
 
+    # --- Authenticate ---
     token = args.token
     if not token:
         if not args.email or not args.password:
@@ -193,12 +469,22 @@ def main():
         print("[API] Token obtained via /api/v1/auth/login")
 
     api_client = ApiClient(base_url=args.base_url, token=token)
+
     gateway = MqttGateway(
         api_client=api_client,
-        topic_prefix=args.topic_prefix,
+        vehicle_id=args.vehicle_id,
+        autopi_device_id=args.autopi_device_id,
         qos=args.qos,
         verbose=args.verbose,
+        topic_prefix=args.topic_prefix,  # None → AutoPi mode
     )
+
+    mode = "LEGACY" if args.topic_prefix else "AutoPi"
+    print(f"[CONFIG] Mode         : {mode}")
+    print(f"[CONFIG] vehicle_id   : {args.vehicle_id}")
+    print(f"[CONFIG] device_id    : {args.autopi_device_id}")
+    print(f"[CONFIG] broker       : {args.mqtt_host}:{args.mqtt_port}")
+    print(f"[CONFIG] backend      : {args.base_url}")
 
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 

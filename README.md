@@ -4,30 +4,17 @@ Location: C:\auto diagnostic platform\backend\.venv\Lib\site-packages
 
 
 
-cd "c:\auto diagnostic platform\backend"
-docker compose up -d --build
-docker compose ps
-Puis ouvre:
 
-http://127.0.0.1:8000/docs
-
-Si tu as l'erreur `open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified`, lance plutôt:
-
-```powershell
-cd "c:\auto diagnostic platform\backend"
-powershell -ExecutionPolicy Bypass -File .\scripts\docker-up.ps1
-```
-
-Ce script démarre Docker Desktop automatiquement (si nécessaire), attend que le daemon soit prêt, puis lance `docker compose up -d --build`.
-
-Si tu utilises Git Bash, tu peux lancer:
 
 ```bash
 cd "/c/auto diagnostic platform/backend"
 bash ./scripts/docker-up.sh
 ```
-
-
+puis :
+```bash
+cd "c:\auto diagnostic platform\frontend-web"
+npm run dev
+```
 
 
 
@@ -39,6 +26,35 @@ docker compose up -d --build
 docker compose ps
 cd "C:\auto diagnostic platform\frontend-web"
 npm run dev
+
+## MQTT local (Mosquitto)
+
+Le broker MQTT local fait maintenant partie du `docker-compose` backend.
+
+Après `docker compose up -d --build`, vérifier:
+
+```bash
+cd "C:\auto diagnostic platform\backend"
+docker compose ps
+docker compose logs mqtt
+```
+
+Broker local par défaut:
+
+- Host: `127.0.0.1`
+- Port: `1883`
+
+Test rapide:
+
+```bash
+docker compose exec mqtt mosquitto_sub -h 127.0.0.1 -p 1883 -t 'autodiag/devices/#' -C 1 -v
+```
+
+Dans un autre terminal:
+
+```bash
+docker compose exec mqtt mosquitto_pub -h 127.0.0.1 -p 1883 -t 'autodiag/devices/test-device/heartbeat' -m '{"device_id":"test-device","status":"online"}'
+```
 
 ## OBD Gateway MVP
 
@@ -57,3 +73,20 @@ Pour travailler la partie Device (dongle) étape par étape, voir:
 Pour la partie MQTT (broker, topics, liaison données dongle vers backend) en détail:
 
 - `docs/README_mqtt_dongle_fr.md`
+
+
+
+
+
+
+# Terminal 1 — démarrer tous les services
+cd "C:\auto diagnostic platform\backend"
+docker compose up -d --build
+
+# Terminal 2 — lancer le client MQTT
+cd "C:\auto diagnostic platform\gateway"
+python mqtt_client.py
+
+# Terminal 3 — frontend (optionnel)
+cd "C:\auto diagnostic platform\frontend-web"
+npm run dev

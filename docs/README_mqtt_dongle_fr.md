@@ -27,6 +27,24 @@ Dongle OBD -> MQTT Broker -> Bridge MQTT -> API Backend -> Frontend
 pip install paho-mqtt requests
 ```
 
+### Broker MQTT local du projet
+
+Le broker Mosquitto fait maintenant partie du `docker-compose` backend.
+
+Démarrage et vérification:
+
+```bash
+cd "c:\auto diagnostic platform\backend"
+docker compose up -d --build
+docker compose ps
+docker compose logs mqtt
+```
+
+Paramètres par défaut:
+- Host: `127.0.0.1`
+- Port: `1883`
+- Auth: anonyme activée en local uniquement
+
 ## 2.1) Plan de travail AVANT de brancher le dongle (recommandé)
 
 Quand le dongle n'est pas encore connecté à la voiture, valider d'abord tout le pipeline logiciel:
@@ -51,7 +69,8 @@ docker compose up -d --build
 #### B) Démarrer broker MQTT
 
 ```bash
-docker run -d --name mqtt-broker -p 1883:1883 eclipse-mosquitto:2
+cd "c:\auto diagnostic platform\backend"
+docker compose up -d mqtt
 ```
 
 #### C) Lancer le bridge MQTT -> API
@@ -64,11 +83,11 @@ cd "c:\auto diagnostic platform\backend"
 #### D) Publier des messages de test (telemetry + dtc + heartbeat)
 
 ```bash
-docker exec mqtt-broker sh -c "mosquitto_pub -h 127.0.0.1 -p 1883 -t 'autodiag/devices/ccb71376-cd13-b201-170e-c917fc1199ff/telemetry' -m '{\"vehicle_id\":1,\"speed\":62,\"rpm\":2200,\"fuel_level\":45,\"engine_temp\":91,\"battery_voltage\":12.5}'"
+docker compose exec mqtt sh -c "mosquitto_pub -h 127.0.0.1 -p 1883 -t 'autodiag/devices/ccb71376-cd13-b201-170e-c917fc1199ff/telemetry' -m '{\"vehicle_id\":1,\"speed\":62,\"rpm\":2200,\"fuel_level\":45,\"engine_temp\":91,\"battery_voltage\":12.5}'"
 
-docker exec mqtt-broker sh -c "mosquitto_pub -h 127.0.0.1 -p 1883 -t 'autodiag/devices/ccb71376-cd13-b201-170e-c917fc1199ff/dtc' -m '{\"vehicle_id\":1,\"code\":\"P0300\",\"description\":\"Random/Multiple Cylinder Misfire\",\"severity\":\"warning\"}'"
+docker compose exec mqtt sh -c "mosquitto_pub -h 127.0.0.1 -p 1883 -t 'autodiag/devices/ccb71376-cd13-b201-170e-c917fc1199ff/dtc' -m '{\"vehicle_id\":1,\"code\":\"P0300\",\"description\":\"Random/Multiple Cylinder Misfire\",\"severity\":\"warning\"}'"
 
-docker exec mqtt-broker sh -c "mosquitto_pub -h 127.0.0.1 -p 1883 -t 'autodiag/devices/ccb71376-cd13-b201-170e-c917fc1199ff/heartbeat' -m '{\"device_id\":\"042f5956-5b4e-4f37-9e74-461f1997a567\",\"unit_id\":\"ccb71376-cd13-b201-170e-c917fc1199ff\",\"status\":\"online\"}'"
+docker compose exec mqtt sh -c "mosquitto_pub -h 127.0.0.1 -p 1883 -t 'autodiag/devices/ccb71376-cd13-b201-170e-c917fc1199ff/heartbeat' -m '{\"device_id\":\"042f5956-5b4e-4f37-9e74-461f1997a567\",\"unit_id\":\"ccb71376-cd13-b201-170e-c917fc1199ff\",\"status\":\"online\"}'"
 ```
 
 #### E) Vérifier ingestion
@@ -88,13 +107,15 @@ GET /api/v1/dtc/iot/logs?device_id=ccb71376-cd13-b201-170e-c917fc1199ff
 Option simple avec Docker (Mosquitto):
 
 ```bash
-docker run -d --name mqtt-broker -p 1883:1883 eclipse-mosquitto:2
+cd "c:\auto diagnostic platform\backend"
+docker compose up -d mqtt
 ```
 
 Vérifier:
 
 ```bash
-docker ps
+docker compose ps
+docker compose logs mqtt
 ```
 
 Broker par défaut:
@@ -164,17 +185,17 @@ Topics à utiliser:
 1) Lancer un subscriber de contrôle (capture 3 messages):
 
 ```bash
-docker exec mqtt-broker sh -c "mosquitto_sub -h 127.0.0.1 -p 1883 -t 'autodiag/devices/ccb71376-cd13-b201-170e-c917fc1199ff/#' -C 3 -v"
+docker compose exec mqtt sh -c "mosquitto_sub -h 127.0.0.1 -p 1883 -t 'autodiag/devices/ccb71376-cd13-b201-170e-c917fc1199ff/#' -C 3 -v"
 ```
 
 2) Publier les 3 messages de test (telemetry, dtc, heartbeat):
 
 ```bash
-docker exec mqtt-broker sh -c "mosquitto_pub -h 127.0.0.1 -p 1883 -t 'autodiag/devices/ccb71376-cd13-b201-170e-c917fc1199ff/telemetry' -m '{\"vehicle_id\":1,\"ts\":\"2026-03-11T12:00:00Z\",\"speed\":58.2,\"rpm\":2100,\"fuel_level\":47.5,\"engine_temp\":92.1,\"battery_voltage\":13.7}'"
+docker compose exec mqtt sh -c "mosquitto_pub -h 127.0.0.1 -p 1883 -t 'autodiag/devices/ccb71376-cd13-b201-170e-c917fc1199ff/telemetry' -m '{\"vehicle_id\":1,\"ts\":\"2026-03-11T12:00:00Z\",\"speed\":58.2,\"rpm\":2100,\"fuel_level\":47.5,\"engine_temp\":92.1,\"battery_voltage\":13.7}'"
 
-docker exec mqtt-broker sh -c "mosquitto_pub -h 127.0.0.1 -p 1883 -t 'autodiag/devices/ccb71376-cd13-b201-170e-c917fc1199ff/dtc' -m '{\"vehicle_id\":1,\"code\":\"P0300\",\"description\":\"Random/Multiple Cylinder Misfire Detected\",\"severity\":\"warning\",\"last_occurrence\":\"2026-03-11T12:00:10Z\"}'"
+docker compose exec mqtt sh -c "mosquitto_pub -h 127.0.0.1 -p 1883 -t 'autodiag/devices/ccb71376-cd13-b201-170e-c917fc1199ff/dtc' -m '{\"vehicle_id\":1,\"code\":\"P0300\",\"description\":\"Random/Multiple Cylinder Misfire Detected\",\"severity\":\"warning\",\"last_occurrence\":\"2026-03-11T12:00:10Z\"}'"
 
-docker exec mqtt-broker sh -c "mosquitto_pub -h 127.0.0.1 -p 1883 -t 'autodiag/devices/ccb71376-cd13-b201-170e-c917fc1199ff/heartbeat' -m '{\"device_id\":\"042f5956-5b4e-4f37-9e74-461f1997a567\",\"unit_id\":\"ccb71376-cd13-b201-170e-c917fc1199ff\",\"status\":\"online\",\"ts\":\"2026-03-11T12:00:30Z\"}'"
+docker compose exec mqtt sh -c "mosquitto_pub -h 127.0.0.1 -p 1883 -t 'autodiag/devices/ccb71376-cd13-b201-170e-c917fc1199ff/heartbeat' -m '{\"device_id\":\"042f5956-5b4e-4f37-9e74-461f1997a567\",\"unit_id\":\"ccb71376-cd13-b201-170e-c917fc1199ff\",\"status\":\"online\",\"ts\":\"2026-03-11T12:00:30Z\"}'"
 ```
 
 3) Résultat attendu:
