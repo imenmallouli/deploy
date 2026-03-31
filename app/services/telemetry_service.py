@@ -18,6 +18,10 @@ class TelemetryService:
         "fuel_level": "avg_fuel_level",
         "engine_temp": "avg_engine_temp",
         "battery_voltage": "avg_battery_voltage",
+        "engine_load": "avg_engine_load",
+        "ambient_air_temp": "avg_ambient_air_temp",
+        "intake_temp": "avg_intake_temp",
+        "odometer": "avg_odometer",
     }
 
     @staticmethod

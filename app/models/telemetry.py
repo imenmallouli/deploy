@@ -18,6 +18,10 @@ class TelemetryData(Base):
     fuel_level = Column(Float, nullable=True)
     engine_temp = Column(Float, nullable=True)
     battery_voltage = Column(Float, nullable=True)
+    engine_load = Column(Float, nullable=True)
+    ambient_air_temp = Column(Float, nullable=True)
+    intake_temp = Column(Float, nullable=True)
+    odometer = Column(Float, nullable=True)
 
 
 class TelemetryMongoModel(BaseModel):
@@ -29,6 +33,10 @@ class TelemetryMongoModel(BaseModel):
     fuel_level: float | None = None
     engine_temp: float | None = None
     battery_voltage: float | None = None
+    engine_load: float | None = None
+    ambient_air_temp: float | None = None
+    intake_temp: float | None = None
+    odometer: float | None = None
     created_at: datetime | None = None
     created_by: int | None = None
 
