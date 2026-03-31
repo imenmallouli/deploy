@@ -15,6 +15,10 @@ class TelemetryDataResponse(BaseModel):
     fuel_level: list[TelemetryPoint] = []
     engine_temp: list[TelemetryPoint] = []
     battery_voltage: list[TelemetryPoint] = []
+    engine_load: list[TelemetryPoint] = []
+    ambient_air_temp: list[TelemetryPoint] = []
+    intake_temp: list[TelemetryPoint] = []
+    odometer: list[TelemetryPoint] = []
 
 
 class TelemetryHistoryResponse(BaseModel):
@@ -34,3 +38,7 @@ class TelemetryIngest(BaseModel):
     fuel_level: Optional[float] = None
     engine_temp: Optional[float] = None
     battery_voltage: Optional[float] = None
+    engine_load: Optional[float] = None
+    ambient_air_temp: Optional[float] = None
+    intake_temp: Optional[float] = None
+    odometer: Optional[float] = None

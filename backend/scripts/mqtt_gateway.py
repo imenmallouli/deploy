@@ -58,6 +58,13 @@ _OBD_TELEMETRY_MAP = {
     "obd.bat":          "battery_voltage",
     "obd.battery":      "battery_voltage",
     "spm.battery":      "battery_voltage",
+    "obd.engine_load":  "engine_load",
+    "obd.load":         "engine_load",
+    "obd.ambient_air_temp": "ambient_air_temp",
+    "obd.ambient_temp": "ambient_air_temp",
+    "obd.intake_temp":  "intake_temp",
+    "obd.intake_air_temp": "intake_temp",
+    "obd.odometer":     "odometer",
 }
 
 # @t prefixes that indicate a DTC fault code record
@@ -178,6 +185,16 @@ class MqttGateway:
     # Dispatch
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _extract_value(payload: dict, fallback_keys: list[str] | None = None):
+        if "value" in payload and payload.get("value") is not None:
+            return payload.get("value")
+        if fallback_keys:
+            for key in fallback_keys:
+                if payload.get(key) is not None:
+                    return payload.get(key)
+        return None
+
     def _dispatch(self, topic: str, payload: dict):
         if self.legacy_mode:
             self._dispatch_legacy(topic, payload)
@@ -191,13 +208,28 @@ class MqttGateway:
 
         # --- Battery / voltage ---
         if at in ("obd.bat", "spm.battery", "obd.battery") or topic == "spm/bat":
-            self._forward_telemetry({"battery_voltage": payload.get("voltage")}, ts, topic)
+            self._forward_telemetry(
+                {"battery_voltage": self._extract_value(payload, ["voltage", "battery_voltage", "bat"])},
+                ts,
+                topic,
+            )
             return
 
         # --- OBD PID that maps to a telemetry field ---
         if at in _OBD_TELEMETRY_MAP:
             field = _OBD_TELEMETRY_MAP[at]
-            value = payload.get("value") if "value" in payload else payload.get(field.split("_")[-1])
+            per_field_keys = {
+                "fuel_level": ["fuel", "fuel_level"],
+                "engine_temp": ["coolant", "coolant_temp", "engine_temp", "temp"],
+                "engine_load": ["load", "engine_load"],
+                "ambient_air_temp": ["ambient_air_temp", "ambient_temp", "temp"],
+                "intake_temp": ["intake_temp", "intake_air_temp", "temp"],
+                "odometer": ["odometer", "distance"],
+                "speed": ["speed"],
+                "rpm": ["rpm"],
+                "battery_voltage": ["voltage", "battery_voltage", "bat"],
+            }
+            value = self._extract_value(payload, per_field_keys.get(field, [field]))
             self._forward_telemetry({field: value}, ts, topic)
             return
 
