@@ -320,76 +320,292 @@ POST /api/v1/ai/evaluate/1
 
 ## 8. Phases d'évolution
 
-### Phase 1 (Maintenant) : Rule Engine
-```
-Règles = connaissance expert + expérience mécanique
-Pas besoin ML compliqué
-Facile à maintenir et ajuster
-```
+Cette section répond à la question : **"Quelles étapes j'applique, dans quel ordre, et dans quels fichiers ?"**
 
-### Phase 2 (Plus tard) : Machine Learning
-```
-Entraîner modèle RandomForest sur dataset public Kaggle
-Modèle apprend automatiquement à prédire severity
-Plus robuste que les règles
-```
+### Phase 1 (Maintenant) : Rule Engine (obligatoire)
+
+Objectif : avoir un système IA utile sans entraînement ML.
+
+Étapes exactes :
+
+1. **Créer le dossier IA backend**
+   - Chemin : `backend/app/services/ia/`
+   - Fichiers à créer :
+     - `backend/app/services/ia/__init__.py`
+     - `backend/app/services/ia/data_cleaner.py`
+     - `backend/app/services/ia/feature_engineering.py`
+     - `backend/app/services/ia/rule_engine.py`
+     - `backend/app/services/ia/db_cleaner.py`
+
+2. **Implémenter nettoyage + features**
+   - `data_cleaner.py` : timestamps, doublons, outliers, interpolation
+   - `feature_engineering.py` : rolling mean, max, trend, flags, idle duration
+
+3. **Implémenter le moteur de règles**
+   - `rule_engine.py`
+   - Règles min recommandées :
+     - batterie critique/faible
+     - température critique/élevée
+     - DTC critiques (P0300..P0304, P0420, P0171, ...)
+     - carburant bas
+
+4. **Créer la persistance recommandations**
+   - Modèle : `backend/app/models/recommendation.py`
+   - Schéma : `backend/app/schemas/recommendation.py`
+
+5. **Exposer les endpoints IA**
+   - `backend/app/api/v1/recommendations.py`
+   - Endpoints min :
+     - `POST /api/v1/ai/evaluate/{vehicle_id}`
+     - `GET /api/v1/ai/recommendations?vehicle_id=...`
+     - `GET /api/v1/ai/risk-score/{vehicle_id}`
+
+6. **Brancher le routeur dans le backend**
+   - Fichier : `backend/app/main.py`
+   - Ajouter le router recommandations dans l'API v1
+
+7. **Tester manuellement**
+   - Lancer backend : `docker compose up -d --build`
+   - Appeler `POST /api/v1/ai/evaluate/1`
+   - Vérifier MongoDB : collections `alerts`, `ai_recommendations`
+
+Critère de sortie Phase 1 :
+- Pour un cas batterie faible, une alerte + une recommandation sont créées et visibles via API.
+
+### Phase 2 (Plus tard) : Machine Learning supervisé
+
+Objectif : compléter les règles avec un modèle prédictif.
+
+Étapes exactes :
+
+1. Ajouter script entraînement : `backend/scripts/train_alert_model.py`
+2. Charger dataset CSV (Kaggle) depuis `backend/data/raw/`
+3. Réutiliser les mêmes features que la Phase 1
+4. Entraîner `RandomForestClassifier`
+5. Sauvegarder modèle : `backend/models/alert_classifier.pkl`
+6. Créer service `backend/app/services/ia/ml_engine.py`
+7. Combiner sortie `rule_engine` + `ml_engine` (priorité aux règles critiques)
+
+Critère de sortie Phase 2 :
+- `f1-score` acceptable et endpoint IA retourne `source = rule_engine` ou `source = ml_model`.
 
 ### Phase 3 (Après) : Anomaly Detection
-```
-Modèle Isolation Forest
-Détecte des patterns anormaux sans règles
-Adaptatif = apprend du temps
-```
 
-### Phase 4 (Futur) : LLM
-```
-API OpenAI/Claude
-Recommandations en langage naturel
-Contexte complet du véhicule historique
+Objectif : détecter des comportements anormaux sans labels parfaits.
+
+Étapes :
+1. Ajouter `IsolationForest` dans `ml_engine.py`
+2. Score anomalie par fenêtre temporelle
+3. Générer alerte `anomaly` si score dépasse seuil
+
+### Phase 4 (Futur) : LLM (texte intelligent)
+
+Objectif : produire une recommandation naturelle et compréhensible.
+
+Étapes :
+1. Construire un résumé structuré (alertes + DTC + contexte)
+2. Envoyer au LLM via API
+3. Stocker texte final dans `ai_recommendations.recommendation_text`
+4. Garder un fallback local si API externe indisponible
+
+### Diagramme bloc PlantUML — Phases d'évolution
+
+```plantuml
+@startuml
+title Phases d'évolution IA - Auto Diagnostic Platform
+
+rectangle "Phase 1\nRule Engine\n(data_cleaner + features + règles)" as P1
+rectangle "Phase 2\nML supervisé\n(RandomForest + model.pkl)" as P2
+rectangle "Phase 3\nAnomaly Detection\n(IsolationForest)" as P3
+rectangle "Phase 4\nLLM\n(recommandations langage naturel)" as P4
+
+P1 --> P2 : ajouter modèle prédictif
+P2 --> P3 : ajouter détection anomalies
+P3 --> P4 : ajouter génération texte
+
+note bottom of P1
+Priorité actuelle
+à implémenter en premier
+end note
+
+@enduml
 ```
 
 ---
 
 ## 9. Fichiers à créer (ordre d'implémentation)
 
-| Jour | Fichier | Rôle |
+### 9.1 Arborescence cible
+
+```text
+backend/
+  app/
+    api/
+      v1/
+        recommendations.py
+    models/
+      recommendation.py
+    schemas/
+      recommendation.py
+    services/
+      ia/
+        __init__.py
+        data_cleaner.py
+        feature_engineering.py
+        rule_engine.py
+        db_cleaner.py
+        ml_engine.py              # Phase 2
+        scheduler.py              # optionnel
+  scripts/
+    train_alert_model.py          # Phase 2
+  models/
+    alert_classifier.pkl          # généré après entraînement
+  data/
+    raw/
+      <dataset>.csv
+```
+
+### 9.2 Plan de travail détaillé (jour par jour)
+
+| Jour | Action | Fichier(s) |
 |---|---|---|
-| J1 | `backend/app/services/ia/data_cleaner.py` | Nettoie données pandas |
-| J2 | `backend/app/services/ia/feature_engineering.py` | Crée features |
-| J3 | `backend/app/services/ia/rule_engine.py` | Applique 10 règles |
-| J4 | `backend/app/services/ia/db_cleaner.py` | Nettoie MongoDB |
-| J5 | `backend/app/models/recommendation.py` | Modèle MongoDB |
-| J6 | `backend/app/api/v1/recommendations.py` | Endpoints API |
-| J7 | `backend/scripts/train_alert_model.py` | Entraîner ML (phase 2) |
+| J1 | Créer structure IA + nettoyage | `services/ia/data_cleaner.py` |
+| J2 | Créer features techniques | `services/ia/feature_engineering.py` |
+| J3 | Écrire règles métier et score risque | `services/ia/rule_engine.py` |
+| J4 | Créer modèle + schéma recommandation | `models/recommendation.py`, `schemas/recommendation.py` |
+| J5 | Créer API recommandations | `api/v1/recommendations.py`, `main.py` |
+| J6 | Tests end-to-end (POST evaluate -> GET results) | tests API + Mongo vérification |
+| J7 | Entraînement ML (optionnel phase 2) | `scripts/train_alert_model.py`, `services/ia/ml_engine.py` |
+
+### 9.3 Checklist de validation à chaque fin de jour
+
+- Les imports du module IA passent sans erreur
+- Les endpoints IA répondent HTTP 200
+- Les collections MongoDB sont alimentées
+- Aucune alerte dupliquée < 15 min
+- Le score de risque est toujours entre 0 et 100
+
+### Diagramme bloc PlantUML — Fichiers et dépendances
+
+```plantuml
+@startuml
+title Dépendances des fichiers IA
+
+package "app/services/ia" {
+  [data_cleaner.py] as DC
+  [feature_engineering.py] as FE
+  [rule_engine.py] as RE
+  [db_cleaner.py] as DBC
+  [ml_engine.py] as MLE
+}
+
+package "app/models + schemas" {
+  [models/recommendation.py] as MR
+  [schemas/recommendation.py] as SR
+}
+
+package "app/api/v1" {
+  [recommendations.py] as API
+}
+
+[scripts/train_alert_model.py] as TRAIN
+[app/main.py] as MAIN
+
+DC --> FE
+FE --> RE
+RE --> API
+MR --> API
+SR --> API
+API --> MAIN
+TRAIN --> MLE
+MLE --> RE : fusion sortie
+DBC --> API : maintenance données
+
+@enduml
+```
 
 ---
 
 ## 10. Résumé du flux complet (A à Z)
 
+### 10.1 Flux d'exécution opérationnel (ce que le backend fait)
+
+1. Lire les données véhicule depuis MongoDB/PostgreSQL
+2. Nettoyer les données (`data_cleaner.py`)
+3. Créer les features (`feature_engineering.py`)
+4. Exécuter les règles (`rule_engine.py`)
+5. Dédupliquer les alertes
+6. Calculer le score de risque
+7. Sauvegarder `alerts` + `ai_recommendations`
+8. Retourner la réponse API au frontend
+
+### 10.2 Pipeline runtime (PlantUML)
+
+```plantuml
+@startuml
+title Pipeline runtime IA (du brut vers recommandation)
+
+start
+:Lire télémétrie + DTC + IoT logs;
+:Nettoyage data_cleaner.py;
+:Feature engineering;
+:Appliquer rule_engine;
+
+if (Alerte dupliquée < 15 min ?) then (Oui)
+  :Ignorer alerte;
+else (Non)
+  :Conserver alerte;
+endif
+
+:Calculer risk_score 0..100;
+:Sauvegarder MongoDB\nalerts + ai_recommendations;
+:Retourner JSON API;
+stop
+
+@enduml
 ```
-DONNÉES BRUTES (MongoDB)
-        ↓
-[DATA_CLEANER] → Supprimer nulles, outliers, doublons
-        ↓
-DONNÉES PROPRES (DataFrame)
-        ↓
-[FEATURE_ENGINEERING] → Créer moyennes, tendances, flags
-        ↓
-FEATURES (DataFrame enrichi)
-        ↓
-[RULE_ENGINE] → Appliquer 10 règles
-        ↓
-ALERTES + RECOMMANDATIONS générées
-        ↓
-[DEDUPLICATION] → Ignorer doublons dans 15 min
-        ↓
-[RISK_SCORE] → Calculer score 0-100
-        ↓
-[SAVE_MONGODB] → Sauvegarder alerts + recommendations
-        ↓
-[API_ENDPOINTS] → GET /api/v1/alerts, /api/v1/ai/recommendations
-        ↓
-FRONTEND → affiche alertes et recommandations à l'utilisateur
+
+### 10.3 Chemin d'appel API côté frontend
+
+```plantuml
+@startuml
+title Appels API Frontend -> Backend IA
+
+actor User
+participant "Frontend React" as FE
+participant "FastAPI /api/v1" as API
+database "MongoDB" as MDB
+
+User -> FE : Ouvrir page alertes
+FE -> API : POST /ai/evaluate/{vehicle_id}
+API -> MDB : read raw data
+API -> API : clean + features + rules
+API -> MDB : write alerts/recommendations
+FE -> API : GET /ai/recommendations?vehicle_id=...
+API -> MDB : read recommendations
+API --> FE : JSON recommandations + risk_score
+FE --> User : Affichage UI
+
+@enduml
+```
+
+### 10.4 Commandes de test rapide (Phase 1)
+
+```bash
+cd "C:\auto diagnostic platform\backend"
+docker compose up -d --build
+
+# 1) Évaluer un véhicule
+curl -X POST "http://127.0.0.1:8000/api/v1/ai/evaluate/1" \
+  -H "Authorization: Bearer <TOKEN>"
+
+# 2) Lire recommandations
+curl "http://127.0.0.1:8000/api/v1/ai/recommendations?vehicle_id=1" \
+  -H "Authorization: Bearer <TOKEN>"
+
+# 3) Lire score
+curl "http://127.0.0.1:8000/api/v1/ai/risk-score/1" \
+  -H "Authorization: Bearer <TOKEN>"
 ```
 
 
