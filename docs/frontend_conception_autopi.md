@@ -1,219 +1,406 @@
-# Conception Frontend Corrigée — MALLOULIAUTO Cloud
+# Conception Frontend (As-Built) — MALLOULIAUTO Cloud
+
+Auteur: Imen Mallouli  
+Mise à jour: 31/03/2026  
+But: documenter le frontend tel qu’il est réellement implémenté dans `frontend-web`.
+
+---
 
 ## 1) Objectif
-Définir une conception frontend alignée avec l’implémentation réelle du projet `frontend-web`.
-
-Objectifs UX:
-- Vue opérationnelle immédiate (fleet + devices + diagnostics + alertes).
-- Actions directes via toolbar (Search, Filters, Columns, Refresh, Create).
-- Intégration native avec l’API backend v1 (`/api/v1/...`) et Swagger/ReDoc.
-
----
-
-## 2) État actuel du scope (implémenté)
-
-### Inclus aujourd’hui
-- Auth: Login, Register, Logout
-- Get Started
-- Fleet Management: Overview, Vehicles (list/details), Geofences, Groups, Locations, Diagnostics, Alerts
-- Device Management: Overview, Devices, OBD Library, Vehicle Status, Telemetry
-- Fleets (liste + opérations de base)
-
-### Partiellement implémenté
-- RBAC granulaire UI (rôle stocké mais règles UI incomplètes)
 
 
-### Hors scope actuel
-- Frontend mobile React Native (non présent dans ce workspace)
 
+1. l’architecture frontend réelle,
+2. les routes réellement actives,
+3. les fonctionnalités effectivement codées page par page,
+4. les points partiels/non branchés.
 
 ---
 
-## 3) Stack technique réelle
+## 2) Stack frontend réellement utilisée
 
-### 3.1 Frontend Web
-- React 18 + TypeScript + Vite
-- React Router (routing protégé)
-- TanStack Query (server state)
+- React 18
+- TypeScript
+- Vite
+- React Router (`createBrowserRouter`)
+- TanStack React Query (`QueryClientProvider`)
 - Axios (client API + interceptors auth)
-- Zustand installé (usage limité/optionnel)
-- UI CSS maison (`styles.css`) — pas de Tailwind actif
+- CSS custom (`src/styles.css`)
 
-### 3.2 Auth/session
-- Token stocké dans `localStorage`
-- Guard de route par session (`RequireAuth`)
-- Interceptor Axios:
-	- injecte `Authorization: Bearer <token>`
-	- sur 401/403: clear session + redirect `/login`
+Dépendance installée mais non utilisée explicitement dans le code actuel:
+- `zustand`
 
 ---
 
-## 4) Architecture frontend réelle
+## 3) Architecture technique réelle
 
-Structure:
-- `frontend-web/src/app` (layout, router, guard)
-- `frontend-web/src/components` (Sidebar, TopBar)
-- `frontend-web/src/pages` (pages métier)
-- `frontend-web/src/lib/api` (client + endpoints + types)
-- `frontend-web/src/lib/auth` (session)
-- `frontend-web/src/styles.css` (design system local)
+Structure principale:
 
-Patterns UI utilisés:
-- Table + toolbar standardisée
-- Panneaux togglables: Filters / Columns / Actions
-- Feedback visible: loading, erreurs, succès, empty state
+- `src/app/`
+  - `router.tsx` (routing)
+  - `RequireAuth.tsx` (guard)
+  - `AppLayout.tsx` (shell global)
+- `src/components/`
+  - `Sidebar.tsx`
+  - `TopBar.tsx`
+- `src/pages/` (pages métier)
+- `src/lib/api/`
+  - `client.ts` (axios + interceptors)
+  - `endpoints.ts` (fonctions API)
+  - `types.ts` (types TS)
+- `src/lib/auth/session.ts` (stockage session)
 
 ---
 
-## 5) Plan des routes (corrigé)
+## 4) Authentification & session
 
-Public:
+Implémentation réelle:
+
+- Token stocké dans `localStorage` (`access_token`)
+- Données session stockées: `role`, `email`, `user_id`
+- `RequireAuth` protège toutes les routes privées
+- Interceptor request Axios: ajoute `Authorization: Bearer <token>`
+- Interceptor response Axios: sur `401/403` → clear session + redirection `/login`
+
+Routes publiques:
 - `/login`
 - `/register`
 
-Protégé:
+Routes protégées:
+- toutes les autres routes sous layout
+
+---
+
+## 5) Plan de routes réellement actives (`router.tsx`)
+
+### Public
+- `/login`
+- `/register`
+
+### Privé
+- `/` → redirection vers `/get-started`
 - `/get-started`
 - `/overview`
+- `/vehicles` → redirection vers `/vehicles/list`
 - `/vehicles/list`
 - `/vehicles/geofences`
 - `/vehicles/groups`
 - `/vehicles/:vehicleId`
 - `/locations`
-- `/diagnostics` (alias métier de DTC)
+- `/diagnostics`
 - `/vehicle-status`
 - `/vehicle-status/:vehicleId`
 - `/devices/overview`
 - `/devices/list`
-- `/devices/obd-library`
+- `/devices/:deviceId`
 - `/telemetry`
-- `/dtc` (route additionnelle)
+- `/dtc`
 - `/alerts`
 - `/fleets`
+- `/devices` → redirection vers `/devices/list`
 
-Redirections actives:
-- `/` -> `/get-started`
-- `/vehicles` -> `/vehicles/list`
-- `/devices` -> `/devices/list`
-- `/obd-library` -> `/devices/obd-library`
 
 ---
 
-## 6) Pages et comportement attendu
+## 6) Navigation UI réelle
 
-### 6.1 Get Started
-- Tuiles `Documentation`, `API Reference`, `Support` reliées aux ressources projet
-- Section d’introduction + raccourcis opérationnels
+### Sidebar
+Sections visibles:
 
-### 6.2 Fleet Management
-- `Overview`: KPIs, blocs fleet/alerts, liens de démarrage
-- `Vehicles`: listing + création + édition/suppression via détails
-- `Geofences`: map + recherche + filtres + colonnes + création + check position
-- `Groups`: recherche + création
-- `Locations`: recherche/filtres/colonnes + création
-- `Diagnostics`/`DTC`: recherche, filtres date, clear/history, feedback
-- `Alerts`: stats, filtres, colonnes, actions, ack unitaire/multi-sélection
+- Get started
+- Fleet Management:
+  - Overview
+  - Vehicles (List, Geofences, Groups)
+  - Locations
+  - Diagnostics
+  - Alerts
+- Device Management:
+  - Overview
+  - Devices
+  - Vehicle Status
+  - Telemetry
 
-### 6.3 Device Management
-- `Devices Overview`: métriques globales devices
-- `Devices`: recherche, colonnes, refresh, création (`device_id`, `vehicle_id`, `status`, `vin`)
-- `OBD Library`: table OBD, filtres/colonnes, import JSON/CSV
-- `Vehicle Status`: synthèse statut véhicule
-- `Telemetry`: ping, création télémétrie, historique, stream WebSocket
+### TopBar
+- Barre de recherche visuelle
+- Badge rôle statique affiché: `manager`
+- Bouton logout fonctionnel (`clearSession()` + navigate `/login`)
 
 ---
 
-## 7) Contrats API utilisés côté frontend
+## 7) Implémentation page par page (réelle)
 
-Auth:
-- `POST /api/v1/auth/login`
-- `POST /api/v1/auth/register`
+## 7.1 `GetStartedPage`
 
-Fleet/Vehicle:
-- `GET/POST /api/v1/vehicles`
-- `GET/PUT/DELETE /api/v1/vehicles/{id}`
-- `GET /api/v1/vehicles/{id}/status`
-- `GET/POST/PUT/DELETE /api/v1/fleets...`
+Implémenté:
+- Chargement KPI rapides via API (`vehicles`, `alerts`, `dtc`)
+- Liens externes:
+  - Documentation → `/redoc`
+  - API Reference → `/docs`
+- Sections visuelles marketing/information
 
-Diagnostics/Alerts/Telemetry:
-- `GET/POST /api/v1/dtc`
-- `GET /api/v1/dtc/{vehicle_id}`
-- `GET /api/v1/dtc/{dtc_id}/history`
-- `POST /api/v1/dtc/clear`
-- `GET/POST /api/v1/alerts`
-- `POST /api/v1/alerts/ack`
-- `GET/POST /api/v1/telemetry`
-- `GET /api/v1/telemetry/{vehicle_id}`
+Non connecté:
+- Boutons “Get expert guidance” et “Check our prices” (UI only)
 
-Ops (pages AutoPi-like):
-- `GET/POST /api/v1/geofences`
+## 7.2 `DashboardPage` (Overview)
+
+Implémenté:
+- Panneau "Getting Started" avec 3 étapes (liens Guide rapide vers vehicles, locations, geofences)
+- Bloc "Fleet Overview" avec 4 stat-cards:
+  - "Driving now" (count vehicles avec status='active')
+  - "Driven today" (count vehicles avec status='active' ou 'warning')
+  - "Driven last 30 days" (calcul simplifié: total - pending alerts)
+  - "Not driven last 30 days" (total - driven last 30 days)
+- Bloc "Open Alerts" (6 dernières alerts avec vehicle_id, title, severity)
+- Bloc "Fleet Tracking" (static OpenStreetMap embed, non-interactif)
+- Toutes les données chargées via `listVehicles`, `listAlerts`, `listDtc`
+
+Partiel:
+- Bouton "Show all vehicles" sans action réelle (UI only)
+
+## 7.3 `VehiclesPage`
+
+Implémenté:
+- `GET /api/v1/vehicles` (liste)
+- `POST /api/v1/vehicles` (création)
+- `DELETE /api/v1/vehicles/{id}`
+- Navigation vers détail véhicule + statut
+
+## 7.4 `VehicleDetailsPage`
+
+Implémenté:
+- `GET /api/v1/vehicles/{id}`
+- `PUT /api/v1/vehicles/{id}`
+- `DELETE /api/v1/vehicles/{id}`
+- Formulaire update multi-champs (VIN, plaque, make/model, year, mileage, fleet/driver, dongle, autopi ids)
+
+## 7.5 `VehicleStatusPage`
+
+Implémenté:
+- `GET /api/v1/vehicles/{id}/status` via formulaire
+- Affichage JSON du statut consolidé
+
+## 7.6 `FleetsPage`
+
+Implémenté:
+- `GET /api/v1/fleets`
+- `POST /api/v1/fleets`
+- `PUT /api/v1/fleets/{id}`
+- `DELETE /api/v1/fleets/{id}`
+- `GET /api/v1/fleets/{id}`
+- `GET /api/v1/fleets/{id}/vehicles`
+- `POST /api/v1/fleets/{id}/vehicles` (assign vehicle)
+
+## 7.7 `GeofencesPage`
+
+Implémenté:
+- `GET /api/v1/geofences`
+- `POST /api/v1/geofences`
 - `POST /api/v1/geofences/check`
-- `GET/POST /api/v1/groups`
-- `GET/POST /api/v1/locations`
-- `GET/POST /api/v1/devices`
+- Toolbar (search, filters, columns)
+- Iframe map OpenStreetMap
+
+Partiel:
+- Colonne Actions affiche `-` (pas de update/delete UI)
+
+## 7.8 `GroupsPage`
+
+Implémenté:
+- `GET /api/v1/groups`
+- `POST /api/v1/groups`
+- Recherche + création
+
+Partiel:
+- Pas de update/delete UI
+
+## 7.9 `LocationsPage`
+
+Implémenté:
+- `GET /api/v1/locations`
+- `POST /api/v1/locations`
+- Search / Filters / Columns / Refresh
+- “Use my location” via `navigator.geolocation`
+- Map OpenStreetMap
+
+Partiel:
+- Les champs notes/contact/address/on_enter/on_exit sont gérés côté état local UI (pas persistés via endpoint backend actuel)
+- Pas de update/delete UI
+
+## 7.10 `DevicesPage`
+
+Implémenté:
+- `GET /api/v1/devices`
+- Search / Filters / Columns / Refresh
+- Export CSV local
+- Navigation vers `/devices/:deviceId`
+
+Partiel:
+- Pas de création/modification/suppression device depuis cette page
+
+## 7.11 `DeviceOverviewPage`
+
+Implémenté:
 - `GET /api/v1/devices/overview`
+- KPIs devices + DTC count
+
+## 7.12 `DeviceDetailsPage`
+
+Implémenté:
+- Charge la donnée via `listDevices(deviceId)` et sélectionne device courant
+- UI riche multi-onglets (Overview, Dashboard, Jobs, Services, Events, CAN Analyzer, Loggers, etc.)
+
+Partiel:
+- Une grande partie est démo/statique UI (placeholders), non branchée à des endpoints dédiés
+
+## 7.13 `DtcPage` (Diagnostics)
+
+Note: les routes `/diagnostics` et `/dtc` pointent toutes les deux vers le même composant `DtcPage`.
+
+Implémenté:
+
+**Endpoints utilisés:**
+- `GET /api/v1/dtc` → chargement initial de la liste (limit 100)
+- `GET /api/v1/dtc/{vehicle_id}` → filtre par véhicule (mutation manuelle)
+- `GET /api/v1/dtc/{dtc_id}/history` → chargement historique d'un DTC spécifique
+- `POST /api/v1/dtc` → création manuelle d'un DTC (vehicle_id, code, severity, description)
+- `POST /api/v1/dtc/clear` → effacement d'un DTC (vehicle_id + dtc_code)
+- `GET /api/v1/dtc/ping` → mutation disponible
+
+**Tableau principal:**
+- Colonnes: Code, Description, Vehicle, First occurrence, Last occurrence, Count, State (active/resolved), Actions
+- Recherche textuelle sur `code` + `description`
+- Filtre par date/heure (`datetime-local` input) sur `last_occurrence` ou `first_detected`
+- Parsing format dates multiples (ISO + `DD/Mon/YYYY HH:MM`)
+
+**Actions par ligne:**
+- Bouton **History** → appelle `getDtcHistory(id)` + affiche résultat JSON dans un bloc `<pre>`
+- Bouton **Clear** → appelle `clearDtc({ vehicle_id, dtc_code })` + feedback message succès/erreur
+- Messages feedback distincts: `actionMessage` (succès) et `actionError` (erreur)
 
 ---
 
-## 8) RBAC (corrigé)
+## 7.14 `AlertsPage`
 
-### Réel aujourd’hui
-- Authentification appliquée globalement
-- Rôle stocké en session, mais contrôle fin des écrans/actions encore partiel
+Implémenté:
+- `GET /api/v1/alerts`
+- `POST /api/v1/alerts/ack`
+- Stats, filtres, colonnes, sélection multiple, ack bulk
 
-### Cible recommandée
-- `admin`: accès complet
-- `manager`: création/modification opérationnelle sans administration sensible
-- `driver`: lecture limitée (véhicules/alertes/dtc autorisés)
+## 7.15 `TelemetryPage`
 
-Actions à implémenter:
-- Guard par rôle sur routes sensibles
-- Masquage conditionnel des boutons `Create`, `Delete`, `Clear`, `Ack bulk`
+Implémenté:
+- `GET /api/v1/telemetry/{vehicle_id}` (historique)
+- WebSocket temps réel: `/api/v1/realtime/ws/vehicles/{vehicle_id}`
+- Connexion/déconnexion live + affichage événements JSON
+
+Non implémenté sur cette page:
+- `POST /api/v1/telemetry`
+- `GET /api/v1/telemetry/ping`
+
+
+
+## 8) Contrats API réellement utilisés (`src/lib/api/endpoints.ts`)
+
+## 8.1 Auth
+- `login(payload)` → `POST /api/v1/auth/login`
+- `register(payload)` → `POST /api/v1/auth/register`
+
+## 8.2 Vehicles
+- `listVehicles`
+- `createVehicle`
+- `getVehicle`
+- `updateVehicle`
+- `deleteVehicle`
+- `getVehicleStatus`
+
+
+
+## 8.4 Alerts
+- `listAlerts`
+- `listAlertsByVehicle`
+- `createAlert`
+- `ackAlert`
+
+## 8.5 DTC
+- `listDtc`
+- `pingDtc`
+- `listDtcByVehicle`
+- `getDtcHistory`
+- `createDtc`
+- `clearDtc`
+- `createObdRawPayload`
+- `listObdRawPayloads`
+- `createIotLog`
+- `listIotLogs`
+
+## 8.6 Telemetry
+- `getTelemetryHistory`
+- `pingTelemetry`
+- `createTelemetry`
+
+## 8.7 Ops
+- `listGeofences`
+- `createGeofence`
+- `checkGeofences`
+- `listGroups`
+- `createGroup`
+- `listLocations`
+- `createLocation`
+- `listDevices`
+- `createDevice`
+- `getDevicesOverview`
+
+### Important
+Les wrappers frontend manquants dans `endpoints.ts` (backend existe, UI partielle):
+- `PUT/DELETE /api/v1/geofences/{item_id}`
+- `PUT/DELETE /api/v1/groups/{item_id}`
+- `PUT/DELETE /api/v1/locations/{item_id}`
+- `PUT/DELETE /api/v1/devices/{item_id}`
 
 ---
 
-## 9) États UI / qualité
+## 9) RBAC frontend (état réel)
 
-Standards déjà utilisés:
-- `Loading` pendant requêtes
-- `No data to display` si liste vide
-- Messages de succès/erreur pour actions utilisateur
+Actuel:
+- Auth globale fonctionnelle (route guard)
+- Rôle stocké en session
 
-À uniformiser:
-- Même wording d’erreur/succès sur toutes les pages
-- Retry explicite là où les mutations sont critiques
+Partiel:
+- Pas de guard d’autorisation fine par rôle au niveau composants/pages/actions
 
 ---
 
+## 10) Qualité UX/UI (état réel)
 
+Présent:
+- états loading/empty sur plusieurs pages
+- messages succès/erreur sur mutations critiques
+- toolbar homogène sur pages data
 
-## 11) Roadmap réaliste (prochaine itération)
+À améliorer:
+- homogénéiser tous les messages erreurs/succès
+- réduire les blocs UI statiques dans `DeviceDetailsPage`
 
-Sprint A — Consolidation:
-- Finaliser RBAC UI par rôle
-- Uniformiser feedback UX sur toutes les pages
-- Ajouter tests UI ciblés sur flux critiques
-
-Sprint B — Data & temps réel:
-- Standardiser polling/refresh modules fleet/device
-- Étendre le temps réel (WebSocket) aux alertes/états critiques
-
-Sprint C — Produit:
-- Page Support interne (formulaire ticket)
-- Documentation interne frontend (guide usage écrans)
-- Préparer base mobile si besoin business validé
 
 ---
 
-## 12) Critères d’acceptation (version corrigée)
+## 11) Écarts conception vs implémentation (à mentionner dans rapport)
 
-- Toutes les routes listées en section 5 sont navigables sans erreur.
-- Les pages toolbar (Alerts, DTC, Devices, Geofences, Locations, OBD Library) ont des boutons fonctionnels.
-- `Documentation`, `API Reference`, `Support` sur Get Started sont reliés à des ressources projet.
-- Le frontend reste aligné avec les endpoints disponibles dans `src/lib/api/endpoints.ts`.
-- Aucun crash sur erreurs API standards (401/403/422/500).
+1. OBD Library existe mais n’est pas routée
+2. OPS update/delete backend disponibles mais UI/frontend wrappers incomplets
+3. RBAC UI fin non appliqué (auth uniquement)
+4. Plusieurs boutons “marketing/placeholder” non connectés à des actions backend
 
 ---
 
-## 13) Note de design
+## 12) Conclusion
 
-Le style visuel reste inspiré d’un flux type AutoPi (fleet/device/data), mais l’application est découplée d’AutoPi et reliée à l’écosystème MALLOULIAUTO (backend, docs, support) pour rester cohérente produit.
+Le frontend actuel est opérationnel pour le MVP web:
+
+- authentification,
+- navigation protégée,
+- gestion flotte/véhicules,
+- diagnostics/alertes,
+- télémétrie historique + temps réel,
+- vue devices et opérations terrain de base.
+
+
