@@ -612,3 +612,593 @@ Le backend implémenté répond aux besoins MVP de la plateforme:
 - Base de tests d’intégration exploitable
 
 
+---
+
+## 14. Diagrammes UML (pour rapport PFE)
+
+Les diagrammes ci-dessous sont au format PlantUML afin d’être intégrés directement dans le rapport.
+
+### 14.1 Diagramme de cas d’utilisation
+
+```plantuml
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+
+actor Admin
+actor Manager
+actor Driver
+actor "IoT Gateway / AutoPi" as Gateway
+
+rectangle "Auto Diagnostic Platform - Backend" {
+   usecase "S'authentifier" as UC_Login
+   usecase "Consulter profil\n(/auth/me)" as UC_Profile
+   usecase "Gérer utilisateurs\n(register/get user)" as UC_Users
+   usecase "Gérer flottes" as UC_Fleets
+   usecase "Gérer véhicules" as UC_Vehicles
+   usecase "Consulter statut véhicule" as UC_Status
+   usecase "Consulter alertes\net acquitter" as UC_Alerts
+   usecase "Gérer DTC\n(list/history/clear/create)" as UC_DTC
+   usecase "Consulter télémétrie\n(historique)" as UC_Telemetry
+   usecase "Consommer WebSocket\ntemps réel" as UC_Realtime
+   usecase "Gérer opérations terrain\n(geofences/groups/locations/devices)" as UC_Ops
+   usecase "Ingérer données IoT\ntelemetry + dtc + logs" as UC_Ingest
+}
+
+Admin --> UC_Login
+Admin --> UC_Profile
+Admin --> UC_Users
+Admin --> UC_Fleets
+Admin --> UC_Vehicles
+Admin --> UC_Status
+Admin --> UC_Alerts
+Admin --> UC_DTC
+Admin --> UC_Telemetry
+Admin --> UC_Realtime
+Admin --> UC_Ops
+
+Manager --> UC_Login
+Manager --> UC_Profile
+Manager --> UC_Fleets
+Manager --> UC_Vehicles
+Manager --> UC_Status
+Manager --> UC_Alerts
+Manager --> UC_DTC
+Manager --> UC_Telemetry
+Manager --> UC_Realtime
+Manager --> UC_Ops
+
+Driver --> UC_Login
+Driver --> UC_Profile
+Driver --> UC_Status
+Driver --> UC_Alerts
+Driver --> UC_DTC
+Driver --> UC_Telemetry
+Driver --> UC_Realtime
+
+Gateway --> UC_Ingest
+UC_Ingest ..> UC_Telemetry : <<include>>
+UC_Ingest ..> UC_DTC : <<include>>
+@enduml
+```
+
+### 14.2 Diagramme de classes (domaine métier)
+
+```plantuml
+@startuml
+skinparam classAttributeIconSize 0
+skinparam classFontSize 12
+
+class User {
+  -id : int
+  -first_name : string
+  -last_name : string
+  -email : string
+  -password_hash : string
+  -role : string
+  -phone : string
+  -created_at : datetime
+  --
+  +register(email, password, role) : Token
+  +login(email, password) : Token
+  +get_profile(user_id) : User
+  +hash_password(password) : string
+  +verify_password(plain, hashed) : bool
+}
+
+class Fleet {
+  -id : int
+  -name : string
+  -description : string
+  -manager_id : int
+  -created_at : datetime
+  --
+  +create(name, manager_id) : Fleet
+  +update(name, description) : Fleet
+  +delete() : void
+  +list_vehicles() : List<Vehicle>
+}
+
+class Vehicle {
+  -id : int
+  -fleet_id : int
+  -driver_id : int
+  -plate : string
+  -vin : string
+  -make : string
+  -model : string
+  -year : int
+  -mileage : float
+  -status : string
+  -autopi_device_id : string
+  -created_at : datetime
+  --
+  +create(plate, vin, fleet_id) : Vehicle
+  +update(fields) : Vehicle
+  +delete() : void
+  +get_status() : VehicleStatus
+}
+
+class Alert {
+  -id : int
+  -vehicle_id : int
+  -title : string
+  -description : string
+  -severity : string
+  -acknowledged : bool
+  -created_at : datetime
+  --
+  +create(vehicle_id, title, severity) : Alert
+  +acknowledge(alert_id) : void
+  +list_by_vehicle(vehicle_id) : List<Alert>
+}
+
+class TelemetryRecord {
+  -_id : ObjectId
+  -vehicle_id : int
+  -timestamp : datetime
+  -speed : float
+  -rpm : float
+  -fuel_level : float
+  -engine_temp : float
+  -battery_voltage : float
+  -engine_load : float
+  -odometer : float
+  --
+  +insert(vehicle_id, metrics) : void
+  +get_history(vehicle_id, limit) : List<TelemetryRecord>
+}
+
+class DtcRecord {
+  -_id : ObjectId
+  -vehicle_id : int
+  -code : string
+  -description : string
+  -severity : string
+  -resolved : bool
+  -first_detected : datetime
+  -last_occurrence : datetime
+  -occurrence_count : int
+  --
+  +create(vehicle_id, code, severity) : DtcRecord
+  +clear(vehicle_id, code) : void
+  +get_history(dtc_id) : List<DtcRecord>
+  +list_by_vehicle(vehicle_id) : List<DtcRecord>
+}
+
+class IotLog {
+  -_id : ObjectId
+  -vehicle_id : int
+  -device_id : string
+  -event_type : string
+  -level : string
+  -message : string
+  -event_at : datetime
+  --
+  +insert(device_id, event_type, level) : void
+  +list(device_id, limit) : List<IotLog>
+}
+
+class Geofence {
+  -_id : ObjectId
+  -name : string
+  -description : string
+  -center_lat : float
+  -center_lng : float
+  -radius_m : float
+  -on_enter : string
+  -on_exit : string
+  -vehicle_count : int
+  -enabled : bool
+  -created_at : datetime
+  --
+  +create(name, center_lat, center_lng, radius_m) : Geofence
+  +update(fields) : Geofence
+  +delete() : void
+  +check(latitude, longitude) : bool
+}
+
+class Location {
+  -_id : ObjectId
+  -name : string
+  -type : string
+  -latitude : float
+  -longitude : float
+  -created_at : datetime
+  --
+  +create(name, latitude, longitude) : Location
+  +update(fields) : Location
+  +delete() : void
+  +list() : List<Location>
+}
+
+class Group {
+  -_id : ObjectId
+  -name : string
+  -vehicle_count : int
+  -created_at : datetime
+  --
+  +create(name) : Group
+  +update(name, vehicle_count) : Group
+  +delete() : void
+  +list() : List<Group>
+}
+
+class Device {
+  -_id : ObjectId
+  -name : string
+  -type : string
+  -status : string
+  -vehicle_id : int
+  -created_at : datetime
+  --
+  +create(name, type) : Device
+  +update(fields) : Device
+  +delete() : void
+  +get_overview() : DeviceOverview
+}
+
+' ── Associations ──────────────────────────
+User "1" --> "0..*" Fleet       : gère >
+User "1" --> "0..*" Vehicle     : conduit >
+Fleet "1" o-- "0..*" Vehicle    : contient >
+Vehicle "1" --> "0..*" Alert           : génère >
+Vehicle "1" --> "0..*" TelemetryRecord : émet >
+Vehicle "1" --> "0..*" DtcRecord       : possède >
+Vehicle "1" --> "0..*" IotLog          : produit >
+Vehicle "0..*" -- "0..*" Geofence      : assigné à
+Vehicle "0..1" -- "0..1" Device        : lié à
+Vehicle "0..*" -- "0..*" Group         : appartient à
+Location "0..*" -- "0..*" Vehicle      : associée à
+
+@enduml
+```
+
+---
+
+### 14.3 Diagrammes de séquence
+
+#### 14.3.1 Authentification (Login)
+
+```plantuml
+@startuml
+title Séquence : Authentification utilisateur
+
+actor Utilisateur
+participant "Frontend\n(React)" as FE
+participant "POST /api/v1/auth/login\n(FastAPI)" as API
+participant "UserService" as SVC
+database "PostgreSQL" as DB
+
+Utilisateur -> FE : saisit email + password
+FE -> API : POST /auth/login\n{ email, password }
+API -> SVC : login_user(db, email, password)
+SVC -> DB : SELECT user WHERE email = ?
+DB --> SVC : user record
+SVC -> SVC : verify_password(plain, hashed)
+alt mot de passe invalide
+    SVC --> API : raise 401 Unauthorized
+    API --> FE : { detail: "Invalid credentials" }
+    FE --> Utilisateur : Affiche erreur
+else mot de passe valide
+    SVC -> SVC : create_access_token(email, user_id, role)
+    SVC --> API : { access_token, role, user_id }
+    API --> FE : 200 OK\n{ access_token, role, user_id }
+    FE -> FE : localStorage.setItem(access_token)
+    FE --> Utilisateur : Redirige vers /get-started
+end
+@enduml
+```
+
+---
+
+#### 14.3.2 Ingestion télémétrie via MQTT Gateway
+
+```plantuml
+@startuml
+title Séquence : Ingestion données IoT (MQTT → Backend)
+
+participant "Boîtier AutoPi\n(véhicule)" as OBD
+participant "MQTT Broker\n(broker.emqx.io)" as MQTT
+participant "mqtt_gateway.py\n(script Python)" as GW
+participant "POST /api/v1/telemetry\n(FastAPI)" as TAPI
+participant "POST /api/v1/dtc\n(FastAPI)" as DAPI
+participant "TelemetryService" as TSVC
+participant "DtcService" as DSVC
+database "MongoDB" as MONGO
+
+OBD -> MQTT : publish obd/speed, obd/rpm,\nobd/engine_temp, ...
+MQTT -> GW : on_message(topic, payload)
+GW -> GW : parse + map metrics
+GW -> TAPI : POST /telemetry\n{ vehicle_id, speed, rpm, engine_temp, ... }
+TAPI -> TSVC : create_telemetry(mongo, payload)
+TSVC -> MONGO : insert_one("telemetry_data", doc)
+MONGO --> TSVC : inserted_id
+TSVC --> TAPI : 201 Created
+
+OBD -> MQTT : publish obd/dtc [P0420]
+MQTT -> GW : on_message("obd/dtc", payload)
+GW -> DAPI : POST /dtc\n{ vehicle_id, code, severity }
+DAPI -> DSVC : create_dtc(mongo, payload)
+DSVC -> MONGO : insert_one("dtc_events", doc)
+MONGO --> DSVC : inserted_id
+DSVC --> DAPI : 201 Created
+@enduml
+```
+
+---
+
+#### 14.3.3 Consultation statut véhicule
+
+```plantuml
+@startuml
+title Séquence : Consultation statut véhicule
+
+actor Manager
+participant "Frontend\n(React)" as FE
+participant "GET /api/v1/vehicles/{id}/status\n(FastAPI)" as API
+participant "VehicleService" as SVC
+database "PostgreSQL" as PG
+database "MongoDB" as MONGO
+
+Manager -> FE : sélectionne un véhicule
+FE -> API : GET /vehicles/{id}/status\nAuthorization: Bearer <token>
+API -> API : decode_token → current_user
+API -> SVC : get_vehicle_status(db, mongo, vehicle_id)
+SVC -> PG : SELECT vehicle WHERE id = ?
+PG --> SVC : vehicle record
+SVC -> MONGO : find_one("telemetry_data")\n{ vehicle_id, sort: ts desc }
+MONGO --> SVC : dernière télémétrie
+SVC -> PG : COUNT(alerts) WHERE vehicle_id AND NOT acknowledged
+PG --> SVC : pending_alerts count
+SVC -> MONGO : COUNT(dtc_events)\n{ vehicle_id, resolved: false }
+MONGO --> SVC : active_dtc count
+SVC --> API : { vehicle, last_telemetry,\npending_alerts, active_dtc }
+API --> FE : 200 OK\n{ ... }
+FE --> Manager : Affiche statut consolidé
+@enduml
+```
+
+---
+
+#### 14.3.4 Gestion DTC (liste + clear)
+
+```plantuml
+@startuml
+title Séquence : Gestion DTC (liste + effacement)
+
+actor Manager
+participant "Frontend\n(React)" as FE
+participant "GET /api/v1/dtc\n(FastAPI)" as LAPI
+participant "POST /api/v1/dtc/clear\n(FastAPI)" as CAPI
+participant "DtcService" as SVC
+database "MongoDB" as MONGO
+
+Manager -> FE : ouvre page Diagnostics
+FE -> LAPI : GET /dtc?limit=100\nAuthorization: Bearer <token>
+LAPI -> SVC : list_dtc(mongo, limit=100)
+SVC -> MONGO : find("dtc_events", limit=100)
+MONGO --> SVC : liste DTC
+SVC --> LAPI : { items, count }
+LAPI --> FE : 200 OK\n{ items: [...], count: N }
+FE --> Manager : Affiche tableau DTC
+
+Manager -> FE : clique "Clear" sur DTC P0420
+FE -> CAPI : POST /dtc/clear\n{ vehicle_id: 1, dtc_code: "P0420" }
+CAPI -> SVC : clear_dtc(mongo, vehicle_id=1, code="P0420")
+SVC -> MONGO : update_many("dtc_events")\n{ vehicle_id:1, code:"P0420" }\n→ set resolved: true
+MONGO --> SVC : modified_count
+SVC --> CAPI : { status: "cleared", modified: N }
+CAPI --> FE : 200 OK
+FE --> Manager : Message "DTC clear executed"
+@enduml
+```
+
+---
+
+#### 14.3.5 WebSocket temps réel (télémétrie live)
+
+```plantuml
+@startuml
+title Séquence : Télémétrie temps réel (WebSocket)
+
+actor Manager
+participant "Frontend\n(React)" as FE
+participant "WS /api/v1/realtime/ws/vehicles/{id}\n(FastAPI)" as WS
+participant "RealtimeService" as SVC
+participant "mqtt_gateway.py" as GW
+database "MongoDB" as MONGO
+
+Manager -> FE : clique "Connect" véhicule 1
+FE -> WS : WebSocket connect\n/realtime/ws/vehicles/1
+WS -> SVC : connect(vehicle_id=1, websocket)
+SVC --> FE : Connection établie
+
+loop Chaque mesure OBD (toutes les ~5s)
+    GW -> WS : POST /telemetry\n{ vehicle_id:1, speed, rpm, ... }
+    WS -> SVC : broadcast(vehicle_id=1, message)
+    SVC -> MONGO : insert_one("telemetry_data", doc)
+    SVC --> FE : WebSocket message\n{ speed, rpm, engine_temp, ... }
+    FE --> Manager : Affiche données live en JSON
+end
+
+Manager -> FE : clique "Disconnect"
+FE -> WS : WebSocket close
+WS -> SVC : disconnect(vehicle_id=1, websocket)
+@enduml
+```
+
+---
+
+#### 14.3.6 Création véhicule (contrôles métier)
+
+```plantuml
+@startuml
+title Séquence : Création véhicule avec validations
+
+actor Admin
+participant "Frontend\n(React)" as FE
+participant "POST /api/v1/vehicles\n(FastAPI)" as API
+participant "VehicleService" as SVC
+database "PostgreSQL" as PG
+
+Admin -> FE : remplit formulaire véhicule
+FE -> API : POST /vehicles\n{ plate, vin, fleet_id, driver_id, dongle_id, ... }
+API -> API : decode_token + RBAC check
+API -> SVC : create_vehicle(db, payload, current_user)
+
+SVC -> PG : SELECT vehicle WHERE vin = ?
+PG --> SVC : résultat VIN
+SVC -> PG : SELECT vehicle WHERE plate = ?
+PG --> SVC : résultat plate
+SVC -> PG : SELECT vehicle WHERE dongle_id = ?
+PG --> SVC : résultat dongle
+SVC -> PG : SELECT fleet WHERE id = payload.fleet_id
+PG --> SVC : fleet existe ?
+SVC -> PG : SELECT user WHERE id = payload.driver_id
+PG --> SVC : driver existe ?
+
+alt conflit unicité ou FK invalide
+   SVC --> API : raise 400 / 409
+   API --> FE : erreur validation métier
+   FE --> Admin : Affiche message d'erreur
+else données valides
+   SVC -> PG : INSERT INTO vehicles (...)
+   PG --> SVC : new vehicle id
+   SVC --> API : Vehicle créé
+   API --> FE : 201 Created\n{ vehicle }
+   FE --> Admin : Affiche succès
+end
+@enduml
+```
+
+---
+
+#### 14.3.7 Gestion flotte (création + assignation véhicule)
+
+```plantuml
+@startuml
+title Séquence : Gestion flotte et assignation
+
+actor Admin
+participant "Frontend\n(React)" as FE
+participant "POST /api/v1/fleets\n(FastAPI)" as FAPI
+participant "POST /api/v1/fleets/{id}/vehicles\n(FastAPI)" as AAPI
+participant "FleetService" as SVC
+database "PostgreSQL" as PG
+
+Admin -> FE : crée une flotte
+FE -> FAPI : POST /fleets\n{ name, description, manager_id }
+FAPI -> FAPI : vérifie token + rôle admin
+FAPI -> SVC : create_fleet(db, payload, current_user)
+SVC -> PG : SELECT fleet WHERE name = ?
+PG --> SVC : existe ?
+alt nom déjà utilisé
+   SVC --> FAPI : raise 409 Conflict
+   FAPI --> FE : erreur "fleet name exists"
+else nom disponible
+   SVC -> PG : INSERT INTO fleets (...)
+   PG --> SVC : fleet_id
+   SVC --> FAPI : Fleet créée
+   FAPI --> FE : 201 Created
+end
+
+Admin -> FE : assigne un véhicule à la flotte
+FE -> AAPI : POST /fleets/{fleet_id}/vehicles\n{ vehicle_id }
+AAPI -> SVC : add_vehicle_to_fleet(db, fleet_id, vehicle_id)
+SVC -> PG : SELECT fleet WHERE id = fleet_id
+PG --> SVC : fleet
+SVC -> PG : SELECT vehicle WHERE id = vehicle_id
+PG --> SVC : vehicle
+SVC -> PG : UPDATE vehicles SET fleet_id = ? WHERE id = ?
+PG --> SVC : row updated
+SVC --> AAPI : assignation OK
+AAPI --> FE : 200 OK
+FE --> Admin : Affiche véhicule assigné
+@enduml
+```
+
+---
+
+#### 14.3.8 Alertes (liste + acquittement)
+
+```plantuml
+@startuml
+title Séquence : Consultation et acquittement des alertes
+
+actor Manager
+participant "Frontend\n(React)" as FE
+participant "GET /api/v1/alerts\n(FastAPI)" as LAPI
+participant "POST /api/v1/alerts/ack\n(FastAPI)" as AAPI
+participant "AlertService" as SVC
+database "PostgreSQL" as PG
+
+Manager -> FE : ouvre page Alerts
+FE -> LAPI : GET /alerts\nAuthorization: Bearer <token>
+LAPI -> LAPI : decode_token + RBAC
+LAPI -> SVC : list_alerts(db, current_user)
+SVC -> PG : SELECT * FROM alerts (filtré selon rôle)
+PG --> SVC : alerts rows
+SVC --> LAPI : { alerts, pending, total }
+LAPI --> FE : 200 OK
+FE --> Manager : Affiche tableau + stats
+
+Manager -> FE : sélectionne alertes + clique Ack
+FE -> AAPI : POST /alerts/ack\n{ ids:[...]} ou { alert_id }
+AAPI -> SVC : acknowledge_alert(...)
+SVC -> PG : UPDATE alerts SET acknowledged=true WHERE id IN (...)
+PG --> SVC : updated rows
+SVC --> AAPI : { acknowledged: N }
+AAPI --> FE : 200 OK
+FE --> Manager : Rafraîchit liste + message succès
+@enduml
+```
+
+---
+
+#### 14.3.9 Ops Geofence Check (position → zones)
+
+```plantuml
+@startuml
+title Séquence : Vérification geofence par position GPS
+
+actor Manager
+participant "Frontend\n(React)" as FE
+participant "POST /api/v1/geofences/check\n(FastAPI)" as API
+participant "OpsService" as SVC
+database "MongoDB" as MONGO
+
+Manager -> FE : saisit latitude + longitude
+FE -> API : POST /geofences/check\n{ vehicle_id?, latitude, longitude }
+API -> API : validate payload (Pydantic)
+API -> SVC : check_geofences(mongo, vehicle_id, lat, lon)
+SVC -> MONGO : find("geofences", enabled=true)
+MONGO --> SVC : liste geofences
+loop pour chaque geofence
+   SVC -> SVC : distance(point, center) <= radius_m ?
+end
+SVC --> API : { matches:[...], total }
+API --> FE : 200 OK\n{ matches:[...], total }
+FE --> Manager : Affiche zones correspondantes
+@enduml
+```
