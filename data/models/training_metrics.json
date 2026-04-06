@@ -1,0 +1,79 @@
+{
+  "dataset_rows": 1210,
+  "severity_distribution": {
+    "info": 805,
+    "warning": 400,
+    "critical": 5
+  },
+  "feature_count": 28,
+  "features": [
+    "speed",
+    "rpm",
+    "engine_temp",
+    "battery_voltage",
+    "fuel_level",
+    "engine_load",
+    "speed_mean_3",
+    "speed_mean_12",
+    "rpm_mean_3",
+    "rpm_mean_12",
+    "engine_temp_mean_3",
+    "engine_temp_mean_12",
+    "battery_voltage_mean_3",
+    "battery_voltage_mean_12",
+    "engine_load_mean_3",
+    "engine_load_mean_12",
+    "fuel_level_mean_3",
+    "fuel_level_mean_12",
+    "battery_voltage_delta",
+    "engine_temp_delta",
+    "fuel_level_delta",
+    "is_idling",
+    "is_overheating",
+    "is_battery_low",
+    "is_low_fuel",
+    "is_engine_overload",
+    "high_rpm_flag",
+    "idle_duration_min"
+  ],
+  "classification": {
+    "accuracy": 0.9958677685950413,
+    "classification_report": {
+      "critical": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1-score": 0.0,
+        "support": 1.0
+      },
+      "info": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 161.0
+      },
+      "warning": {
+        "precision": 0.9876543209876543,
+        "recall": 1.0,
+        "f1-score": 0.9937888198757764,
+        "support": 80.0
+      },
+      "accuracy": 0.9958677685950413,
+      "macro avg": {
+        "precision": 0.6625514403292181,
+        "recall": 0.6666666666666666,
+        "f1-score": 0.6645962732919255,
+        "support": 242.0
+      },
+      "weighted avg": {
+        "precision": 0.991786552392613,
+        "recall": 0.9958677685950413,
+        "f1-score": 0.9938144859093475,
+        "support": 242.0
+      }
+    }
+  },
+  "regression": {
+    "mae": 0.05538016528925622,
+    "r2": 0.9981235950519547
+  }
+}

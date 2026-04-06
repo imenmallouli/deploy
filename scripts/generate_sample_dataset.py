@@ -211,6 +211,11 @@ def gen_iot_logs():
 
 # ── Sheet 4 — ai_labels ────────────────────────────────────────────────────────
 
+def bump_severity(current: str, candidate: str) -> str:
+    sev_order = {"info": 0, "warning": 1, "critical": 2}
+    return candidate if sev_order[candidate] > sev_order[current] else current
+
+
 def apply_rules(row: dict) -> tuple[str, str, int]:
     """
     Règles métier → (rule_triggered, severity, risk_score 0-100)
@@ -227,34 +232,28 @@ def apply_rules(row: dict) -> tuple[str, str, int]:
     load    = row["engine_load"]
 
     if battery < 11.5:
-        rules.append("BATTERY_CRITICAL"); score += 40; severity = "critical"
+        rules.append("BATTERY_CRITICAL"); score += 40; severity = bump_severity(severity, "critical")
     elif battery < 12.0:
-        rules.append("BATTERY_LOW");      score += 20; severity = max(severity, "warning")
+        rules.append("BATTERY_LOW");      score += 20; severity = bump_severity(severity, "warning")
 
     if temp > 105:
-        rules.append("ENGINE_OVERHEAT");  score += 45; severity = "critical"
+        rules.append("ENGINE_OVERHEAT");  score += 45; severity = bump_severity(severity, "critical")
     elif temp > 100:
-        rules.append("ENGINE_HOT");       score += 20; severity = max(severity, "warning")
+        rules.append("ENGINE_HOT");       score += 20; severity = bump_severity(severity, "warning")
 
     if fuel < 5:
-        rules.append("FUEL_CRITICAL");    score += 30; severity = "critical"
+        rules.append("FUEL_CRITICAL");    score += 30; severity = bump_severity(severity, "critical")
     elif fuel < 15:
-        rules.append("FUEL_LOW");         score += 15; severity = max(severity, "warning")
+        rules.append("FUEL_LOW");         score += 15; severity = bump_severity(severity, "warning")
 
     if rpm_val > 4500:
-        rules.append("RPM_HIGH");         score +=  5; severity = max(severity, "warning")
+        rules.append("RPM_HIGH");         score += 5; severity = bump_severity(severity, "warning")
 
     if load > 85:
-        rules.append("ENGINE_OVERLOAD");  score += 10; severity = max(severity, "warning")
-
-    # Severity ordering helper
-    sev_order = {"info": 0, "warning": 1, "critical": 2}
-    for s in ["warning", "critical"]:
-        if sev_order[severity] < sev_order[s]:
-            severity = s
+        rules.append("ENGINE_OVERLOAD");  score += 10; severity = bump_severity(severity, "warning")
 
     rule_str = ", ".join(rules) if rules else "NONE"
-    return rule_str, severity, clamp(score, 0, 100)
+    return rule_str, severity, int(clamp(score, 0, 100))
 
 
 def gen_ai_labels(df_telem: pd.DataFrame) -> pd.DataFrame:
@@ -286,7 +285,7 @@ HEADER_FONT = "FFFFFF"   # blanc
 def write_excel(sheets: dict[str, pd.DataFrame], path: str):
     os.makedirs(os.path.dirname(path), exist_ok=True)
 
-    with pd.ExcelWriter(path, engine="xlsxwriter") as writer:
+    def _populate_workbook(writer):
         wb = writer.book
 
         # Formats
@@ -295,12 +294,6 @@ def write_excel(sheets: dict[str, pd.DataFrame], path: str):
             "bg_color": HEADER_FILL, "border": 1,
             "align": "center", "valign": "vcenter",
         })
-        cell_fmt = wb.add_format({"border": 1, "align": "left"})
-        date_fmt  = wb.add_format({
-            "border": 1, "align": "left", "num_format": "yyyy-mm-dd hh:mm:ss"
-        })
-        num_fmt   = wb.add_format({"border": 1, "align": "right", "num_format": "#,##0.00"})
-        int_fmt   = wb.add_format({"border": 1, "align": "right"})
 
         for sheet_name, df in sheets.items():
             df.to_excel(writer, sheet_name=sheet_name, index=False, startrow=1, header=False)
@@ -320,7 +313,18 @@ def write_excel(sheets: dict[str, pd.DataFrame], path: str):
             # Autofilter
             ws.autofilter(0, 0, len(df), len(df.columns) - 1)
 
-    print(f"\n✅  Fichier Excel généré : {os.path.abspath(path)}")
+    final_path = path
+    try:
+        with pd.ExcelWriter(final_path, engine="xlsxwriter") as writer:
+            _populate_workbook(writer)
+    except PermissionError:
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        final_path = os.path.join(os.path.dirname(path), f"sample_dataset_{timestamp}.xlsx")
+        with pd.ExcelWriter(final_path, engine="xlsxwriter") as writer:
+            _populate_workbook(writer)
+        print("⚠️  Le fichier principal était ouvert dans Excel ; une nouvelle version horodatée a été créée.")
+
+    print(f"\n✅  Fichier Excel généré : {os.path.abspath(final_path)}")
     print(f"   Sheets : {list(sheets.keys())}")
     for name, df in sheets.items():
         print(f"   • {name:<20} {len(df):>5} lignes × {len(df.columns):>2} colonnes")
