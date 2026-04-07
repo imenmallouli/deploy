@@ -18,7 +18,11 @@ RUN pip install --no-cache-dir \
     email-validator \
     python-jose \
     passlib[bcrypt] \
-    bcrypt==4.0.1
+    bcrypt==4.0.1 \
+    numpy \
+    pandas \
+    scikit-learn \
+    joblib
 
 COPY ./app ./app
 
