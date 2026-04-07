@@ -3,7 +3,14 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app.schemas.ai import AIPredictRequest, AIPredictResponse
+from app.schemas.ai import (
+    AIInfoResponse,
+    AIInsightsResponse,
+    AIPredictRequest,
+    AIPredictResponse,
+    AIRecommendationsResponse,
+    AIRiskScoreResponse,
+)
 from app.services.ia.inference_engine import AIInferenceService
 from app.services.ia.recommendation_engine import RecommendationEngine
 from app.services.user_service import UserService
@@ -43,7 +50,12 @@ def _handle_prediction_error(exc: Exception):
     raise HTTPException(status_code=500, detail=f"AI inference error: {exc}") from exc
 
 
-@router.get("/info")
+@router.get(
+    "/info",
+    response_model=AIInfoResponse,
+    summary="Informations du module IA",
+    description="Retourne la liste des routes IA disponibles dans le backend ainsi que leur rôle fonctionnel.",
+)
 def ai_info(context: dict = Depends(get_current_context)):
     return {
         "status": "success",
@@ -59,7 +71,12 @@ def ai_info(context: dict = Depends(get_current_context)):
     }
 
 
-@router.post("/predict", response_model=AIPredictResponse)
+@router.post(
+    "/predict",
+    response_model=AIPredictResponse,
+    summary="Prédire à partir d'un payload manuel",
+    description="Reçoit un snapshot télémétrique, applique le pipeline IA (nettoyage, features, inférence) puis retourne la sévérité prédite, le score de risque, les risques détectés et les suggestions de maintenance.",
+)
 async def predict(
     payload: AIPredictRequest,
     context: dict = Depends(get_current_context),
@@ -71,7 +88,12 @@ async def predict(
         _handle_prediction_error(exc)
 
 
-@router.post("/evaluate/{vehicle_id}", response_model=AIPredictResponse)
+@router.post(
+    "/evaluate/{vehicle_id}",
+    response_model=AIPredictResponse,
+    summary="Évaluer le dernier état d'un véhicule",
+    description="Récupère la dernière télémétrie disponible dans la base pour le véhicule demandé puis exécute le pipeline IA complet.",
+)
 async def evaluate_vehicle(
     vehicle_id: int,
     context: dict = Depends(get_current_context),
@@ -83,9 +105,14 @@ async def evaluate_vehicle(
         _handle_prediction_error(exc)
 
 
-@router.get("/recommendations")
+@router.get(
+    "/recommendations",
+    response_model=AIRecommendationsResponse,
+    summary="Obtenir les recommandations de maintenance",
+    description="Retourne les recommandations dynamiques de maintenance générées à partir de la dernière prédiction IA du véhicule.",
+)
 async def get_recommendations(
-    vehicle_id: int = Query(..., ge=1),
+    vehicle_id: int = Query(..., ge=1, description="Identifiant du véhicule à analyser."),
     context: dict = Depends(get_current_context),
 ):
     try:
@@ -102,9 +129,14 @@ async def get_recommendations(
         _handle_prediction_error(exc)
 
 
-@router.get("/insights")
+@router.get(
+    "/insights",
+    response_model=AIInsightsResponse,
+    summary="Obtenir les insights IA d'un véhicule",
+    description="Retourne un résumé intelligent, les risques prédits et la priorité d'action pour le véhicule demandé.",
+)
 async def get_insights(
-    vehicle_id: int = Query(..., ge=1),
+    vehicle_id: int = Query(..., ge=1, description="Identifiant du véhicule à analyser."),
     context: dict = Depends(get_current_context),
 ):
     try:
@@ -122,7 +154,12 @@ async def get_insights(
         _handle_prediction_error(exc)
 
 
-@router.get("/risk-score/{vehicle_id}")
+@router.get(
+    "/risk-score/{vehicle_id}",
+    response_model=AIRiskScoreResponse,
+    summary="Consulter le score de risque prédit",
+    description="Retourne le niveau de sévérité, le score de risque entre 0 et 100 et le niveau de confiance pour le véhicule demandé.",
+)
 async def get_risk_score(
     vehicle_id: int,
     context: dict = Depends(get_current_context),
