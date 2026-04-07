@@ -1,0 +1,61 @@
+{
+  "dataset_rows": 1210,
+  "severity_distribution": {
+    "warning": 829,
+    "info": 363,
+    "critical": 18
+  },
+  "feature_count": 28,
+  "classification": [
+    {
+      "algorithm": "Decision Tree",
+      "accuracy": 0.987603305785124,
+      "precision_weighted": 0.9880926489778163,
+      "recall_weighted": 0.987603305785124,
+      "f1_weighted": 0.9876715848377343,
+      "precision_macro": 0.9868421052631579,
+      "recall_macro": 0.9939759036144578,
+      "f1_macro": 0.9902490769262154
+    },
+    {
+      "algorithm": "Random Forest",
+      "accuracy": 0.987603305785124,
+      "precision_weighted": 0.9880926489778163,
+      "recall_weighted": 0.987603305785124,
+      "f1_weighted": 0.9876715848377343,
+      "precision_macro": 0.9868421052631579,
+      "recall_macro": 0.9939759036144578,
+      "f1_macro": 0.9902490769262154
+    },
+    {
+      "algorithm": "Linear (LogisticRegression)",
+      "accuracy": 0.9669421487603306,
+      "precision_weighted": 0.9711662820650424,
+      "recall_weighted": 0.9669421487603306,
+      "f1_weighted": 0.9680015717690007,
+      "precision_macro": 0.8429383116883117,
+      "recall_macro": 0.9813775650547395,
+      "f1_macro": 0.8951533742331289
+    }
+  ],
+  "regression": [
+    {
+      "algorithm": "Random Forest Regressor",
+      "mae": 1.8545409065234746,
+      "rmse": 2.233523577739445,
+      "r2": 0.9815768474203378
+    },
+    {
+      "algorithm": "Decision Tree Regressor",
+      "mae": 2.1085692165525307,
+      "rmse": 2.7465265749221235,
+      "r2": 0.9721419651562437
+    },
+    {
+      "algorithm": "Linear Regression",
+      "mae": 3.85554551414197,
+      "rmse": 5.715222228800865,
+      "r2": 0.8793717269944927
+    }
+  ]
+}
