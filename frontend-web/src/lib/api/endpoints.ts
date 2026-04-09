@@ -11,6 +11,50 @@ type RegisterPayload = {
   password: string;
 };
 
+type AiMaintenanceSuggestion = {
+  priority: string;
+  title: string;
+  message: string;
+};
+
+type AiInsight = {
+  summary: string;
+  priority: string;
+  next_action: string;
+};
+
+type AiPredictedRisk = {
+  type: string;
+  severity: string;
+  message: string;
+  value?: number | null;
+};
+
+export type AiRiskScoreResponse = {
+  status: string;
+  vehicle_id: number;
+  predicted_severity: string;
+  predicted_risk_score: number;
+  confidence?: number | null;
+};
+
+export type AiRecommendationsResponse = {
+  status: string;
+  vehicle_id: number;
+  predicted_severity: string;
+  predicted_risk_score: number;
+  recommendations: AiMaintenanceSuggestion[];
+};
+
+export type AiInsightsResponse = {
+  status: string;
+  vehicle_id: number;
+  predicted_severity: string;
+  predicted_risk_score: number;
+  insights: AiInsight;
+  predicted_risks: AiPredictedRisk[];
+};
+
 export async function login(payload: LoginPayload) {
   const { data } = await apiClient.post('/api/v1/auth/login', payload);
   return data as ApiResult<{ access_token?: string; role?: string; email?: string; user_id?: number }>;
@@ -258,4 +302,19 @@ export async function createDevice(payload: { device_id: string; vehicle_id?: nu
 export async function getDevicesOverview() {
   const { data } = await apiClient.get('/api/v1/devices/overview');
   return data as ApiResult<{ total: number; online: number; offline: number; warning: number }>;
+}
+
+export async function getAiRiskScore(vehicleId: number) {
+  const { data } = await apiClient.get(`/api/v1/ai/risk-score/${vehicleId}`);
+  return data as AiRiskScoreResponse;
+}
+
+export async function getAiRecommendations(vehicleId: number) {
+  const { data } = await apiClient.get('/api/v1/ai/recommendations', { params: { vehicle_id: vehicleId } });
+  return data as AiRecommendationsResponse;
+}
+
+export async function getAiInsights(vehicleId: number) {
+  const { data } = await apiClient.get('/api/v1/ai/insights', { params: { vehicle_id: vehicleId } });
+  return data as AiInsightsResponse;
 }

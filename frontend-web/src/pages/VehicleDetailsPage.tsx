@@ -1,7 +1,14 @@
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { deleteVehicle, getVehicle, updateVehicle } from '../lib/api/endpoints';
+import {
+  deleteVehicle,
+  getAiInsights,
+  getAiRecommendations,
+  getAiRiskScore,
+  getVehicle,
+  updateVehicle,
+} from '../lib/api/endpoints';
 
 function parseOptionalNumber(value: string): number | undefined {
   if (value.trim() === '') {
@@ -10,6 +17,25 @@ function parseOptionalNumber(value: string): number | undefined {
 
   const parsedValue = Number(value);
   return Number.isFinite(parsedValue) ? parsedValue : undefined;
+}
+
+function getErrorMessage(error: unknown): string {
+  const maybeAxiosError = error as { response?: { data?: { message?: string; detail?: string } }; message?: string };
+  return maybeAxiosError.response?.data?.message ?? maybeAxiosError.response?.data?.detail ?? maybeAxiosError.message ?? 'Request failed.';
+}
+
+function formatScore(value?: number | null): string {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return '-';
+  }
+  return `${value.toFixed(1)} / 100`;
+}
+
+function formatPercent(value?: number | null): string {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return '-';
+  }
+  return `${value.toFixed(1)}%`;
 }
 
 export function VehicleDetailsPage() {
@@ -21,6 +47,27 @@ export function VehicleDetailsPage() {
     queryKey: ['vehicle', id],
     queryFn: () => getVehicle(id),
     enabled: Number.isFinite(id),
+  });
+
+  const aiRiskQuery = useQuery({
+    queryKey: ['ai-risk-score', id],
+    queryFn: () => getAiRiskScore(id),
+    enabled: Number.isFinite(id),
+    retry: false,
+  });
+
+  const aiRecommendationsQuery = useQuery({
+    queryKey: ['ai-recommendations', id],
+    queryFn: () => getAiRecommendations(id),
+    enabled: Number.isFinite(id),
+    retry: false,
+  });
+
+  const aiInsightsQuery = useQuery({
+    queryKey: ['ai-insights', id],
+    queryFn: () => getAiInsights(id),
+    enabled: Number.isFinite(id),
+    retry: false,
   });
 
   const [make, setMake] = useState('');
@@ -115,6 +162,89 @@ export function VehicleDetailsPage() {
             <li>Driver ID: {vehicle?.driver_id ?? '-'}</li>
             <li>Dongle ID: {vehicle?.dongle_id ?? '-'}</li>
           </ul>
+        </div>
+      </div>
+
+      <div className="panel">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+          <div>
+            <h3>AI Diagnostic</h3>
+            <p className="subtitle">Latest AI risk score, recommendations and insights for this vehicle.</p>
+          </div>
+          <button
+            type="button"
+            className="btn-link"
+            onClick={() => {
+              queryClient.invalidateQueries({ queryKey: ['ai-risk-score', id] });
+              queryClient.invalidateQueries({ queryKey: ['ai-recommendations', id] });
+              queryClient.invalidateQueries({ queryKey: ['ai-insights', id] });
+            }}
+          >
+            Refresh AI
+          </button>
+        </div>
+
+        <div className="details-grid">
+          <div>
+            <h4>Risk Summary</h4>
+            {aiRiskQuery.isLoading ? (
+              <p className="subtitle">Loading AI risk score...</p>
+            ) : aiRiskQuery.isError ? (
+              <p className="subtitle">{getErrorMessage(aiRiskQuery.error)}</p>
+            ) : (
+              <ul>
+                <li>Severity: {aiRiskQuery.data?.predicted_severity ?? '-'}</li>
+                <li>Risk score: {formatScore(aiRiskQuery.data?.predicted_risk_score)}</li>
+                <li>Confidence: {formatPercent(aiRiskQuery.data?.confidence)}</li>
+              </ul>
+            )}
+          </div>
+
+          <div>
+            <h4>Maintenance Recommendations</h4>
+            {aiRecommendationsQuery.isLoading ? (
+              <p className="subtitle">Loading recommendations...</p>
+            ) : aiRecommendationsQuery.isError ? (
+              <p className="subtitle">{getErrorMessage(aiRecommendationsQuery.error)}</p>
+            ) : aiRecommendationsQuery.data?.recommendations?.length ? (
+              <ul>
+                {aiRecommendationsQuery.data.recommendations.map((item, index) => (
+                  <li key={`${item.title}-${index}`}>
+                    <strong>{item.title}</strong> ({item.priority}) — {item.message}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="subtitle">No recommendation available.</p>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <h4>AI Insights</h4>
+          {aiInsightsQuery.isLoading ? (
+            <p className="subtitle">Loading insights...</p>
+          ) : aiInsightsQuery.isError ? (
+            <p className="subtitle">{getErrorMessage(aiInsightsQuery.error)}</p>
+          ) : (
+            <>
+              <p><strong>Summary:</strong> {aiInsightsQuery.data?.insights?.summary ?? '-'}</p>
+              <p><strong>Priority:</strong> {aiInsightsQuery.data?.insights?.priority ?? '-'}</p>
+              <p><strong>Next action:</strong> {aiInsightsQuery.data?.insights?.next_action ?? '-'}</p>
+
+              {aiInsightsQuery.data?.predicted_risks?.length ? (
+                <ul>
+                  {aiInsightsQuery.data.predicted_risks.map((risk, index) => (
+                    <li key={`${risk.type}-${index}`}>
+                      <strong>{risk.type}</strong> ({risk.severity}) — {risk.message}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="subtitle">No predicted risks returned.</p>
+              )}
+            </>
+          )}
         </div>
       </div>
 
