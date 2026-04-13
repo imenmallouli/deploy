@@ -316,6 +316,171 @@ POST /api/v1/ai/evaluate/1
   → lancer évaluation IA manuelle pour véhicule 1
 ```
 
+### 7.1 Ce qui est déjà prêt et ce qui manque encore
+
+**Déjà prêt dans le projet :**
+- `backend/app/services/ia/data_cleaner.py`
+- `backend/app/services/ia/feature_engineering.py`
+- `backend/scripts/train_alert_model.py`
+- `backend/data/models/severity_classifier.joblib`
+- `backend/data/models/risk_regressor.joblib`
+- `backend/data/models/training_metrics.json`
+
+**Pas encore terminé côté application :**
+- chargement des modèles dans le backend
+- prédiction en temps réel sur nouvelles données télémétriques
+- génération des recommandations dynamiques
+- production des `AI Insights`
+- endpoints API dédiés pour ces fonctions
+
+### 7.2 Comment travailler cette couche applicative IA
+
+Après `Preprocessing & Training`, il faut passer à la **couche applicative IA**.
+
+Idée simple :
+
+```text
+Training = apprendre
+Application layer = utiliser le modèle dans le vrai système backend
+```
+
+Ordre recommandé :
+
+1. **Charger les modèles entraînés**
+   - fichiers source :
+     - `backend/data/models/severity_classifier.joblib`
+     - `backend/data/models/risk_regressor.joblib`
+   - fichier à créer : `backend/app/services/ia/model_loader.py`
+
+2. **Créer le moteur de prédiction temps réel**
+   - fichier à créer : `backend/app/services/ia/inference_engine.py`
+   - rôle : recevoir les données véhicule, appliquer nettoyage + features, appeler les modèles
+
+3. **Créer le moteur de recommandations dynamiques**
+   - fichier à créer : `backend/app/services/ia/recommendation_engine.py`
+   - rôle : transformer `severity`, `risk_score`, DTC et alertes en suggestions de maintenance
+
+4. **Créer les insights IA**
+   - fichier à créer : `backend/app/services/ia/insight_engine.py`
+   - rôle : produire un résumé simple et lisible pour l'utilisateur
+
+5. **Créer les schémas Pydantic IA**
+   - fichier à créer : `backend/app/schemas/ai.py`
+   - rôle : valider les requêtes/réponses JSON de l'API IA
+
+6. **Exposer les endpoints API IA**
+   - fichier à créer : `backend/app/api/v1/ai.py`
+   - puis enregistrer le router dans : `backend/app/main.py`
+
+### 7.3 Chemins exacts du projet à utiliser
+
+```text
+backend/
+  app/
+    api/
+      v1/
+        ai.py                         # à créer
+    schemas/
+      ai.py                           # à créer
+    services/
+      ia/
+        data_cleaner.py               # déjà prêt
+        feature_engineering.py        # déjà prêt
+        model_loader.py               # à créer
+        inference_engine.py           # à créer
+        recommendation_engine.py      # à créer
+        insight_engine.py             # à créer
+  data/
+    models/
+      severity_classifier.joblib      # déjà généré
+      risk_regressor.joblib           # déjà généré
+      training_metrics.json           # déjà généré
+```
+
+### 7.4 Flux réel dans l'application
+
+Le flux cible doit être :
+
+```text
+Nouvelles données télémétriques
+        ↓
+`data_cleaner.py` → nettoyage
+        ↓
+`feature_engineering.py` → création des features
+        ↓
+`inference_engine.py` → prédiction severity + risk_score
+        ↓
+`recommendation_engine.py` → suggestions de maintenance
+        ↓
+`insight_engine.py` → résumé intelligent compréhensible
+        ↓
+`api/v1/ai.py` → réponse JSON envoyée au frontend
+```
+
+### 7.5 Endpoints API à prévoir
+
+**1. Prediction API**
+```
+POST /api/v1/ai/predict
+```
+Rôle : lancer une prédiction sur les données d'un véhicule.
+
+Exemple de réponse :
+```json
+{
+  "vehicle_id": 1,
+  "predicted_severity": "warning",
+  "predicted_risk_score": 67,
+  "source": "ml_model"
+}
+```
+
+**2. Recommendation Engine API**
+```
+GET /api/v1/ai/recommendations?vehicle_id=1
+```
+Rôle : retourner les suggestions de maintenance.
+
+Exemple de réponse :
+```json
+{
+  "vehicle_id": 1,
+  "recommendations": [
+    "Vérifier la batterie dans les 48h",
+    "Contrôler le système de refroidissement"
+  ]
+}
+```
+
+**3. AI Insights API**
+```
+GET /api/v1/ai/insights?vehicle_id=1
+```
+Rôle : retourner un résumé intelligent lisible par l'utilisateur.
+
+Exemple de réponse :
+```json
+{
+  "vehicle_id": 1,
+  "summary": "Le véhicule présente un risque moyen lié à la batterie et à la température moteur.",
+  "priority": "medium"
+}
+```
+
+### 7.6 Comment expliquer cette étape dans le rapport
+
+Dans le rapport, il faut expliquer que :
+- `Preprocessing & Training` prépare les modèles,
+- la **couche applicative IA** permet d'utiliser ces modèles dans le backend réel,
+- elle relie les modèles entraînés aux endpoints consommés par le frontend.
+
+Autrement dit :
+
+```text
+Le modèle apprend pendant le training,
+puis il est utilisé dans l'application via l'API IA.
+```
+
 ---
 
 ## 8. Phases d'évolution

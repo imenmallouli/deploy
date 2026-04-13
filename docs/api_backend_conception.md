@@ -628,57 +628,66 @@ skinparam packageStyle rectangle
 actor Admin
 actor Manager
 actor Driver
-actor "IoT Gateway / AutoPi" as Gateway
 
-rectangle "Auto Diagnostic Platform - Backend" {
-   usecase "S'authentifier" as UC_Login
-   usecase "Consulter profil\n(/auth/me)" as UC_Profile
-   usecase "Gérer utilisateurs\n(register/get user)" as UC_Users
-   usecase "Gérer flottes" as UC_Fleets
-   usecase "Gérer véhicules" as UC_Vehicles
+rectangle "Auto Diagnostic Platform - Frontend Web" {
+   usecase "S'inscrire" as UC_Register
+   usecase "Se connecter" as UC_Login
+   usecase "Consulter dashboard" as UC_Dashboard
+   usecase "Gérer véhicules\n(liste/créer/détail/update/delete)" as UC_Vehicles
+   usecase "Gérer flottes\n(CRUD + assignation véhicule)" as UC_Fleets
    usecase "Consulter statut véhicule" as UC_Status
-   usecase "Consulter alertes\net acquitter" as UC_Alerts
-   usecase "Gérer DTC\n(list/history/clear/create)" as UC_DTC
+   usecase "Consulter alertes" as UC_AlertsView
+   usecase "Acquitter alertes" as UC_AlertsAck
+   usecase "Consulter DTC\n(liste + history + clear)" as UC_DTC
    usecase "Consulter télémétrie\n(historique)" as UC_Telemetry
-   usecase "Consommer WebSocket\ntemps réel" as UC_Realtime
-   usecase "Gérer opérations terrain\n(geofences/groups/locations/devices)" as UC_Ops
-   usecase "Ingérer données IoT\ntelemetry + dtc + logs" as UC_Ingest
+   usecase "Consulter télémétrie\n(temps réel WebSocket)" as UC_Realtime
+   usecase "Gérer geofences\n(liste/créer/check)" as UC_Geofences
+   usecase "Gérer groups\n(liste/créer)" as UC_Groups
+   usecase "Gérer locations\n(liste/créer)" as UC_Locations
+   usecase "Consulter devices\n(overview/liste/détail)" as UC_Devices
 }
 
+Admin --> UC_Register
 Admin --> UC_Login
-Admin --> UC_Profile
-Admin --> UC_Users
+Admin --> UC_Dashboard
 Admin --> UC_Fleets
 Admin --> UC_Vehicles
 Admin --> UC_Status
-Admin --> UC_Alerts
+Admin --> UC_AlertsView
+Admin --> UC_AlertsAck
 Admin --> UC_DTC
 Admin --> UC_Telemetry
 Admin --> UC_Realtime
-Admin --> UC_Ops
+Admin --> UC_Geofences
+Admin --> UC_Groups
+Admin --> UC_Locations
+Admin --> UC_Devices
 
+Manager --> UC_Register
 Manager --> UC_Login
-Manager --> UC_Profile
+Manager --> UC_Dashboard
 Manager --> UC_Fleets
 Manager --> UC_Vehicles
 Manager --> UC_Status
-Manager --> UC_Alerts
+Manager --> UC_AlertsView
+Manager --> UC_AlertsAck
 Manager --> UC_DTC
 Manager --> UC_Telemetry
 Manager --> UC_Realtime
-Manager --> UC_Ops
+Manager --> UC_Geofences
+Manager --> UC_Groups
+Manager --> UC_Locations
+Manager --> UC_Devices
 
+Driver --> UC_Register
 Driver --> UC_Login
-Driver --> UC_Profile
+Driver --> UC_Dashboard
 Driver --> UC_Status
-Driver --> UC_Alerts
+Driver --> UC_AlertsView
 Driver --> UC_DTC
 Driver --> UC_Telemetry
 Driver --> UC_Realtime
-
-Gateway --> UC_Ingest
-UC_Ingest ..> UC_Telemetry : <<include>>
-UC_Ingest ..> UC_DTC : <<include>>
+Driver --> UC_Devices
 @enduml
 ```
 
