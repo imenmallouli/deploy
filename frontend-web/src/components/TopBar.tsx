@@ -1,8 +1,9 @@
 import { useNavigate } from 'react-router-dom';
-import { clearSession } from '../lib/auth/session';
+import { clearSession, getRole } from '../lib/auth/session';
 
 export function TopBar() {
   const navigate = useNavigate();
+  const role = getRole() || 'user';
 
   const handleLogout = () => {
     clearSession();
@@ -17,7 +18,7 @@ export function TopBar() {
         aria-label="search vehicle"
       />
       <div className="topbar-right">
-        <span className="chip">manager</span>
+        <span className="chip">{role}</span>
         <button className="logout-btn" type="button" onClick={handleLogout}>
           Logout
         </button>

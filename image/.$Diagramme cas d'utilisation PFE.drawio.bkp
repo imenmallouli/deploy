@@ -1,0 +1,19 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.6.6 Chrome/144.0.7559.236 Electron/40.8.4 Safari/537.36" version="29.6.6">
+  <diagram name="Page-1" id="1595YAWo7fifLo4DdVJK">
+    <mxGraphModel dx="2084" dy="1320" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="78zefCNAaeMP_jUgPpKg-1" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" value="Admin" vertex="1">
+          <mxGeometry height="60" width="30" x="80" y="580" as="geometry" />
+        </mxCell>
+        <mxCell id="78zefCNAaeMP_jUgPpKg-2" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" value="&#xa;&lt;b style=&quot;mso-bidi-font-weight:normal&quot;&gt;&lt;span style=&quot;font-size:11.0pt;line-height:107%;font-family:&amp;quot;Aptos&amp;quot;,&amp;quot;sans-serif&amp;quot;;&#xa;mso-ascii-theme-font:minor-latin;mso-fareast-font-family:Aptos;mso-fareast-theme-font:&#xa;minor-latin;mso-hansi-theme-font:minor-latin;mso-bidi-font-family:&amp;quot;Times New Roman&amp;quot;;&#xa;mso-bidi-theme-font:minor-bidi;mso-ansi-language:FR;mso-fareast-language:EN-US;&#xa;mso-bidi-language:AR-SA&quot;&gt;gestionnaire&lt;/span&gt;&lt;/b&gt;&#xa;&#xa;&#xa;&#xa;" vertex="1">
+          <mxGeometry height="60" width="30" x="80" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="78zefCNAaeMP_jUgPpKg-3" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" value="&#xa;&lt;b style=&quot;mso-bidi-font-weight:normal&quot;&gt;&lt;span style=&quot;font-size:11.0pt;line-height:107%;font-family:&amp;quot;Aptos&amp;quot;,&amp;quot;sans-serif&amp;quot;;&#xa;mso-ascii-theme-font:minor-latin;mso-fareast-font-family:Aptos;mso-fareast-theme-font:&#xa;minor-latin;mso-hansi-theme-font:minor-latin;mso-bidi-font-family:&amp;quot;Times New Roman&amp;quot;;&#xa;mso-bidi-theme-font:minor-bidi;mso-ansi-language:FR;mso-fareast-language:EN-US;&#xa;mso-bidi-language:AR-SA&quot;&gt;conducteur&lt;/span&gt;&lt;/b&gt;&#xa;&#xa;&#xa;&#xa;" vertex="1">
+          <mxGeometry height="60" width="30" x="80" y="860" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

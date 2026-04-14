@@ -28,3 +28,7 @@ export function getAccessToken() {
 export function hasSession() {
   return Boolean(getAccessToken());
 }
+
+export function getRole() {
+  return (localStorage.getItem('role') ?? '').toLowerCase();
+}

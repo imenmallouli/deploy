@@ -43,6 +43,9 @@
         <mxCell id="78zefCNAaeMP_jUgPpKg-66" edge="1" parent="1" source="78zefCNAaeMP_jUgPpKg-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="78zefCNAaeMP_jUgPpKg-22">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
+        <mxCell id="78zefCNAaeMP_jUgPpKg-89" edge="1" parent="1" source="78zefCNAaeMP_jUgPpKg-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="78zefCNAaeMP_jUgPpKg-88" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
         <mxCell id="78zefCNAaeMP_jUgPpKg-1" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" value="Admin" vertex="1">
           <mxGeometry height="60" width="30" x="-90" y="590" as="geometry" />
         </mxCell>
@@ -207,6 +210,9 @@
             <mxPoint x="608.75" y="619.23" as="sourcePoint" />
             <mxPoint x="860" y="619" as="targetPoint" />
           </mxGeometry>
+        </mxCell>
+        <mxCell id="78zefCNAaeMP_jUgPpKg-88" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" value="Admin" vertex="1">
+          <mxGeometry height="60" width="30" x="-90" y="730" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
