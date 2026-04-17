@@ -1,11 +1,16 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { listDevices } from '../lib/api/endpoints';
+import { createDevice, listDevices } from '../lib/api/endpoints';
 
 export function DevicesPage() {
+  const queryClient = useQueryClient();
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
+  const [deviceId, setDeviceId] = useState('');
+  const [vehicleId, setVehicleId] = useState('');
+  const [vin, setVin] = useState('');
+  const [deviceStatus, setDeviceStatus] = useState('offline');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [statusFilterDraft, setStatusFilterDraft] = useState<'all' | 'online' | 'offline' | 'warning'>('all');
@@ -21,6 +26,35 @@ export function DevicesPage() {
   });
 
   const devicesQuery = useQuery({ queryKey: ['devices', search], queryFn: () => listDevices(search || undefined) });
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const response = await createDevice({
+        device_id: deviceId,
+        vehicle_id: vehicleId.trim() === '' ? undefined : Number(vehicleId),
+        vin: vin.trim() === '' ? undefined : vin,
+        status: deviceStatus,
+      });
+
+      if (response.status !== 'success') {
+        throw new Error(response.message || 'Échec de création du device');
+      }
+
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+      setDeviceId('');
+      setVehicleId('');
+      setVin('');
+      setDeviceStatus('offline');
+      setActionMessage('Device ajouté avec succès.');
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Échec de création du device';
+      setActionMessage(message);
+    },
+  });
 
   const sourceItems = devicesQuery.data?.items ?? [];
   const items = sourceItems.filter((device) => {
@@ -88,6 +122,42 @@ export function DevicesPage() {
   return (
     <section>
       <h2>Devices</h2>
+
+      <form
+        className="panel form-grid"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setActionMessage('');
+          createMutation.mutate();
+        }}
+      >
+        <h3>Create Device</h3>
+        <input
+          placeholder="Device ID exact (ex: dongle_001)"
+          value={deviceId}
+          onChange={(e) => setDeviceId(e.target.value)}
+          required
+        />
+        <input
+          type="number"
+          placeholder="Vehicle ID optionnel (ex: 5)"
+          value={vehicleId}
+          onChange={(e) => setVehicleId(e.target.value)}
+        />
+        <input
+          placeholder="VIN optionnel (17 caractères, ex: VF1AAAAA123456789)"
+          value={vin}
+          onChange={(e) => setVin(e.target.value)}
+        />
+        <select value={deviceStatus} onChange={(e) => setDeviceStatus(e.target.value)}>
+          <option value="offline">offline</option>
+          <option value="online">online</option>
+          <option value="warning">warning</option>
+        </select>
+        <button className="btn-primary" type="submit" disabled={createMutation.isPending}>
+          {createMutation.isPending ? 'Creating...' : 'Add Device'}
+        </button>
+      </form>
 
       <div className="panel table-shell">
         <div className="toolbar-row">

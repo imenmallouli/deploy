@@ -78,7 +78,6 @@ export function VehicleDetailsPage() {
   const [year, setYear] = useState('');
   const [mileage, setMileage] = useState('');
   const [fleetId, setFleetId] = useState('');
-  const [driverId, setDriverId] = useState('');
   const [dongleId, setDongleId] = useState('');
   const [autopiDeviceId, setAutopiDeviceId] = useState('');
   const [autopiUnitId, setAutopiUnitId] = useState('');
@@ -107,9 +106,6 @@ export function VehicleDetailsPage() {
 
       const fleetIdValue = parseOptionalNumber(fleetId);
       if (fleetIdValue !== undefined) payload.fleet_id = fleetIdValue;
-
-      const driverIdValue = parseOptionalNumber(driverId);
-      if (driverIdValue !== undefined) payload.driver_id = driverIdValue;
 
       if (dongleId.trim() !== '') payload.dongle_id = dongleId;
       if (autopiDeviceId.trim() !== '') payload.autopi_device_id = autopiDeviceId;
@@ -158,8 +154,7 @@ export function VehicleDetailsPage() {
         <div>
           <h3>Assignment</h3>
           <ul>
-            <li>Fleet ID: {vehicle?.fleet_id ?? '-'}</li>
-            <li>Driver ID: {vehicle?.driver_id ?? '-'}</li>
+            
             <li>Dongle ID: {vehicle?.dongle_id ?? '-'}</li>
           </ul>
         </div>
@@ -250,26 +245,24 @@ export function VehicleDetailsPage() {
 
       <form className="panel form-grid" onSubmit={(e) => { e.preventDefault(); setFormFeedback(''); updateMutation.mutate(); }}>
         <h3>Update vehicle</h3>
-        <input placeholder="VIN" value={vin} onChange={(e) => setVin(e.target.value)} />
-        <input placeholder="License plate" value={licensePlate} onChange={(e) => setLicensePlate(e.target.value)} />
-        <input placeholder="Make" value={make} onChange={(e) => setMake(e.target.value)} />
-        <input placeholder="Model" value={model} onChange={(e) => setModel(e.target.value)} />
+        <input placeholder="VIN (17 caractères, ex: VF1AAAAA123456789)" value={vin} onChange={(e) => setVin(e.target.value)} />
+        <input placeholder="License plate (ex: 12345-A-1)" value={licensePlate} onChange={(e) => setLicensePlate(e.target.value)} />
+        <input placeholder="Make (ex: Renault)" value={make} onChange={(e) => setMake(e.target.value)} />
+        <input placeholder="Model (ex: Clio 5)" value={model} onChange={(e) => setModel(e.target.value)} />
         <input type="number" placeholder="Year" value={year} onChange={(e) => setYear(e.target.value)} />
-        <input type="number" placeholder="Mileage" value={mileage} onChange={(e) => setMileage(e.target.value)} />
-        <input type="number" placeholder="Fleet ID" value={fleetId} onChange={(e) => setFleetId(e.target.value)} />
-        <input type="number" placeholder="Driver ID" value={driverId} onChange={(e) => setDriverId(e.target.value)} />
-        <input placeholder="Dongle ID" value={dongleId} onChange={(e) => setDongleId(e.target.value)} />
-        <input placeholder="AutoPi device ID" value={autopiDeviceId} onChange={(e) => setAutopiDeviceId(e.target.value)} />
-        <input placeholder="AutoPi unit ID" value={autopiUnitId} onChange={(e) => setAutopiUnitId(e.target.value)} />
+        <input type="number" placeholder="Mileage (ex: 125000)" value={mileage} onChange={(e) => setMileage(e.target.value)} />
+        
+        <input placeholder="ID dongle exact (ex: dongle_001)" value={dongleId} onChange={(e) => setDongleId(e.target.value)} />
+      
         <select value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">Status</option>
+          <option value="">choose a status </option>
           <option value="pending">pending</option>
           <option value="healthy">healthy</option>
           <option value="warning">warning</option>
           <option value="critical">critical</option>
         </select>
         <button type="submit" className="btn-primary" disabled={updateMutation.isPending}>
-          {updateMutation.isPending ? 'Saving...' : 'PUT Update'}
+          {updateMutation.isPending ? 'Saving...' : 'Update'}
         </button>
         {formFeedback && <p className="subtitle">{formFeedback}</p>}
       </form>

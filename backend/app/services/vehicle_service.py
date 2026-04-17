@@ -73,9 +73,16 @@ class VehicleService:
         db.add(vehicle)
         try:
             db.commit()
-        except IntegrityError:
+        except IntegrityError as e:
             db.rollback()
-            return {"status": "error", "message": "fleet_id ou driver_id invalide"}
+            # Log the actual error for debugging
+            error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+            print(f"IntegrityError during vehicle creation: {error_msg}")
+            return {"status": "error", "message": f"Erreur d'intégrité : {error_msg}"}
+        except Exception as e:
+            db.rollback()
+            print(f"Unexpected error during vehicle creation: {e}")
+            return {"status": "error", "message": f"Erreur serveur : {str(e)}"}
 
         db.refresh(vehicle)
         return {

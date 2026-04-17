@@ -58,7 +58,7 @@ export function GetStartedPage() {
         <div>
           <h3>Struggling with accessing real-time vehicle data?</h3>
           <p>Explore our telematics and diagnostics modules to elevate your data insights.</p>
-          <button className="btn-primary" type="button">Check our prices</button>
+          
         </div>
       </article>
 
@@ -67,8 +67,6 @@ export function GetStartedPage() {
       <div className="get-started-business-grid">
         <article className="get-started-business-card">Data Management</article>
         <article className="get-started-business-card">Device Management</article>
-        <article className="get-started-business-card">Electric Vehicle</article>
-        <article className="get-started-business-card">Fleet Management</article>
         <article className="get-started-business-card">Real-time Data Streaming</article>
         <article className="get-started-business-card">Vehicle Telematics</article>
       </div>

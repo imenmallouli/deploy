@@ -1,18 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { checkGeofences, createGeofence, listGeofences } from '../lib/api/endpoints';
+import { createGeofence, deleteGeofence, listGeofences } from '../lib/api/endpoints';
 
 function parseDecimal(value: string) {
   const normalized = value.trim().replace(',', '.');
   if (!normalized) return Number.NaN;
   return Number(normalized);
-}
-
-function parseOptionalNumber(value: string): number | undefined {
-  const normalized = value.trim();
-  if (!normalized) return undefined;
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function buildMapEmbedUrl(latitude?: number, longitude?: number) {
@@ -33,16 +26,15 @@ function buildMapEmbedUrl(latitude?: number, longitude?: number) {
   return 'https://www.openstreetmap.org/export/embed.html?bbox=-3.8%2C43.8%2C3.8%2C49.2&layer=mapnik';
 }
 
-function getErrorMessage(error: unknown) {
+function getErrorMessage(error: unknown, fallback = 'Operation failed. Please try again.') {
   const data = (error as { response?: { data?: { message?: string; detail?: string } } })?.response?.data;
-  return data?.message ?? data?.detail ?? 'Create failed. Please try again.';
+  return data?.message ?? data?.detail ?? fallback;
 }
 
 export function GeofencesPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [columnsOpen, setColumnsOpen] = useState(false);
   const [enabledDraft, setEnabledDraft] = useState<'all' | 'enabled' | 'disabled'>('all');
   const [enabledFilter, setEnabledFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
   const [name, setName] = useState('');
@@ -57,17 +49,6 @@ export function GeofencesPage() {
   const [checkLngInput, setCheckLngInput] = useState('');
   const [createFeedback, setCreateFeedback] = useState('');
   const [createError, setCreateError] = useState('');
-  const [visibleColumns, setVisibleColumns] = useState({
-    name: true,
-    description: true,
-    onEnter: true,
-    onExit: true,
-    center: true,
-    radius: true,
-    vehicles: true,
-    actions: true,
-  });
-
   const geofencesQuery = useQuery({ queryKey: ['geofences', search], queryFn: () => listGeofences(search || undefined) });
   const createMutation = useMutation({
     mutationFn: createGeofence,
@@ -85,7 +66,10 @@ export function GeofencesPage() {
       setCreateError(getErrorMessage(error));
     },
   });
-  const checkMutation = useMutation({ mutationFn: checkGeofences });
+  const deleteMutation = useMutation({
+    mutationFn: deleteGeofence,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['geofences'] }); },
+  });
 
   const sourceItems = geofencesQuery.data?.items ?? [];
   const items = sourceItems.filter((item) => {
@@ -98,10 +82,7 @@ export function GeofencesPage() {
   const radiusM = parseDecimal(radiusMInput);
   const checkLat = parseDecimal(checkLatInput);
   const checkLng = parseDecimal(checkLngInput);
-  const checkVehicleIdValue = parseOptionalNumber(checkVehicleId);
   const canCreate = name.trim().length > 0 && Number.isFinite(centerLat) && Number.isFinite(centerLng) && Number.isFinite(radiusM) && radiusM > 0;
-  const canCheck = Number.isFinite(checkLat) && Number.isFinite(checkLng);
-  const visibleCount = Object.values(visibleColumns).filter(Boolean).length;
   const mapLatitude = Number.isFinite(checkLat) ? checkLat : Number.isFinite(centerLat) ? centerLat : undefined;
   const mapLongitude = Number.isFinite(checkLng) ? checkLng : Number.isFinite(centerLng) ? centerLng : undefined;
   const mapSrc = buildMapEmbedUrl(mapLatitude, mapLongitude);
@@ -139,10 +120,6 @@ export function GeofencesPage() {
     setEnabledFilter('all');
   };
 
-  const toggleColumn = (column: keyof typeof visibleColumns) => {
-    setVisibleColumns((prev) => ({ ...prev, [column]: !prev[column] }));
-  };
-
   return (
     <section>
       <h2>Geofences</h2>
@@ -158,7 +135,6 @@ export function GeofencesPage() {
         <div className="toolbar-row">
           <input className="toolbar-input" placeholder="Search for geofences" value={search} onChange={(e) => setSearch(e.target.value)} />
           <button className="btn-link" type="button" onClick={() => setFiltersOpen((open) => !open)}>Filters</button>
-          <button className="btn-link" type="button" onClick={() => setColumnsOpen((open) => !open)}>Columns</button>
           <input className="toolbar-input" placeholder="New geofence name" value={name} onChange={(e) => setName(e.target.value)} />
           <input className="toolbar-input" placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
           <input className="toolbar-input" placeholder="On enter action" value={onEnter} onChange={(e) => setOnEnter(e.target.value)} />
@@ -194,77 +170,58 @@ export function GeofencesPage() {
           </div>
         )}
 
-        {columnsOpen && (
-          <div className="panel" style={{ marginBottom: 12 }}>
-            <div className="toolbar-row" style={{ marginBottom: 0 }}>
-              <button className="btn-link" type="button" onClick={() => toggleColumn('name')}>Name {visibleColumns.name ? '✓' : ''}</button>
-              <button className="btn-link" type="button" onClick={() => toggleColumn('description')}>Description {visibleColumns.description ? '✓' : ''}</button>
-              <button className="btn-link" type="button" onClick={() => toggleColumn('onEnter')}>On Enter {visibleColumns.onEnter ? '✓' : ''}</button>
-              <button className="btn-link" type="button" onClick={() => toggleColumn('onExit')}>On Exit {visibleColumns.onExit ? '✓' : ''}</button>
-              <button className="btn-link" type="button" onClick={() => toggleColumn('center')}>Center {visibleColumns.center ? '✓' : ''}</button>
-              <button className="btn-link" type="button" onClick={() => toggleColumn('radius')}>Radius {visibleColumns.radius ? '✓' : ''}</button>
-              <button className="btn-link" type="button" onClick={() => toggleColumn('vehicles')}>Vehicles {visibleColumns.vehicles ? '✓' : ''}</button>
-              <button className="btn-link" type="button" onClick={() => toggleColumn('actions')}>Actions {visibleColumns.actions ? '✓' : ''}</button>
-            </div>
-          </div>
-        )}
-
         {createError && <p className="form-error">{createError}</p>}
         {createFeedback && <p className="muted-note">{createFeedback}</p>}
 
+      
         <div className="toolbar-row">
           <input className="toolbar-input" type="number" placeholder="Vehicle ID (optional)" value={checkVehicleId} onChange={(e) => setCheckVehicleId(e.target.value)} />
           <input className="toolbar-input" type="text" inputMode="decimal" placeholder="Position lat" value={checkLatInput} onChange={(e) => setCheckLatInput(e.target.value)} />
           <input className="toolbar-input" type="text" inputMode="decimal" placeholder="Position lng" value={checkLngInput} onChange={(e) => setCheckLngInput(e.target.value)} />
-          <button
-            className="btn-link"
-            type="button"
-            disabled={!canCheck || checkMutation.isPending}
-            onClick={() => checkMutation.mutate({
-              vehicle_id: checkVehicleIdValue,
-              latitude: checkLat,
-              longitude: checkLng,
-            })}
-          >
-            Check position
-          </button>
         </div>
-
         <table className="vehicles-table">
           <thead>
             <tr>
-              {visibleColumns.name && <th>Name</th>}
-              {visibleColumns.description && <th>Description</th>}
-              {visibleColumns.onEnter && <th>On Enter</th>}
-              {visibleColumns.onExit && <th>On Exit</th>}
-              {visibleColumns.center && <th>Center</th>}
-              {visibleColumns.radius && <th>Radius (m)</th>}
-              {visibleColumns.vehicles && <th>Vehicles</th>}
-              {visibleColumns.actions && <th>Actions</th>}
+              <th>Name</th>
+              <th>Description</th>
+              <th>On Enter</th>
+              <th>On Exit</th>
+              <th>Center</th>
+              <th>Radius (m)</th>
+              <th>Vehicles</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {items.length === 0 && (
               <tr>
-                <td colSpan={visibleCount} className="empty-cell">No data to display</td>
+                <td colSpan={8} className="empty-cell">No data to display</td>
               </tr>
             )}
             {items.map((item) => (
               <tr key={item.id}>
-                {visibleColumns.name && <td>{item.name}</td>}
-                {visibleColumns.description && <td>{item.description ?? '-'}</td>}
-                {visibleColumns.onEnter && <td>{item.on_enter ?? '-'}</td>}
-                {visibleColumns.onExit && <td>{item.on_exit ?? '-'}</td>}
-                {visibleColumns.center && <td>{item.center_lat ?? '-'}, {item.center_lng ?? '-'}</td>}
-                {visibleColumns.radius && <td>{item.radius_m ?? '-'}</td>}
-                {visibleColumns.vehicles && <td>{item.vehicle_count ?? 0}</td>}
-                {visibleColumns.actions && <td>-</td>}
+                <td>{item.name}</td>
+                <td>{item.description ?? '-'}</td>
+                <td>{item.on_enter ?? '-'}</td>
+                <td>{item.on_exit ?? '-'}</td>
+                <td>{item.center_lat ?? '-'}, {item.center_lng ?? '-'}</td>
+                <td>{item.radius_m ?? '-'}</td>
+                <td>{item.vehicle_count ?? 0}</td>
+                <td style={{ whiteSpace: 'nowrap' }}>
+                  <button
+                    className="btn-link"
+                    type="button"
+                    style={{ color: 'var(--danger, #dc3545)' }}
+                    disabled={deleteMutation.isPending}
+                    onClick={() => { if (window.confirm(`Delete "${item.name}"?`)) deleteMutation.mutate(item.id); }}
+                  >Delete</button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        <pre className="json-preview">{JSON.stringify(checkMutation.data ?? {}, null, 2)}</pre>
+
       </div>
     </section>
   );

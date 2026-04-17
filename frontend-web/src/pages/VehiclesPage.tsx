@@ -9,21 +9,32 @@ export function VehiclesPage() {
   const [licensePlate, setLicensePlate] = useState('');
   const [make, setMake] = useState('');
   const [model, setModel] = useState('');
-  const [year, setYear] = useState<number>(2024);
+  const [year, setYear] = useState('');
+  const [mileage, setMileage] = useState('');
   const [status, setStatus] = useState('pending');
+
+  const [dongleId, setDongleId] = useState('');
 
   const vehiclesQuery = useQuery({ queryKey: ['vehicles'], queryFn: listVehicles });
 
   const createMutation = useMutation({
-    mutationFn: createVehicle,
+    mutationFn: async (payload: Parameters<typeof createVehicle>[0]) => {
+      const response = await createVehicle(payload);
+      if (response.status !== 'success') {
+        throw new Error(response.message || 'Échec de création du véhicule');
+      }
+      return response;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
       setVin('');
       setLicensePlate('');
       setMake('');
       setModel('');
-      setYear(2024);
+      setYear('');
+      setMileage('');
       setStatus('pending');
+      setDongleId('');
     },
   });
 
@@ -41,24 +52,27 @@ export function VehiclesPage() {
       license_plate: licensePlate,
       make,
       model,
-      year,
-      mileage: 0,
+      year: Number(year),
+      mileage: Number(mileage),
       status,
+      dongle_id: dongleId.trim() === '' ? null : dongleId,
     });
   };
 
   return (
     <section>
       <h2>Vehicles</h2>
-      <p className="subtitle">List, filter and inspect vehicle health and assignment data.</p>
+     <br></br>
 
       <form className="panel form-grid" onSubmit={onCreate}>
         <h3>Create Vehicle</h3>
-        <input placeholder="VIN" value={vin} onChange={(e) => setVin(e.target.value)} required />
-        <input placeholder="License plate" value={licensePlate} onChange={(e) => setLicensePlate(e.target.value)} required />
-        <input placeholder="Make" value={make} onChange={(e) => setMake(e.target.value)} required />
-        <input placeholder="Model" value={model} onChange={(e) => setModel(e.target.value)} required />
-        <input type="number" placeholder="Year" value={year} onChange={(e) => setYear(Number(e.target.value))} required />
+        <input placeholder="VIN (17 caractères, ex: VF1AAAAA123456789)" value={vin} onChange={(e) => setVin(e.target.value)} required />
+        <input placeholder="License plate (ex: 12345-A-1)" value={licensePlate} onChange={(e) => setLicensePlate(e.target.value)} required />
+        <input placeholder="Make (ex: Renault)" value={make} onChange={(e) => setMake(e.target.value)} required />
+        <input placeholder="Model (ex: Clio 5)" value={model} onChange={(e) => setModel(e.target.value)} required />
+        <input type="number" placeholder="Year (ex: 2024)" value={year} onChange={(e) => setYear(e.target.value)} required />
+        <input type="number" placeholder="Mileage in km (ex: 125000)" value={mileage} onChange={(e) => setMileage(e.target.value)} required />
+        <input placeholder=" dongle ID (ex: dongle_001)" value={dongleId} onChange={(e) => setDongleId(e.target.value)} />
         <select value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="pending">pending</option>
           <option value="healthy">healthy</option>
@@ -68,6 +82,8 @@ export function VehiclesPage() {
         <button className="btn-primary" type="submit" disabled={createMutation.isPending}>
           {createMutation.isPending ? 'Creating...' : 'Add Vehicle'}
         </button>
+        {createMutation.isError ? <p className="error-text">{(createMutation.error as Error).message}</p> : null}
+        {createMutation.isSuccess ? <p className="success-text">Véhicule ajouté avec succès.</p> : null}
       </form>
 
       <div className="panel">
@@ -96,9 +112,6 @@ export function VehiclesPage() {
                 <td className="actions-cell">
                   <Link to={`/vehicles/${vehicle.id}`} className="inline-link">
                     Voir détail
-                  </Link>
-                  <Link to={`/vehicle-status/${vehicle.id}`} className="inline-link">
-                    Voir status
                   </Link>
                   <button className="inline-danger" type="button" onClick={() => deleteMutation.mutate(vehicle.id)}>
                     Delete

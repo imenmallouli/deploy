@@ -264,6 +264,16 @@ export async function createGeofence(payload: { name: string; description?: stri
   return data;
 }
 
+export async function updateGeofence(id: string, payload: { name?: string; description?: string; on_enter?: string; on_exit?: string; center_lat?: number; center_lng?: number; radius_m?: number; enabled?: boolean }) {
+  const { data } = await apiClient.put(`/api/v1/geofences/${id}`, payload);
+  return data;
+}
+
+export async function deleteGeofence(id: string) {
+  const { data } = await apiClient.delete(`/api/v1/geofences/${id}`);
+  return data;
+}
+
 export async function checkGeofences(payload: { vehicle_id?: number; latitude: number; longitude: number }) {
   const { data } = await apiClient.post('/api/v1/geofences/check', payload);
   return data as ApiResult<{ vehicle_id?: number; position: { latitude: number; longitude: number }; count: number; items: Array<{ geofence_id: string; name: string; distance_m: number; radius_m: number; inside: boolean; transition?: string }>; events: Array<Record<string, unknown>> }>;

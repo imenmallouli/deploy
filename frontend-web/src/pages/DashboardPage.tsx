@@ -12,9 +12,35 @@ export function DashboardPage() {
   const pendingAlerts = alertsQuery.data?.pending ?? 0;
   const latestAlerts = alertsQuery.data?.alerts?.slice(0, 6) ?? [];
 
-  const drivingNow = vehicles.filter((vehicle) => (vehicle.status ?? '').toLowerCase() === 'active').length;
-  const drivenToday = vehicles.filter((vehicle) => ['active', 'warning'].includes((vehicle.status ?? '').toLowerCase())).length;
-  const drivenLast30Days = Math.max(totalVehicles - pendingAlerts, 0);
+  const now = Date.now();
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const thirtyDaysAgo = now - (30 * 24 * 60 * 60 * 1000);
+  const fifteenMinutesAgo = now - (15 * 60 * 1000);
+
+  const getLastSeenMs = (lastAutopiSeen?: string | null, lastConnection?: string | null) => {
+    const source = lastAutopiSeen ?? lastConnection;
+    if (!source) return null;
+    const parsed = Date.parse(source);
+    return Number.isNaN(parsed) ? null : parsed;
+  };
+
+  const drivingNow = vehicles.filter((vehicle) => {
+    const status = (vehicle.status ?? '').toLowerCase();
+    const lastSeenMs = getLastSeenMs(vehicle.last_autopi_seen, vehicle.last_connection);
+    return status === 'active' || (lastSeenMs !== null && lastSeenMs >= fifteenMinutesAgo);
+  }).length;
+
+  const drivenToday = vehicles.filter((vehicle) => {
+    const lastSeenMs = getLastSeenMs(vehicle.last_autopi_seen, vehicle.last_connection);
+    return lastSeenMs !== null && lastSeenMs >= startOfToday.getTime();
+  }).length;
+
+  const drivenLast30Days = vehicles.filter((vehicle) => {
+    const lastSeenMs = getLastSeenMs(vehicle.last_autopi_seen, vehicle.last_connection);
+    return lastSeenMs !== null && lastSeenMs >= thirtyDaysAgo;
+  }).length;
+
   const notDrivenLast30Days = Math.max(totalVehicles - drivenLast30Days, 0);
 
   return (
@@ -30,7 +56,7 @@ export function DashboardPage() {
             </div>
             <ol>
               <li><Link className="getting-started-link" to="/vehicles/list">Create / Import vehicles and start managing them</Link></li>
-              <li><Link className="getting-started-link" to="/vehicles/list">Add details to vehicles in your fleet</Link></li>
+              <li><Link className="getting-started-link" to="/alerts">Review alerts detected across your fleet</Link></li>
               <li>
                 Create and assign <Link className="getting-started-link" to="/locations">locations</Link> and <Link className="getting-started-link" to="/vehicles/geofences">geofences</Link> to vehicles
               </li>
@@ -40,7 +66,6 @@ export function DashboardPage() {
           <article className="panel fleet-overview-panel">
             <div className="panel-title-row">
               <h3>Fleet Overview</h3>
-              <button className="inline-link-btn" type="button">Show all vehicles</button>
             </div>
 
             <div className="overview-cards-grid">
