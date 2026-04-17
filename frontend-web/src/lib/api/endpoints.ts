@@ -289,13 +289,33 @@ export async function createGroup(payload: { name: string; vehicle_count?: numbe
   return data;
 }
 
-export async function listLocations(q?: string) {
-  const { data } = await apiClient.get('/api/v1/locations', { params: { q } });
-  return data as ApiResult<{ items: Array<{ id: string; name: string; type?: string; latitude?: number; longitude?: number }>; count: number }>;
+export async function deleteGroup(id: string) {
+  const { data } = await apiClient.delete(`/api/v1/groups/${id}`);
+  return data;
 }
 
-export async function createLocation(payload: { name: string; type?: string; latitude?: number; longitude?: number }) {
+export async function updateGroup(id: string, payload: { name?: string }) {
+  const { data } = await apiClient.put(`/api/v1/groups/${id}`, payload);
+  return data;
+}
+
+export async function listLocations(q?: string) {
+  const { data } = await apiClient.get('/api/v1/locations', { params: { q } });
+  return data as ApiResult<{ items: Array<{ id: string; name: string; type?: string; notes?: string; contactEmail?: string; contactPhone?: string; address?: string; onEnter?: string; onExit?: string; latitude?: number; longitude?: number }>; count: number }>;
+}
+
+export async function createLocation(payload: { name: string; type?: string; notes?: string; contactEmail?: string; contactPhone?: string; address?: string; onEnter?: string; onExit?: string; latitude?: number; longitude?: number }) {
   const { data } = await apiClient.post('/api/v1/locations', payload);
+  return data;
+}
+
+export async function updateLocation(id: string, payload: { name?: string; type?: string; notes?: string; contactEmail?: string; contactPhone?: string; address?: string; onEnter?: string; onExit?: string; latitude?: number; longitude?: number }) {
+  const { data } = await apiClient.put(`/api/v1/locations/${id}`, payload);
+  return data;
+}
+
+export async function deleteLocation(id: string) {
+  const { data } = await apiClient.delete(`/api/v1/locations/${id}`);
   return data;
 }
 

@@ -44,6 +44,12 @@ class GroupUpdate(BaseModel):
 class LocationCreate(BaseModel):
     name: str
     type: str | None = None
+    notes: str | None = None
+    contactEmail: str | None = None
+    contactPhone: str | None = None
+    address: str | None = None
+    onEnter: str | None = None
+    onExit: str | None = None
     latitude: float | None = None
     longitude: float | None = None
 
@@ -51,6 +57,12 @@ class LocationCreate(BaseModel):
 class LocationUpdate(BaseModel):
     name: str | None = None
     type: str | None = None
+    notes: str | None = None
+    contactEmail: str | None = None
+    contactPhone: str | None = None
+    address: str | None = None
+    onEnter: str | None = None
+    onExit: str | None = None
     latitude: float | None = None
     longitude: float | None = None
 
