@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
-import { getVehicleStatus } from '../lib/api/endpoints';
+import { Link, useParams } from 'react-router-dom';
+import { getVehicleStatus, listVehicles } from '../lib/api/endpoints';
 
 type VehicleStatusPayload = {
   vehicle?: {
@@ -25,31 +25,59 @@ type VehicleStatusPayload = {
 
 export function VehicleStatusPage() {
   const { vehicleId: routeVehicleId } = useParams();
-  const vehicleId = Number(routeVehicleId);
+  const parsedVehicleId = Number(routeVehicleId);
+
+  const vehiclesQuery = useQuery({
+    queryKey: ['vehicles', 'status-page'],
+    queryFn: listVehicles,
+  });
+
+  const vehicles = vehiclesQuery.data?.items ?? [];
+  const vehicleIds = vehicles.map((item) => item.id);
+  const hasVehicles = vehicleIds.length > 0;
+
+  const routeIdIsValid = Number.isFinite(parsedVehicleId) && parsedVehicleId > 0;
+  const routeIdExists = routeIdIsValid && vehicleIds.includes(parsedVehicleId);
+  const vehicleId = hasVehicles ? (routeIdExists ? parsedVehicleId : vehicleIds[0]) : null;
+
+  const hasInvalidRouteId = routeVehicleId !== undefined && !routeIdExists;
 
   const statusQuery = useQuery({
     queryKey: ['vehicle-status', vehicleId],
-    queryFn: () => getVehicleStatus(vehicleId),
-    enabled: Number.isFinite(vehicleId) && vehicleId > 0,
+    queryFn: () => getVehicleStatus(vehicleId as number),
+    enabled: vehicleId !== null,
   });
 
   const data = statusQuery.data as VehicleStatusPayload | undefined;
   const vehicle = data?.vehicle;
   const telemetry = data?.telemetry;
 
-  if (!Number.isFinite(vehicleId) || vehicleId <= 0) {
-    return (
-      <section>
-        <h2>Vehicle Status</h2>
-        <p className="muted-note">Invalid vehicle id in URL.</p>
-      </section>
-    );
-  }
-
   return (
     <section>
       <h2>Vehicle Status</h2>
       <p className="subtitle">Consolidated live status: telemetry, active DTC and pending alerts.</p>
+
+      {vehiclesQuery.isLoading && <p className="muted-note">Loading vehicles...</p>}
+      {vehiclesQuery.isError && <p className="muted-note">Unable to load vehicles list.</p>}
+
+      {!vehiclesQuery.isLoading && !vehiclesQuery.isError && !hasVehicles && (
+        <p className="muted-note">No vehicles in database.</p>
+      )}
+
+      {!vehiclesQuery.isLoading && !vehiclesQuery.isError && hasVehicles && (
+        <>
+          {hasInvalidRouteId && <p className="muted-note">Invalid vehicle id in URL, showing first available vehicle.</p>}
+          <p className="muted-note" style={{ marginTop: 0 }}>
+            Existing vehicle IDs:{' '}
+            {vehicleIds.map((id, index) => (
+              <span key={id}>
+                {index > 0 && ' | '}
+                <Link className="inline-link" to={`/vehicle-status/${id}`}>{id}</Link>
+              </span>
+            ))}
+          </p>
+        </>
+      )}
 
       {statusQuery.isLoading && <p className="muted-note">Loading vehicle status...</p>}
       {statusQuery.isError && <p className="muted-note">Unable to load vehicle status.</p>}
