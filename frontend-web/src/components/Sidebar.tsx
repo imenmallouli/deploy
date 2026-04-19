@@ -55,11 +55,7 @@ export function Sidebar() {
             <NavLink to="/alerts" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
               Alerts
             </NavLink>
-            {canManageFleet && (
-              <NavLink to="/fleets" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-                Fleets
-              </NavLink>
-            )}
+
           </div>
         </div>
 

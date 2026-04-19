@@ -10,7 +10,6 @@ export function DevicesPage() {
   const [deviceId, setDeviceId] = useState('');
   const [vehicleId, setVehicleId] = useState('');
   const [vin, setVin] = useState('');
-  const [deviceStatus, setDeviceStatus] = useState('offline');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [statusFilterDraft, setStatusFilterDraft] = useState<'all' | 'online' | 'offline' | 'warning'>('all');
@@ -33,7 +32,6 @@ export function DevicesPage() {
         device_id: deviceId,
         vehicle_id: vehicleId.trim() === '' ? undefined : Number(vehicleId),
         vin: vin.trim() === '' ? undefined : vin,
-        status: deviceStatus,
       });
 
       if (response.status !== 'success') {
@@ -47,7 +45,6 @@ export function DevicesPage() {
       setDeviceId('');
       setVehicleId('');
       setVin('');
-      setDeviceStatus('offline');
       setActionMessage('Device ajouté avec succès.');
     },
     onError: (error: unknown) => {
@@ -149,11 +146,6 @@ export function DevicesPage() {
           value={vin}
           onChange={(e) => setVin(e.target.value)}
         />
-        <select value={deviceStatus} onChange={(e) => setDeviceStatus(e.target.value)}>
-          <option value="offline">offline</option>
-          <option value="online">online</option>
-          <option value="warning">warning</option>
-        </select>
         <button className="btn-primary" type="submit" disabled={createMutation.isPending}>
           {createMutation.isPending ? 'Creating...' : 'Add Device'}
         </button>

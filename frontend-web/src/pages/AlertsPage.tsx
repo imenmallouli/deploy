@@ -184,8 +184,6 @@ export function AlertsPage() {
             onKeyDown={handleSearchKeyDown}
           />
           <button className="btn-link" type="button" onClick={() => setFiltersOpen((v) => !v)}>Filters</button>
-          <button className="btn-link" type="button" onClick={() => setColumnsOpen((v) => !v)}>Columns</button>
-          <button className="btn-link" type="button" onClick={handleSearch}>Search</button>
           <div style={{ flex: 1 }} />
           <button className="btn-link" type="button" onClick={handleRefresh} disabled={alertsQuery.isFetching}>Refresh</button>
           <button className="btn-link" type="button" onClick={() => setActionsOpen((v) => !v)}>Actions</button>

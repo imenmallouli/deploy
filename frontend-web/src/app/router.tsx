@@ -8,7 +8,6 @@ import {
   DeviceOverviewPage,
   DevicesPage,
   DtcPage,
-  FleetsPage,
   GeofencesPage,
   GetStartedPage,
   GroupsPage,
@@ -93,14 +92,6 @@ export const router = createBrowserRouter([
           { path: 'telemetry', element: <TelemetryPage /> },
           { path: 'dtc', element: <DtcPage /> },
           { path: 'alerts', element: <AlertsPage /> },
-          {
-            path: 'fleets',
-            element: (
-              <RequireRole allowedRoles={['admin', 'manager']}>
-                <FleetsPage />
-              </RequireRole>
-            ),
-          },
 
           { path: 'devices', element: <Navigate to="/devices/list" replace /> },
 
