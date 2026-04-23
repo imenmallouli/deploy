@@ -21,28 +21,30 @@ export function Sidebar() {
         </div>
 
         <div className="nav-section">
-          <p className="nav-section-title">Fleet Management</p>
           <div className="nav-list">
             <NavLink to="/overview" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
               Overview
             </NavLink>
             {canManageFleet && (
-              <div className="nav-group">
-                <NavLink to="/vehicles/list" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-                  Vehicles
-                </NavLink>
-                <div className="nav-sublist">
-                  <NavLink to="/vehicles/list" className={({ isActive }) => (isActive ? 'nav-subitem active' : 'nav-subitem')}>
-                    List
-                  </NavLink>
-                  <NavLink to="/vehicles/geofences" className={({ isActive }) => (isActive ? 'nav-subitem active' : 'nav-subitem')}>
-                    Geofences
-                  </NavLink>
-                  <NavLink to="/vehicles/groups" className={({ isActive }) => (isActive ? 'nav-subitem active' : 'nav-subitem')}>
-                    Groups
-                  </NavLink>
-                </div>
-              </div>
+              <NavLink to="/vehicles/list" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+                Vehicles
+              </NavLink>
+            )}
+            <NavLink to="/vehicle-status" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+              Vehicle Status
+            </NavLink>
+            <NavLink to="/telemetry" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+              Telemetry
+            </NavLink>
+            {canManageFleet && (
+              <NavLink to="/vehicles/geofences" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+                Geofences
+              </NavLink>
+            )}
+            {canManageFleet && (
+              <NavLink to="/vehicles/groups" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+                Groups
+              </NavLink>
             )}
             {canManageFleet && (
               <NavLink to="/locations" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
@@ -55,7 +57,6 @@ export function Sidebar() {
             <NavLink to="/alerts" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
               Alerts
             </NavLink>
-
           </div>
         </div>
 
@@ -67,12 +68,6 @@ export function Sidebar() {
             </NavLink>
             <NavLink to="/devices/list" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
               Devices
-            </NavLink>
-            <NavLink to="/vehicle-status" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-              Vehicle Status
-            </NavLink>
-            <NavLink to="/telemetry" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-              Telemetry
             </NavLink>
           </div>
         </div>
