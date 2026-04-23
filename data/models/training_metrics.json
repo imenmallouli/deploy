@@ -5,39 +5,118 @@
     "warning": 400,
     "critical": 5
   },
-  "feature_count": 28,
+  "feature_count": 10,
   "features": [
+    "ts",
     "speed",
     "rpm",
+    "fuel_level",
     "engine_temp",
     "battery_voltage",
-    "fuel_level",
     "engine_load",
-    "speed_mean_3",
-    "speed_mean_12",
-    "rpm_mean_3",
-    "rpm_mean_12",
-    "engine_temp_mean_3",
-    "engine_temp_mean_12",
-    "battery_voltage_mean_3",
-    "battery_voltage_mean_12",
-    "engine_load_mean_3",
-    "engine_load_mean_12",
-    "fuel_level_mean_3",
-    "fuel_level_mean_12",
-    "battery_voltage_delta",
-    "engine_temp_delta",
-    "fuel_level_delta",
-    "is_idling",
-    "is_overheating",
-    "is_battery_low",
-    "is_low_fuel",
-    "is_engine_overload",
-    "high_rpm_flag",
-    "idle_duration_min"
+    "ambient_air_temp",
+    "intake_temp",
+    "odometer"
   ],
+  "status_before_training": {
+    "trained": true,
+    "classifier_exists": true,
+    "regressor_exists": true,
+    "metrics_exists": true,
+    "last_artifact_update": "2026-04-22T16:07:29.282390"
+  },
   "classification": {
+    "selected_model": "baseline",
+    "candidates": [
+      {
+        "model": "baseline",
+        "cv_folds": 4,
+        "cv_mean_accuracy": 0.9958677685950413,
+        "cv_mean_f1_macro": 0.7481843395252838,
+        "cv_mean_critical_recall": 0.25,
+        "smote": [
+          {
+            "applied": true,
+            "critical_count_before": 3,
+            "critical_count_after": 483,
+            "target_count": 483
+          },
+          {
+            "applied": true,
+            "critical_count_before": 3,
+            "critical_count_after": 483,
+            "target_count": 483
+          },
+          {
+            "applied": true,
+            "critical_count_before": 3,
+            "critical_count_after": 483,
+            "target_count": 483
+          },
+          {
+            "applied": true,
+            "critical_count_before": 3,
+            "critical_count_after": 483,
+            "target_count": 483
+          }
+        ]
+      },
+      {
+        "model": "improved",
+        "cv_folds": 4,
+        "cv_mean_accuracy": 0.9958677685950413,
+        "cv_mean_f1_macro": 0.7481843395252838,
+        "cv_mean_critical_recall": 0.25,
+        "smote": [
+          {
+            "applied": true,
+            "critical_count_before": 3,
+            "critical_count_after": 483,
+            "target_count": 483
+          },
+          {
+            "applied": true,
+            "critical_count_before": 3,
+            "critical_count_after": 483,
+            "target_count": 483
+          },
+          {
+            "applied": true,
+            "critical_count_before": 3,
+            "critical_count_after": 483,
+            "target_count": 483
+          },
+          {
+            "applied": true,
+            "critical_count_before": 3,
+            "critical_count_after": 483,
+            "target_count": 483
+          }
+        ]
+      }
+    ],
+    "cross_validation": {
+      "strategy": "StratifiedKFold",
+      "n_splits": 4,
+      "selection_priority": [
+        "cv_mean_critical_recall",
+        "cv_mean_f1_macro"
+      ]
+    },
+    "critical_label": "critical",
+    "final_train_smote": {
+      "applied": true,
+      "critical_count_before": 4,
+      "critical_count_after": 644,
+      "target_count": 644
+    },
+    "split": {
+      "train_rows": 726,
+      "val_rows": 242,
+      "test_rows": 242
+    },
     "accuracy": 0.9958677685950413,
+    "critical_recall": 0.0,
     "classification_report": {
       "critical": {
         "precision": 0.0,
@@ -73,7 +152,32 @@
     }
   },
   "regression": {
-    "mae": 0.05538016528925622,
-    "r2": 0.9981235950519547
+    "selected_model": "improved",
+    "candidates": [
+      {
+        "model": "baseline",
+        "validation_r2": 0.9248548351645633,
+        "validation_mae": 0.3441400367309459
+      },
+      {
+        "model": "improved",
+        "validation_r2": 0.9288455382028518,
+        "validation_mae": 0.2184297520661157
+      }
+    ],
+    "split": {
+      "train_rows": 726,
+      "val_rows": 242,
+      "test_rows": 242
+    },
+    "mae": 0.032231404958677684,
+    "r2": 0.9992084583333334
+  },
+  "status_after_training": {
+    "trained": true,
+    "classifier_exists": true,
+    "regressor_exists": true,
+    "metrics_exists": true,
+    "last_artifact_update": "2026-04-22T16:09:22.749454"
   }
 }

@@ -33,7 +33,7 @@ OUTPUT_PATH = BASE_DIR / "data" / "models" / "algorithm_benchmark.json"
 def benchmark_classification(X, y):
     stratify = y if y.value_counts().min() >= 2 else None
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=stratify
+        X, y, test_size=0.2, random_state=30, stratify=stratify
     )
 
     models = {
@@ -43,24 +43,24 @@ def benchmark_classification(X, y):
                 (
                     "model",
                     LogisticRegression(
-                        max_iter=3000,
+                        max_iter=2000,
                         class_weight="balanced",
-                        random_state=42,
+                        random_state=70,
                     ),
                 ),
             ]
         ),
         "Decision Tree": DecisionTreeClassifier(
-            random_state=42,
+            random_state=70,
             class_weight="balanced",
-            max_depth=8,
-            min_samples_leaf=2,
+            max_depth=1000,
+            min_samples_leaf=6,
         ),
         "Random Forest": RandomForestClassifier(
-            n_estimators=250,
-            max_depth=10,
-            min_samples_leaf=2,
-            random_state=42,
+            n_estimators=200,
+            max_depth=1000,
+            min_samples_leaf=6,
+            random_state=70,
             class_weight="balanced",
         ),
     }
@@ -110,15 +110,15 @@ def benchmark_regression(X, y):
             ]
         ),
         "Decision Tree Regressor": DecisionTreeRegressor(
-            random_state=42,
-            max_depth=8,
-            min_samples_leaf=2,
+            random_state=70,
+            max_depth=90,
+            min_samples_leaf=10,
         ),
         "Random Forest Regressor": RandomForestRegressor(
-            n_estimators=250,
-            max_depth=10,
-            min_samples_leaf=2,
-            random_state=42,
+            n_estimators=200,
+            max_depth=90,
+            min_samples_leaf=10,
+            random_state=70,
         ),
     }
 
