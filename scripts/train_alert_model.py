@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import json
+import math
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import joblib
 import pandas as pd
-from imblearn.over_sampling import SMOTE
+from imblearn.over_sampling import RandomOverSampler, SMOTE
+from sklearn.base import clone
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.metrics import accuracy_score, classification_report, mean_absolute_error, r2_score, recall_score
 from sklearn.model_selection import StratifiedKFold, train_test_split
@@ -81,29 +84,39 @@ def compute_critical_recall(y_true: pd.Series, y_pred: pd.Series, critical_label
     return float(recall_score(y_true_bin, y_pred_bin, zero_division=0))
 
 
-def apply_smote_for_critical(X_train: pd.DataFrame, y_train: pd.Series, critical_label: str | None):
-    if critical_label is None or critical_label not in y_train.astype(str).unique().tolist():
-        return X_train, y_train, {"applied": False, "reason": "critical class absent in fold"}
-
+def balance_training_classes(X_train: pd.DataFrame, y_train: pd.Series):
     class_counts = y_train.value_counts()
-    critical_count = int(class_counts.get(critical_label, 0))
-    if critical_count < 2:
-        return X_train, y_train, {"applied": False, "reason": "critical class count < 2 in fold"}
-
     target_count = int(class_counts.max())
-    if critical_count >= target_count:
-        return X_train, y_train, {"applied": False, "reason": "critical class already at majority count"}
 
-    smote = SMOTE(
-        sampling_strategy={critical_label: target_count},
-        k_neighbors=min(5, critical_count - 1),
-        random_state=42,
-    )
-    X_res, y_res = smote.fit_resample(X_train, y_train)
+    # If classes are already balanced, skip augmentation.
+    if class_counts.nunique() == 1:
+        return X_train, y_train, {"applied": False, "method": None, "reason": "classes already balanced"}
+
+    sampling_strategy = {label: target_count for label, count in class_counts.items() if int(count) < target_count}
+    if not sampling_strategy:
+        return X_train, y_train, {"applied": False, "method": None, "reason": "nothing to resample"}
+
+    min_class_count = int(class_counts.min())
+    if min_class_count >= 2:
+        sampler = SMOTE(
+            sampling_strategy=sampling_strategy,
+            k_neighbors=min(5, min_class_count - 1),
+            random_state=42,
+        )
+        method = "smote"
+    else:
+        sampler = RandomOverSampler(
+            sampling_strategy=sampling_strategy,
+            random_state=42,
+        )
+        method = "random_over_sampler"
+
+    X_res, y_res = sampler.fit_resample(X_train, y_train)
     return X_res, y_res, {
         "applied": True,
-        "critical_count_before": critical_count,
-        "critical_count_after": int(pd.Series(y_res).value_counts().get(critical_label, 0)),
+        "method": method,
+        "counts_before": {str(k): int(v) for k, v in class_counts.to_dict().items()},
+        "counts_after": {str(k): int(v) for k, v in pd.Series(y_res).value_counts().to_dict().items()},
         "target_count": target_count,
     }
 
@@ -111,7 +124,7 @@ def apply_smote_for_critical(X_train: pd.DataFrame, y_train: pd.Series, critical
 def evaluate_classification_candidates_cv(
     X: pd.DataFrame,
     y: pd.Series,
-    candidates: dict[str, RandomForestClassifier],
+    candidates: dict[str, Any],
     critical_label: str | None,
 ) -> tuple[str, list[dict], dict[str, object]]:
     min_class_count = int(y.value_counts().min())
@@ -120,24 +133,19 @@ def evaluate_classification_candidates_cv(
 
     model_summaries: list[dict] = []
     best_name = ""
-    best_critical_recall = float("-inf")
-    best_f1_macro = float("-inf")
+    best_score = float("-inf")
 
     for candidate_name, candidate_model in candidates.items():
         fold_scores = []
-        smote_events = []
+        balance_events = []
         for train_idx, val_idx in cv.split(X, y):
             X_train_fold = X.iloc[train_idx]
             y_train_fold = y.iloc[train_idx]
             X_val_fold = X.iloc[val_idx]
             y_val_fold = y.iloc[val_idx]
 
-            X_train_balanced, y_train_balanced, smote_meta = apply_smote_for_critical(
-                X_train_fold,
-                y_train_fold,
-                critical_label,
-            )
-            smote_events.append(smote_meta)
+            X_train_balanced, y_train_balanced, balance_meta = balance_training_classes(X_train_fold, y_train_fold)
+            balance_events.append(balance_meta)
 
             candidate_model.fit(X_train_balanced, y_train_balanced)
             val_pred = candidate_model.predict(X_val_fold)
@@ -161,35 +169,63 @@ def evaluate_classification_candidates_cv(
             "cv_mean_accuracy": mean_accuracy,
             "cv_mean_f1_macro": mean_f1_macro,
             "cv_mean_critical_recall": mean_critical_recall,
-            "smote": smote_events,
+            "cv_selection_score": None,
+            "resampling": balance_events,
         }
+
+        recall_for_score = mean_critical_recall if mean_critical_recall is not None else 0.0
+        # Balanced objective: prioritize global quality while preserving critical detection.
+        selection_score = (0.50 * mean_accuracy) + (0.25 * mean_f1_macro) + (0.25 * recall_for_score)
+        summary["cv_selection_score"] = float(selection_score)
         model_summaries.append(summary)
 
-        ranking_recall = mean_critical_recall if mean_critical_recall is not None else float("-inf")
-        if ranking_recall > best_critical_recall or (
-            ranking_recall == best_critical_recall and mean_f1_macro > best_f1_macro
-        ):
-            best_critical_recall = ranking_recall
-            best_f1_macro = mean_f1_macro
+        if selection_score > best_score:
+            best_score = selection_score
             best_name = candidate_name
 
     cv_meta = {
         "strategy": "StratifiedKFold",
         "n_splits": n_splits,
-        "selection_priority": ["cv_mean_critical_recall", "cv_mean_f1_macro"],
+        "selection_priority": ["cv_selection_score", "cv_mean_accuracy", "cv_mean_critical_recall"],
     }
     return best_name, model_summaries, cv_meta
 
 
 def resolve_dataset_path() -> Path:
-    fixed_dataset = DATA_DIR / "sample_dataset.xlsx"
-    if fixed_dataset.exists():
-        return fixed_dataset
-
+    # Always use the newest generated dataset file.
+    # This avoids training on a stale sample_dataset.xlsx when Excel locked it
+    # and generate_sample_dataset.py produced a timestamped variant.
     candidates = sorted(DATA_DIR.glob("sample_dataset*.xlsx"), key=lambda p: p.stat().st_mtime, reverse=True)
     if not candidates:
         raise FileNotFoundError(f"No dataset found in: {DATA_DIR}")
     return candidates[0]
+
+
+def temporal_holdout_indices(df: pd.DataFrame, test_ratio: float = 0.2):
+    """Build train/test indices where test only contains later timestamps."""
+    if "ts" not in df.columns or df.empty:
+        return None
+
+    ts = pd.to_datetime(df["ts"], errors="coerce")
+    valid_mask = ts.notna()
+    if int(valid_mask.sum()) < 10:
+        return None
+
+    ordered_valid_idx = ts[valid_mask].sort_values().index.tolist()
+    split_at = int(len(ordered_valid_idx) * (1 - test_ratio))
+    split_at = max(1, min(split_at, len(ordered_valid_idx) - 1))
+
+    train_idx = ordered_valid_idx[:split_at]
+    test_idx = ordered_valid_idx[split_at:]
+    if not train_idx or not test_idx:
+        return None
+
+    return {
+        "train_idx": train_idx,
+        "test_idx": test_idx,
+        "train_end_ts": ts.loc[train_idx].max(),
+        "test_start_ts": ts.loc[test_idx].min(),
+    }
 
 
 def load_training_dataset() -> pd.DataFrame:
@@ -218,32 +254,35 @@ def load_training_dataset() -> pd.DataFrame:
 
 
 def prepare_xy(df: pd.DataFrame):
-    feature_cols = [
-        "ts",
-        "speed",
-        "rpm",
-        "fuel_level",
-        "engine_temp",
-        "battery_voltage",
-        "engine_load",
-        "ambient_air_temp",
-        "intake_temp",
-        "odometer",
-    ]
+    excluded_cols = {
+        "vehicle_id",
+        "plate",
+        "rule_triggered",
+        "severity",
+        "risk_score",
+        "device_id",
+    }
 
-    available = [col for col in feature_cols if col in df.columns]
-    X = df[available].copy()
+    X = df[[col for col in df.columns if col not in excluded_cols]].copy()
 
+    # Add time-derived features (cyclical) while keeping raw timestamp numeric.
     if "ts" in X.columns:
-        ts_numeric = pd.to_datetime(X["ts"], errors="coerce").astype("int64") / 1_000_000_000
+        ts_dt = pd.to_datetime(X["ts"], errors="coerce")
+        ts_numeric = ts_dt.astype("int64") / 1_000_000_000
         X["ts"] = ts_numeric.where(ts_numeric > 0)
+        hours = ts_dt.dt.hour.fillna(0)
+        weekdays = ts_dt.dt.weekday.fillna(0)
+        X["hour_sin"] = (hours * (2 * math.pi / 24)).map(math.sin)
+        X["hour_cos"] = (hours * (2 * math.pi / 24)).map(math.cos)
+        X["weekday_sin"] = (weekdays * (2 * math.pi / 7)).map(math.sin)
+        X["weekday_cos"] = (weekdays * (2 * math.pi / 7)).map(math.cos)
 
     X = X.apply(pd.to_numeric, errors="coerce")
     X = X.fillna(X.median(numeric_only=True)).fillna(0)
 
     y_class = df["severity"].astype(str)
     y_reg = pd.to_numeric(df["risk_score"], errors="coerce").fillna(0)
-    return X, y_class, y_reg, available
+    return X, y_class, y_reg, X.columns.tolist()
 
 
 def train_models(df: pd.DataFrame) -> dict:
@@ -286,6 +325,16 @@ def train_models(df: pd.DataFrame) -> dict:
                 random_state=42,
                 class_weight="balanced_subsample",
             ),
+            "high_accuracy": RandomForestClassifier(
+                n_estimators=900,
+                max_depth=None,
+                min_samples_leaf=1,
+                min_samples_split=2,
+                max_features="sqrt",
+                random_state=42,
+                class_weight="balanced_subsample",
+                n_jobs=-1,
+            ),
         }
 
         best_clf_name, clf_trials, cv_meta = evaluate_classification_candidates_cv(
@@ -296,11 +345,7 @@ def train_models(df: pd.DataFrame) -> dict:
         )
 
         clf = clf_candidates[best_clf_name]
-        X_train_final, y_train_final, final_smote = apply_smote_for_critical(
-            X_train_val,
-            y_train_val,
-            critical_label,
-        )
+        X_train_final, y_train_final, final_resampling = balance_training_classes(X_train_val, y_train_val)
         clf.fit(X_train_final, y_train_final)
         y_pred = clf.predict(X_test)
         critical_recall_test = compute_critical_recall(y_test, y_pred, critical_label)
@@ -310,7 +355,7 @@ def train_models(df: pd.DataFrame) -> dict:
             "candidates": clf_trials,
             "cross_validation": cv_meta,
             "critical_label": critical_label,
-            "final_train_smote": final_smote,
+            "final_train_resampling": final_resampling,
             "split": {
                 "train_rows": int(len(X_train)),
                 "val_rows": int(len(X_val)),
@@ -320,6 +365,30 @@ def train_models(df: pd.DataFrame) -> dict:
             "critical_recall": critical_recall_test,
             "classification_report": classification_report(y_test, y_pred, output_dict=True, zero_division=0),
         }
+
+        temporal_meta = temporal_holdout_indices(df)
+        if temporal_meta is not None:
+            X_time_train = X.loc[temporal_meta["train_idx"]]
+            y_time_train = y_class.loc[temporal_meta["train_idx"]]
+            X_time_test = X.loc[temporal_meta["test_idx"]]
+            y_time_test = y_class.loc[temporal_meta["test_idx"]]
+
+            clf_time = clone(clf)
+            X_bal, y_bal, _ = balance_training_classes(X_time_train, y_time_train)
+            clf_time.fit(X_bal, y_bal)
+            y_time_pred = clf_time.predict(X_time_test)
+            time_report = classification_report(y_time_test, y_time_pred, output_dict=True, zero_division=0)
+
+            class_metrics["temporal_holdout"] = {
+                "train_rows": int(len(X_time_train)),
+                "test_rows": int(len(X_time_test)),
+                "train_end_ts": temporal_meta["train_end_ts"].isoformat() if temporal_meta["train_end_ts"] is not None else None,
+                "test_start_ts": temporal_meta["test_start_ts"].isoformat() if temporal_meta["test_start_ts"] is not None else None,
+                "accuracy": float(accuracy_score(y_time_test, y_time_pred)),
+                "f1_macro": float(time_report["macro avg"]["f1-score"]),
+                "critical_recall": compute_critical_recall(y_time_test, y_time_pred, critical_label),
+            }
+
         metrics["classification"] = class_metrics
         joblib.dump({
             "model": clf,
@@ -387,6 +456,27 @@ def train_models(df: pd.DataFrame) -> dict:
         "mae": float(mean_absolute_error(y_test_r, y_pred_r)),
         "r2": float(r2_score(y_test_r, y_pred_r)),
     }
+
+    temporal_meta_reg = temporal_holdout_indices(df)
+    if temporal_meta_reg is not None:
+        X_time_train_r = X.loc[temporal_meta_reg["train_idx"]]
+        y_time_train_r = y_reg.loc[temporal_meta_reg["train_idx"]]
+        X_time_test_r = X.loc[temporal_meta_reg["test_idx"]]
+        y_time_test_r = y_reg.loc[temporal_meta_reg["test_idx"]]
+
+        reg_time = clone(reg)
+        reg_time.fit(X_time_train_r, y_time_train_r)
+        y_time_pred_r = reg_time.predict(X_time_test_r)
+
+        reg_metrics["temporal_holdout"] = {
+            "train_rows": int(len(X_time_train_r)),
+            "test_rows": int(len(X_time_test_r)),
+            "train_end_ts": temporal_meta_reg["train_end_ts"].isoformat() if temporal_meta_reg["train_end_ts"] is not None else None,
+            "test_start_ts": temporal_meta_reg["test_start_ts"].isoformat() if temporal_meta_reg["test_start_ts"] is not None else None,
+            "mae": float(mean_absolute_error(y_time_test_r, y_time_pred_r)),
+            "r2": float(r2_score(y_time_test_r, y_time_pred_r)),
+        }
+
     metrics["regression"] = reg_metrics
     joblib.dump({"model": reg, "feature_names": feature_names}, REGRESSOR_PATH)
 
@@ -414,12 +504,27 @@ def main():
             print(f"Classifier critical recall: {classification['critical_recall']:.4f}")
         else:
             print("Classifier critical recall: N/A (critical class absent)")
+        temporal_class = classification.get("temporal_holdout")
+        if temporal_class:
+            print(
+                "Temporal holdout (classification): "
+                f"acc={temporal_class['accuracy']:.4f}, "
+                f"f1_macro={temporal_class['f1_macro']:.4f}, "
+                f"critical_recall={temporal_class['critical_recall']:.4f}"
+            )
     else:
         print(f"Classifier skipped: {classification['reason']}")
 
     regression = metrics["regression"]
     print(f"Risk MAE: {regression['mae']:.4f}")
     print(f"Risk R²: {regression['r2']:.4f}")
+    temporal_reg = regression.get("temporal_holdout")
+    if temporal_reg:
+        print(
+            "Temporal holdout (regression): "
+            f"MAE={temporal_reg['mae']:.4f}, "
+            f"R²={temporal_reg['r2']:.4f}"
+        )
     print(f"Saved: {CLASSIFIER_PATH}")
     print(f"Saved: {REGRESSOR_PATH}")
     print(f"Saved: {METRICS_PATH}")

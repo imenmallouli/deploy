@@ -110,12 +110,39 @@ class AIInferenceService:
             sort=[("ts", -1)],
         )
 
-        if not doc:
-            raise LookupError(f"No telemetry found for vehicle_id={vehicle_id}")
+        if doc:
+            doc.pop("_id", None)
+            doc["vehicle_id"] = int(doc.get("vehicle_id") or vehicle_id)
+            return doc
 
-        doc.pop("_id", None)
-        doc["vehicle_id"] = int(doc.get("vehicle_id") or vehicle_id)
-        return doc
+        # Fallback: if no telemetry is available yet, predict from a minimal vehicle snapshot
+        # so AI endpoints remain usable right after vehicle creation.
+        from app.db.session import SessionLocal
+        from app.models.vehicle import Vehicle
+
+        sql_db = SessionLocal()
+        try:
+            vehicle = sql_db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
+        finally:
+            sql_db.close()
+
+        if not vehicle:
+            raise LookupError(f"Vehicle not found for vehicle_id={vehicle_id}")
+
+        return {
+            "vehicle_id": int(vehicle_id),
+            "plate": vehicle.license_plate,
+            "ts": datetime.now(timezone.utc),
+            "speed": None,
+            "rpm": None,
+            "fuel_level": None,
+            "engine_temp": None,
+            "battery_voltage": None,
+            "engine_load": None,
+            "ambient_air_temp": None,
+            "intake_temp": None,
+            "odometer": float(vehicle.mileage) if vehicle.mileage is not None else None,
+        }
 
     @classmethod
     async def predict_latest_for_vehicle(cls, vehicle_id: int) -> dict[str, Any]:
