@@ -57,12 +57,38 @@ VEHICLES = [
         "battery_health": 0.98,
         "cooling_efficiency": 1.04,
     },
+    # Véhicules dégradés — batterie et refroidissement défaillants → générateurs de critiques
+    {
+        "vehicle_id": 4,
+        "plate": "TUN-004",
+        "model": "Peugeot 308 2017",
+        "device_id": "ff00aa112233",
+        "driving_style": "aggressive",
+        "battery_health": 0.82,   # batterie très usée
+        "cooling_efficiency": 0.76,  # refroidissement défaillant
+    },
+    {
+        "vehicle_id": 5,
+        "plate": "TUN-005",
+        "model": "Ford Focus 2016",
+        "device_id": "cc44bb667788",
+        "driving_style": "aggressive",
+        "battery_health": 0.78,   # batterie critique
+        "cooling_efficiency": 0.80,  # radiateur dégradé
+    },
 ]
 
 START_DATE   = datetime(2026, 3, 25, 6, 0, 0)
 INTERVAL_MIN = 5          # une mesure toutes les 5 minutes
 DAYS         = 7          # 7 jours de données
 ROWS_PER_VEH = (DAYS * 24 * 60) // INTERVAL_MIN   # ~2016 lignes / véhicule
+
+# Cible de distribution pour le sheet ai_labels:
+# info=2000, warning=2000, critical=2000 (total 6000 lignes).
+TARGET_INFO_COUNT = 2000
+TARGET_WARNING_COUNT = 2000
+TARGET_CRITICAL_COUNT = 2000
+AI_LABELS_TARGET_ROWS = TARGET_INFO_COUNT + TARGET_WARNING_COUNT + TARGET_CRITICAL_COUNT
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -180,8 +206,8 @@ def gen_telemetry():
                 "odometer": round(odometer, 1),
             })
 
-    # Injecter un mélange de cas faibles, modérés et critiques
-    for row in random.sample(rows, k=140):
+    # Injecter un mélange de cas faibles, modérés et critiques (anomalies simples)
+    for row in random.sample(rows, k=145):
         anomaly = random.choice([
             "battery_warning",
             "low_battery",
@@ -205,6 +231,48 @@ def gen_telemetry():
             row["rpm"] = random.randint(3900, 5500)
         elif anomaly == "overload":
             row["engine_load"] = round(random.uniform(80, 96), 1)
+
+    # ── Combos multi-anomalies garantissant un score critique ────────────────
+    # batterie_critique + surchauffe → score > 50 assuré
+    for row in random.sample(rows, k=140):
+        combo = random.choice([
+            "battery_overheat",       # batterie < 11.3 + temp > 106
+            "battery_overheat_load",  # batterie + temp + surcharge
+            "total_critical",         # tout rouge simultanément
+            "overheat_overload",      # temp > 106 + load > 88 + rpm élevé
+            "battery_fuel_highway",   # batterie faible + carbu vide + haute vitesse
+            "battery_overvoltage",    # surtension > 15.8V
+            "alternator_weak",        # alternateur défaillant : 12.0-12.4V moteur allumé
+        ])
+        if combo == "battery_overheat":
+            row["battery_voltage"] = round(random.uniform(10.5, 11.3), 2)
+            row["engine_temp"]     = round(random.uniform(105, 115), 1)
+        elif combo == "battery_overheat_load":
+            row["battery_voltage"] = round(random.uniform(10.5, 11.4), 2)
+            row["engine_temp"]     = round(random.uniform(104, 115), 1)
+            row["engine_load"]     = round(random.uniform(86, 97), 1)
+        elif combo == "total_critical":
+            row["battery_voltage"] = round(random.uniform(10.2, 11.2), 2)
+            row["engine_temp"]     = round(random.uniform(106, 118), 1)
+            row["fuel_level"]      = round(random.uniform(1, 6), 2)
+            row["rpm"]             = random.randint(4500, 6000)
+            row["engine_load"]     = round(random.uniform(85, 98), 1)
+        elif combo == "overheat_overload":
+            row["engine_temp"]     = round(random.uniform(105, 115), 1)
+            row["engine_load"]     = round(random.uniform(88, 98), 1)
+            row["rpm"]             = random.randint(4200, 5500)
+        elif combo == "battery_fuel_highway":
+            row["battery_voltage"] = round(random.uniform(10.6, 11.4), 2)
+            row["fuel_level"]      = round(random.uniform(1, 5), 2)
+            row["speed"]           = round(random.uniform(88, 130), 1)
+        elif combo == "battery_overvoltage":
+            row["battery_voltage"] = round(random.uniform(15.8, 16.4), 2)
+            row["rpm"]             = random.randint(4000, 5200)
+        elif combo == "alternator_weak":
+            # Moteur allumé (rpm > 1000) mais tension trop basse
+            row["battery_voltage"] = round(random.uniform(12.0, 12.4), 2)
+            row["rpm"]             = random.randint(1200, 3500)
+            row["speed"]           = round(random.uniform(30, 120), 1)
 
     return pd.DataFrame(rows)
 
@@ -329,19 +397,30 @@ def apply_rules(row: dict) -> tuple[str, str, int]:
 
     score = 0.0
 
-    if battery < 11.4:
-        rules.append("BATTERY_CRITICAL"); score += 30
+    if battery < 11.5:
+        # Batterie critique : risque élevé même si les autres capteurs sont bons
+        rules.append("BATTERY_CRITICAL"); score += 55
     elif battery < 11.9:
-        rules.append("BATTERY_LOW"); score += 16
-    elif battery < 12.3:
-        rules.append("BATTERY_WEAK"); score += 6
+        rules.append("BATTERY_LOW"); score += 22
+    elif battery < 12.0:
+        rules.append("BATTERY_WEAK"); score += 8
+    elif battery < 12.5:
+        # Moteur allumé mais tension trop basse → alternateur suspect
+        rules.append("ALTERNATOR_WEAK"); score += 18
+    elif battery > 15.8:
+        # Surtension critique : peut endommager l'alternateur, le système électrique
+        rules.append("BATTERY_OVERVOLTAGE_CRITICAL"); score += 35
+    elif battery > 15.5:
+        # Surtension : tension trop élevée, dommage système électrique possible
+        rules.append("BATTERY_OVERVOLTAGE"); score += 22
 
     if temp > 106:
-        rules.append("ENGINE_OVERHEAT"); score += 32
+        rules.append("ENGINE_OVERHEAT"); score += 38
     elif temp > 99:
-        rules.append("ENGINE_HOT"); score += 15
+        # Embouteillage à 104°C doit clairement sortir en Warning
+        rules.append("ENGINE_HOT"); score += 25
     elif temp > 94:
-        rules.append("ENGINE_WARM"); score += 5
+        rules.append("ENGINE_WARM"); score += 8
 
     if fuel < 5:
         rules.append("FUEL_CRITICAL"); score += 22
@@ -370,14 +449,28 @@ def apply_rules(row: dict) -> tuple[str, str, int]:
     if ambient > 30 and intake - ambient > 8:
         rules.append("HOT_AIR_INTAKE"); score += 5
 
-    score += max(0, (temp - 90) * 0.4)
-    score += max(0, (12.5 - battery) * 4.5)
-    score += random.uniform(-3.5, 3.5)
+    score += max(0, (temp - 90) * 0.6)
+    score += max(0, (12.5 - battery) * 7.0)
+    score += random.uniform(-2.5, 2.5)
     score = int(clamp(score, 0, 100))
 
-    if score >= 65 or (battery < 11.3 and temp > 104):
+    # Planchers de score pour éviter la sous-estimation
+    if battery < 11.5:
+        score = max(score, 70)
+    if battery > 15.8:
+        score = max(score, 70)
+    elif battery > 15.5:
+        score = max(score, 36)
+    elif 12.0 <= battery < 12.5:
+        score = max(score, 36)
+    if temp > 99 and temp <= 106:
+        score = max(score, 36)
+    if temp > 106:
+        score = max(score, 72)
+
+    if score >= 65 or (battery < 11.5):
         severity = "critical"
-    elif score >= 28:
+    elif score >= 35:
         severity = "warning"
     else:
         severity = "info"
@@ -386,9 +479,60 @@ def apply_rules(row: dict) -> tuple[str, str, int]:
     return rule_str, severity, score
 
 
+def rebalance_ai_labels_by_score(
+    df: pd.DataFrame,
+    target_info: int = TARGET_INFO_COUNT,
+    target_warning: int = TARGET_WARNING_COUNT,
+    target_critical: int = TARGET_CRITICAL_COUNT,
+) -> pd.DataFrame:
+    """
+    Rééquilibre les classes en se basant sur risk_score:
+    - scores les plus faibles -> info
+    - scores les plus élevés -> critical
+    - le milieu -> warning
+    """
+    if df.empty:
+        return df
+
+    rebalanced = df.copy()
+    score = pd.to_numeric(rebalanced["risk_score"], errors="coerce").fillna(0)
+
+    # Use separated score bands to reduce overlap/noise between classes.
+    info_pool = rebalanced[score <= 30]
+    warning_pool = rebalanced[(score >= 36) & (score <= 64)]
+    critical_pool = rebalanced[score >= 70]
+
+    # Fallback to broader bands if one pool is too small.
+    if len(info_pool) < max(10, target_info // 10):
+        info_pool = rebalanced[score <= 35]
+    if len(warning_pool) < max(10, target_warning // 10):
+        warning_pool = rebalanced[(score >= 30) & (score <= 70)]
+    if len(critical_pool) < max(10, target_critical // 10):
+        critical_pool = rebalanced[score >= 65]
+
+    info_sample = info_pool.sample(n=target_info, replace=len(info_pool) < target_info, random_state=RANDOM_SEED).copy()
+    warning_sample = warning_pool.sample(n=target_warning, replace=len(warning_pool) < target_warning, random_state=RANDOM_SEED + 1).copy()
+    critical_sample = critical_pool.sample(n=target_critical, replace=len(critical_pool) < target_critical, random_state=RANDOM_SEED + 2).copy()
+
+    info_sample["severity"] = "info"
+    warning_sample["severity"] = "warning"
+    critical_sample["severity"] = "critical"
+
+    balanced = pd.concat([info_sample, warning_sample, critical_sample], ignore_index=True)
+    balanced = balanced.sample(frac=1, random_state=RANDOM_SEED).reset_index(drop=True)
+
+    # Trace explicite dans les règles pour audit du dataset synthétique.
+    balanced["rule_triggered"] = balanced["rule_triggered"].astype(str) + ", REBALANCED_BY_SCORE_BANDS"
+    return balanced
+
+
 def gen_ai_labels(df_telem: pd.DataFrame) -> pd.DataFrame:
-    """Sélectionne 1 ligne sur 5 et applique les règles métier."""
-    subset = df_telem[df_telem.index % 5 == 0].copy()
+    """Échantillonne un volume fixe puis applique les règles métier."""
+    if len(df_telem) >= AI_LABELS_TARGET_ROWS:
+        subset = df_telem.sample(n=AI_LABELS_TARGET_ROWS, random_state=RANDOM_SEED).copy()
+    else:
+        subset = df_telem.sample(n=AI_LABELS_TARGET_ROWS, replace=True, random_state=RANDOM_SEED).copy()
+    subset = subset.sort_values(["vehicle_id", "ts"]).reset_index(drop=True)
 
     results = subset.apply(
         lambda row: pd.Series(
@@ -398,6 +542,7 @@ def gen_ai_labels(df_telem: pd.DataFrame) -> pd.DataFrame:
         axis=1,
     )
     subset = pd.concat([subset, results], axis=1)
+    subset = rebalance_ai_labels_by_score(subset)
 
     return subset[[
         "vehicle_id", "plate", "ts",

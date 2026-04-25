@@ -37,16 +37,6 @@ export function Sidebar() {
               Telemetry
             </NavLink>
             {canManageFleet && (
-              <NavLink to="/vehicles/geofences" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-                Geofences
-              </NavLink>
-            )}
-            {canManageFleet && (
-              <NavLink to="/vehicles/groups" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-                Groups
-              </NavLink>
-            )}
-            {canManageFleet && (
               <NavLink to="/locations" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
                 Locations
               </NavLink>

@@ -1,154 +1,231 @@
 {
-  "dataset_rows": 1210,
+  "dataset_rows": 6000,
   "severity_distribution": {
-    "info": 805,
-    "warning": 400,
-    "critical": 5
+    "info": 2000,
+    "warning": 2000,
+    "critical": 2000
   },
-  "feature_count": 10,
+  "feature_count": 39,
   "features": [
     "ts",
     "speed",
     "rpm",
-    "fuel_level",
     "engine_temp",
     "battery_voltage",
+    "fuel_level",
     "engine_load",
     "ambient_air_temp",
     "intake_temp",
-    "odometer"
+    "odometer",
+    "speed_mean_3",
+    "speed_mean_12",
+    "speed_delta",
+    "rpm_mean_3",
+    "rpm_mean_12",
+    "rpm_delta",
+    "engine_temp_mean_3",
+    "engine_temp_mean_12",
+    "engine_temp_delta",
+    "battery_voltage_mean_3",
+    "battery_voltage_mean_12",
+    "battery_voltage_delta",
+    "engine_load_mean_3",
+    "engine_load_mean_12",
+    "engine_load_delta",
+    "fuel_level_mean_3",
+    "fuel_level_mean_12",
+    "fuel_level_delta",
+    "is_idling",
+    "is_overheating",
+    "is_battery_low",
+    "is_low_fuel",
+    "is_engine_overload",
+    "high_rpm_flag",
+    "idle_duration_min",
+    "hour_sin",
+    "hour_cos",
+    "weekday_sin",
+    "weekday_cos"
   ],
   "status_before_training": {
     "trained": true,
     "classifier_exists": true,
     "regressor_exists": true,
     "metrics_exists": true,
-    "last_artifact_update": "2026-04-22T16:07:29.282390"
+    "last_artifact_update": "2026-04-25T15:25:51.593710"
   },
   "classification": {
     "selected_model": "baseline",
     "candidates": [
       {
         "model": "baseline",
-        "cv_folds": 4,
-        "cv_mean_accuracy": 0.9958677685950413,
-        "cv_mean_f1_macro": 0.7481843395252838,
-        "cv_mean_critical_recall": 0.25,
-        "smote": [
+        "cv_folds": 5,
+        "cv_mean_accuracy": 0.9974999999999999,
+        "cv_mean_f1_macro": 0.997500941530771,
+        "cv_mean_critical_recall": 0.9974999999999999,
+        "cv_selection_score": 0.9975002353826927,
+        "resampling": [
           {
-            "applied": true,
-            "critical_count_before": 3,
-            "critical_count_after": 483,
-            "target_count": 483
+            "applied": false,
+            "method": null,
+            "reason": "classes already balanced"
           },
           {
-            "applied": true,
-            "critical_count_before": 3,
-            "critical_count_after": 483,
-            "target_count": 483
+            "applied": false,
+            "method": null,
+            "reason": "classes already balanced"
           },
           {
-            "applied": true,
-            "critical_count_before": 3,
-            "critical_count_after": 483,
-            "target_count": 483
+            "applied": false,
+            "method": null,
+            "reason": "classes already balanced"
           },
           {
-            "applied": true,
-            "critical_count_before": 3,
-            "critical_count_after": 483,
-            "target_count": 483
+            "applied": false,
+            "method": null,
+            "reason": "classes already balanced"
+          },
+          {
+            "applied": false,
+            "method": null,
+            "reason": "classes already balanced"
           }
         ]
       },
       {
         "model": "improved",
-        "cv_folds": 4,
-        "cv_mean_accuracy": 0.9958677685950413,
-        "cv_mean_f1_macro": 0.7481843395252838,
-        "cv_mean_critical_recall": 0.25,
-        "smote": [
+        "cv_folds": 5,
+        "cv_mean_accuracy": 0.9974999999999999,
+        "cv_mean_f1_macro": 0.997500941530771,
+        "cv_mean_critical_recall": 0.9974999999999999,
+        "cv_selection_score": 0.9975002353826927,
+        "resampling": [
           {
-            "applied": true,
-            "critical_count_before": 3,
-            "critical_count_after": 483,
-            "target_count": 483
+            "applied": false,
+            "method": null,
+            "reason": "classes already balanced"
           },
           {
-            "applied": true,
-            "critical_count_before": 3,
-            "critical_count_after": 483,
-            "target_count": 483
+            "applied": false,
+            "method": null,
+            "reason": "classes already balanced"
           },
           {
-            "applied": true,
-            "critical_count_before": 3,
-            "critical_count_after": 483,
-            "target_count": 483
+            "applied": false,
+            "method": null,
+            "reason": "classes already balanced"
           },
           {
-            "applied": true,
-            "critical_count_before": 3,
-            "critical_count_after": 483,
-            "target_count": 483
+            "applied": false,
+            "method": null,
+            "reason": "classes already balanced"
+          },
+          {
+            "applied": false,
+            "method": null,
+            "reason": "classes already balanced"
+          }
+        ]
+      },
+      {
+        "model": "high_accuracy",
+        "cv_folds": 5,
+        "cv_mean_accuracy": 0.9974999999999999,
+        "cv_mean_f1_macro": 0.997500941530771,
+        "cv_mean_critical_recall": 0.9974999999999999,
+        "cv_selection_score": 0.9975002353826927,
+        "resampling": [
+          {
+            "applied": false,
+            "method": null,
+            "reason": "classes already balanced"
+          },
+          {
+            "applied": false,
+            "method": null,
+            "reason": "classes already balanced"
+          },
+          {
+            "applied": false,
+            "method": null,
+            "reason": "classes already balanced"
+          },
+          {
+            "applied": false,
+            "method": null,
+            "reason": "classes already balanced"
+          },
+          {
+            "applied": false,
+            "method": null,
+            "reason": "classes already balanced"
           }
         ]
       }
     ],
     "cross_validation": {
       "strategy": "StratifiedKFold",
-      "n_splits": 4,
+      "n_splits": 5,
       "selection_priority": [
-        "cv_mean_critical_recall",
-        "cv_mean_f1_macro"
+        "cv_selection_score",
+        "cv_mean_accuracy",
+        "cv_mean_critical_recall"
       ]
     },
     "critical_label": "critical",
-    "final_train_smote": {
-      "applied": true,
-      "critical_count_before": 4,
-      "critical_count_after": 644,
-      "target_count": 644
+    "final_train_resampling": {
+      "applied": false,
+      "method": null,
+      "reason": "classes already balanced"
     },
     "split": {
-      "train_rows": 726,
-      "val_rows": 242,
-      "test_rows": 242
+      "train_rows": 3600,
+      "val_rows": 1200,
+      "test_rows": 1200
     },
-    "accuracy": 0.9958677685950413,
-    "critical_recall": 0.0,
+    "accuracy": 0.9966666666666667,
+    "critical_recall": 0.9925,
     "classification_report": {
       "critical": {
-        "precision": 0.0,
-        "recall": 0.0,
-        "f1-score": 0.0,
-        "support": 1.0
+        "precision": 1.0,
+        "recall": 0.9925,
+        "f1-score": 0.9962358845671268,
+        "support": 400.0
       },
       "info": {
         "precision": 1.0,
-        "recall": 1.0,
-        "f1-score": 1.0,
-        "support": 161.0
+        "recall": 0.9975,
+        "f1-score": 0.9987484355444305,
+        "support": 400.0
       },
       "warning": {
-        "precision": 0.9876543209876543,
+        "precision": 0.9900990099009901,
         "recall": 1.0,
-        "f1-score": 0.9937888198757764,
-        "support": 80.0
+        "f1-score": 0.9950248756218906,
+        "support": 400.0
       },
-      "accuracy": 0.9958677685950413,
+      "accuracy": 0.9966666666666667,
       "macro avg": {
-        "precision": 0.6625514403292181,
-        "recall": 0.6666666666666666,
-        "f1-score": 0.6645962732919255,
-        "support": 242.0
+        "precision": 0.9966996699669967,
+        "recall": 0.9966666666666667,
+        "f1-score": 0.9966697319111493,
+        "support": 1200.0
       },
       "weighted avg": {
-        "precision": 0.991786552392613,
-        "recall": 0.9958677685950413,
-        "f1-score": 0.9938144859093475,
-        "support": 242.0
+        "precision": 0.9966996699669968,
+        "recall": 0.9966666666666667,
+        "f1-score": 0.9966697319111493,
+        "support": 1200.0
       }
+    },
+    "temporal_holdout": {
+      "train_rows": 4800,
+      "test_rows": 1200,
+      "train_end_ts": "2026-03-30T07:05:00",
+      "test_start_ts": "2026-03-30T07:05:00",
+      "accuracy": 0.9891666666666666,
+      "f1_macro": 0.9880038793980653,
+      "critical_recall": 0.9948805460750854
     }
   },
   "regression": {
@@ -156,28 +233,36 @@
     "candidates": [
       {
         "model": "baseline",
-        "validation_r2": 0.9248548351645633,
-        "validation_mae": 0.3441400367309459
+        "validation_r2": 0.9972938175877938,
+        "validation_mae": 0.3926872172976328
       },
       {
         "model": "improved",
-        "validation_r2": 0.9288455382028518,
-        "validation_mae": 0.2184297520661157
+        "validation_r2": 0.9976423450138336,
+        "validation_mae": 0.2552669656084658
       }
     ],
     "split": {
-      "train_rows": 726,
-      "val_rows": 242,
-      "test_rows": 242
+      "train_rows": 3600,
+      "val_rows": 1200,
+      "test_rows": 1200
     },
-    "mae": 0.032231404958677684,
-    "r2": 0.9992084583333334
+    "mae": 0.144243355940356,
+    "r2": 0.9997190765219891,
+    "temporal_holdout": {
+      "train_rows": 4800,
+      "test_rows": 1200,
+      "train_end_ts": "2026-03-30T07:05:00",
+      "test_start_ts": "2026-03-30T07:05:00",
+      "mae": 0.6839062572751324,
+      "r2": 0.9967687292684804
+    }
   },
   "status_after_training": {
     "trained": true,
     "classifier_exists": true,
     "regressor_exists": true,
     "metrics_exists": true,
-    "last_artifact_update": "2026-04-22T16:09:22.749454"
+    "last_artifact_update": "2026-04-25T16:40:59.667293"
   }
 }

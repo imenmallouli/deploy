@@ -58,7 +58,7 @@ export function DashboardPage() {
               <li><Link className="getting-started-link" to="/vehicles/list">Create / Import vehicles and start managing them</Link></li>
               <li><Link className="getting-started-link" to="/alerts">Review alerts detected across your fleet</Link></li>
               <li>
-                Create and assign <Link className="getting-started-link" to="/locations">locations</Link> and <Link className="getting-started-link" to="/vehicles/geofences">geofences</Link> to vehicles
+                Create and assign <Link className="getting-started-link" to="/locations">locations</Link> to vehicles
               </li>
             </ol>
           </article>
