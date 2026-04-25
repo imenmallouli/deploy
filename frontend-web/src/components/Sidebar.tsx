@@ -3,7 +3,7 @@ import { getRole } from '../lib/auth/session';
 
 export function Sidebar() {
   const role = getRole();
-  const canManageFleet = role === 'admin' || role === 'manager';
+  const canManageFleet = role === 'admin';
 
   return (
     <aside className="sidebar">

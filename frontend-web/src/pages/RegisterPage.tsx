@@ -76,7 +76,6 @@ export function RegisterPage() {
             Role
             <select value={role} onChange={(e) => setRole(e.target.value)}>
               <option value="driver">driver</option>
-              <option value="manager">manager</option>
               <option value="admin">admin</option>
             </select>
           </label>

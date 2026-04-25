@@ -12,14 +12,14 @@ export function RequireAuth() {
 }
 
 type RequireRoleProps = {
-  allowedRoles: Array<'admin' | 'manager' | 'driver'>;
+  allowedRoles: Array<'admin' | 'driver'>;
   children: JSX.Element;
 };
 
 export function RequireRole({ allowedRoles, children }: RequireRoleProps) {
   const role = getRole();
 
-  if (!role || !allowedRoles.includes(role as 'admin' | 'manager' | 'driver')) {
+  if (!role || !allowedRoles.includes(role as 'admin' | 'driver')) {
     return <Navigate to="/overview" replace />;
   }
 

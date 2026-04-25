@@ -1,6 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { ackAlert, listAlerts } from '../lib/api/endpoints';
+import { ackAlert, getAiRiskScore, listAlerts } from '../lib/api/endpoints';
 
 function getErrorMessage(error: unknown) {
   const data = (error as { response?: { data?: { message?: string; detail?: string } } })?.response?.data;
@@ -34,6 +34,7 @@ export function AlertsPage() {
     vehicle: true,
     type: true,
     severity: true,
+    aiRisk: true,
     firstOccurrence: true,
     lastOccurrence: true,
     count: true,
@@ -55,6 +56,36 @@ export function AlertsPage() {
   });
 
   const allAlerts = alertsQuery.data?.alerts ?? [];
+  const vehicleIds = Array.from(
+    new Set(
+      allAlerts
+        .map((item) => item.vehicle_id)
+        .filter((id): id is number => Number.isFinite(id)),
+    ),
+  );
+
+  const aiRiskQueries = useQueries({
+    queries: vehicleIds.map((vehicleId) => ({
+      queryKey: ['ai-risk-score', vehicleId],
+      queryFn: () => getAiRiskScore(vehicleId),
+      retry: false,
+      staleTime: 60_000,
+    })),
+  });
+
+  const aiRiskByVehicleId = vehicleIds.reduce<Record<number, { predicted_severity?: string; predicted_risk_score?: number }>>(
+    (acc, vehicleId, index) => {
+      const query = aiRiskQueries[index];
+      if (query?.data) {
+        acc[vehicleId] = {
+          predicted_severity: query.data.predicted_severity,
+          predicted_risk_score: query.data.predicted_risk_score,
+        };
+      }
+      return acc;
+    },
+    {},
+  );
 
   const stats = {
     open: allAlerts.filter((item) => (item.status ?? 'pending').toLowerCase() !== 'resolved').length,
@@ -217,6 +248,7 @@ export function AlertsPage() {
               <button className="btn-link" type="button" onClick={() => toggleColumn('vehicle')}>Vehicle {visibleColumns.vehicle ? '✓' : ''}</button>
               <button className="btn-link" type="button" onClick={() => toggleColumn('type')}>Type {visibleColumns.type ? '✓' : ''}</button>
               <button className="btn-link" type="button" onClick={() => toggleColumn('severity')}>Severity {visibleColumns.severity ? '✓' : ''}</button>
+              <button className="btn-link" type="button" onClick={() => toggleColumn('aiRisk')}>AI Risk {visibleColumns.aiRisk ? '✓' : ''}</button>
               <button className="btn-link" type="button" onClick={() => toggleColumn('firstOccurrence')}>First Occurrence {visibleColumns.firstOccurrence ? '✓' : ''}</button>
               <button className="btn-link" type="button" onClick={() => toggleColumn('lastOccurrence')}>Last Occurrence {visibleColumns.lastOccurrence ? '✓' : ''}</button>
               <button className="btn-link" type="button" onClick={() => toggleColumn('count')}>Count {visibleColumns.count ? '✓' : ''}</button>
@@ -252,6 +284,7 @@ export function AlertsPage() {
               {visibleColumns.vehicle && <th>Vehicle ↕</th>}
               {visibleColumns.type && <th>Type ↕</th>}
               {visibleColumns.severity && <th>Severity ↕</th>}
+              {visibleColumns.aiRisk && <th>AI Risk ↕</th>}
               {visibleColumns.firstOccurrence && <th>First Occurrence ↕</th>}
               {visibleColumns.lastOccurrence && <th>Last Occurrence ↕</th>}
               {visibleColumns.count && <th>Count ↕</th>}
@@ -273,6 +306,16 @@ export function AlertsPage() {
                 {visibleColumns.vehicle && <td>{alert.vehicle_id}</td>}
                 {visibleColumns.type && <td>{alert.type}</td>}
                 {visibleColumns.severity && <td>{alert.severity}</td>}
+                {visibleColumns.aiRisk && (
+                  <td>
+                    {(() => {
+                      const risk = aiRiskByVehicleId[alert.vehicle_id ?? -1];
+                      if (!risk) return '-';
+                      const score = typeof risk.predicted_risk_score === 'number' ? risk.predicted_risk_score.toFixed(1) : '-';
+                      return `${risk.predicted_severity ?? '-'} (${score} / 100)`;
+                    })()}
+                  </td>
+                )}
                 {visibleColumns.firstOccurrence && <td>{formatDate(alert.created_at)}</td>}
                 {visibleColumns.lastOccurrence && <td>{formatDate(alert.created_at)}</td>}
                 {visibleColumns.count && <td>1</td>}

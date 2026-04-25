@@ -35,7 +35,7 @@ export const router = createBrowserRouter([
           {
             path: 'vehicles',
             element: (
-              <RequireRole allowedRoles={['admin', 'manager']}>
+              <RequireRole allowedRoles={['admin']}>
                 <Navigate to="/vehicles/list" replace />
               </RequireRole>
             ),
@@ -43,7 +43,7 @@ export const router = createBrowserRouter([
           {
             path: 'vehicles/list',
             element: (
-              <RequireRole allowedRoles={['admin', 'manager']}>
+              <RequireRole allowedRoles={['admin']}>
                 <VehiclesPage />
               </RequireRole>
             ),
@@ -51,7 +51,7 @@ export const router = createBrowserRouter([
           {
             path: 'vehicles/:vehicleId',
             element: (
-              <RequireRole allowedRoles={['admin', 'manager']}>
+              <RequireRole allowedRoles={['admin']}>
                 <VehicleDetailsPage />
               </RequireRole>
             ),
@@ -59,7 +59,7 @@ export const router = createBrowserRouter([
           {
             path: 'locations',
             element: (
-              <RequireRole allowedRoles={['admin', 'manager']}>
+              <RequireRole allowedRoles={['admin']}>
                 <LocationsPage />
               </RequireRole>
             ),
