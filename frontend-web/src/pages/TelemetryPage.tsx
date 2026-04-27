@@ -41,7 +41,7 @@ function formatTelemetryValue(value: unknown): string {
 export function TelemetryPage() {
   const [vehicleId, setVehicleId] = useState<number | null>(null);
   const interval = '1h';
-  const metricsList = ['speed', 'rpm', 'fuel_level', 'engine_temp', 'battery_voltage'];
+  const metricsList = ['speed', 'rpm', 'fuel_level', 'engine_temp', 'battery_voltage', 'engine_load', 'ambient_air_temp', 'intake_temp', 'odometer'];
 
   const [liveConnected, setLiveConnected] = useState(false);
   const [liveError, setLiveError] = useState('');

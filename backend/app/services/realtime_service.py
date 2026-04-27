@@ -56,6 +56,10 @@ class RealtimeService:
             fuel_level=RealtimeService._to_float(doc.get("fuel_level")),
             engine_temp=RealtimeService._to_float(doc.get("engine_temp")),
             battery_voltage=RealtimeService._to_float(doc.get("battery_voltage")),
+            engine_load=RealtimeService._to_float(doc.get("engine_load")),
+            ambient_air_temp=RealtimeService._to_float(doc.get("ambient_air_temp")),
+            intake_temp=RealtimeService._to_float(doc.get("intake_temp")),
+            odometer=RealtimeService._to_float(doc.get("odometer")),
         )
 
         return RealtimeTelemetryEventModel(
