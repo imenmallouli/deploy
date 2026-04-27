@@ -26,6 +26,7 @@ Run example:
 import argparse
 import importlib
 import json
+import math
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -65,6 +66,10 @@ _OBD_TELEMETRY_MAP = {
     "obd.intake_temp":  "intake_temp",
     "obd.intake_air_temp": "intake_temp",
     "obd.odometer":     "odometer",
+    # Common AutoPi/OBD aliases
+    "obd.vehicle_speed": "speed",
+    "obd.fuel_tank_level_input": "fuel_level",
+    "obd.ambient_air_temperature": "ambient_air_temp",
 }
 
 # @t prefixes that indicate a DTC fault code record
@@ -75,9 +80,12 @@ _DTC_CODES_KEY = "codes"  # AutoPi may return {"codes": ["P0300", ...], "@t": "o
 
 
 class ApiClient:
-    def __init__(self, base_url: str, token: str):
+    def __init__(self, base_url: str, token: str, email: str | None = None, password: str | None = None):
         requests = _load_requests_module()
         self.base_url = base_url.rstrip("/")
+        self._requests = requests
+        self._email = email
+        self._password = password
         self.session = requests.Session()
         self.session.headers.update(
             {
@@ -86,20 +94,36 @@ class ApiClient:
             }
         )
 
-    def post_telemetry(self, payload: dict):
-        response = self.session.post(f"{self.base_url}/api/v1/telemetry", json=payload, timeout=10)
+    def _refresh_token(self) -> bool:
+        if not self._email or not self._password:
+            return False
+        try:
+            token = login_and_get_token(self.base_url, self._email, self._password)
+            self.session.headers.update({"Authorization": f"Bearer {token}"})
+            print("[API] Token refreshed after 401")
+            return True
+        except Exception as exc:
+            print(f"[API] Token refresh failed: {exc}")
+            return False
+
+    def _post_with_retry(self, path: str, payload: dict):
+        url = f"{self.base_url}{path}"
+        response = self.session.post(url, json=payload, timeout=10)
+
+        if response.status_code == 401 and self._refresh_token():
+            response = self.session.post(url, json=payload, timeout=10)
+
         response.raise_for_status()
         return response.json()
+
+    def post_telemetry(self, payload: dict):
+        return self._post_with_retry("/api/v1/telemetry", payload)
 
     def post_dtc(self, payload: dict):
-        response = self.session.post(f"{self.base_url}/api/v1/dtc", json=payload, timeout=10)
-        response.raise_for_status()
-        return response.json()
+        return self._post_with_retry("/api/v1/dtc", payload)
 
     def post_iot_log(self, payload: dict):
-        response = self.session.post(f"{self.base_url}/api/v1/dtc/iot/logs", json=payload, timeout=10)
-        response.raise_for_status()
-        return response.json()
+        return self._post_with_retry("/api/v1/dtc/iot/logs", payload)
 
 
 class MqttGateway:
@@ -201,10 +225,70 @@ class MqttGateway:
         else:
             self._dispatch_autopi(topic, payload)
 
+    @staticmethod
+    def _normalize_autopi_type(raw_type: str) -> str:
+        """Normalize AutoPi type names to a stable obd.* naming."""
+        t = (raw_type or "").strip().lower()
+        if not t:
+            return ""
+        if t.startswith("obd."):
+            return t
+        # AutoPi often sends _type like "rpm", "coolant_temp", "engine_load"
+        return f"obd.{t}"
+
+    def _infer_type_from_topic_payload(self, topic: str, payload: dict) -> str:
+        """Infer telemetry type when @t is missing in AutoPi payload."""
+        at = self._normalize_autopi_type(str(payload.get("@t") or ""))
+        if at:
+            return at
+
+        alt_type = self._normalize_autopi_type(str(payload.get("_type") or payload.get("type") or ""))
+        if alt_type:
+            return alt_type
+
+        # Fallback from topic name (obd/rpm -> obd.rpm)
+        if topic.startswith("obd/"):
+            suffix = topic.split("/", 1)[1].strip().lower()
+            if suffix:
+                return f"obd.{suffix}"
+        if topic == "spm/bat":
+            return "spm.battery"
+        if topic == "track/pos":
+            return "track.pos"
+        if topic == "acc/xyz":
+            return "acc.xyz"
+        if topic == "rpi/temp":
+            return "rpi.temp"
+        return ""
+
+    @staticmethod
+    def _normalize_telemetry_fields(fields: dict[str, Any]) -> dict[str, Any]:
+        """Prepare field values for backend schema compatibility."""
+        normalized: dict[str, Any] = {}
+        for key, value in fields.items():
+            if value is None:
+                continue
+            try:
+                if key == "rpm":
+                    v = float(value)
+                    if not math.isfinite(v):
+                        continue
+                    normalized[key] = int(round(v))
+                    continue
+                if isinstance(value, (int, float)):
+                    if isinstance(value, float) and not math.isfinite(value):
+                        continue
+                    normalized[key] = value
+                    continue
+                normalized[key] = value
+            except (TypeError, ValueError):
+                continue
+        return normalized
+
     def _dispatch_autopi(self, topic: str, payload: dict):
         """Route an AutoPi payload to the correct API endpoint."""
-        at = payload.get("@t", "")
-        ts = payload.get("@ts") or datetime.now(timezone.utc).isoformat()
+        at = self._infer_type_from_topic_payload(topic, payload)
+        ts = payload.get("@ts") or payload.get("_stamp") or datetime.now(timezone.utc).isoformat()
 
         # --- Battery / voltage ---
         if at in ("obd.bat", "spm.battery", "obd.battery") or topic == "spm/bat":
@@ -350,8 +434,8 @@ class MqttGateway:
 
     def _forward_telemetry(self, fields: dict, ts: str, topic: str):
         """POST a partial telemetry record (merges vehicle_id and ts)."""
-        # Drop None values — only keep fields that have data
-        data = {k: v for k, v in fields.items() if v is not None}
+        # Drop invalid values and normalize for backend schema (rpm must be int).
+        data = self._normalize_telemetry_fields(fields)
         if not data:
             if self.verbose:
                 print(f"[SKIP] telemetry: all fields None for topic={topic}")
@@ -500,7 +584,12 @@ def main():
         token = login_and_get_token(args.base_url, args.email, args.password)
         print("[API] Token obtained via /api/v1/auth/login")
 
-    api_client = ApiClient(base_url=args.base_url, token=token)
+    api_client = ApiClient(
+        base_url=args.base_url,
+        token=token,
+        email=args.email,
+        password=args.password,
+    )
 
     gateway = MqttGateway(
         api_client=api_client,

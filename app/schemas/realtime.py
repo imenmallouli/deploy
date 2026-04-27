@@ -3,4 +3,4 @@ from pydantic import BaseModel, Field
 
 class RealtimeStreamParams(BaseModel):
     token: str | None = None
-    poll_ms: int = Field(default=1500, ge=500, le=10000)
+    poll_ms: int = Field(default=60000, ge=1000, le=60000)

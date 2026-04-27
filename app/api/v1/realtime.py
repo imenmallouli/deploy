@@ -19,9 +19,9 @@ async def realtime_info():
             "method": "WS",
             "query_params": {
                 "token": "JWT optionnel (Bearer token)",
-                "poll_ms": "Intervalle polling Mongo en ms (500 à 10000, défaut 1500)",
+                "poll_ms": "Intervalle polling Mongo en ms (1000 à 60000, défaut 60000)",
             },
-            "example": "ws://127.0.0.1:8000/api/v1/realtime/ws/vehicles/1?token=<JWT>&poll_ms=1500",
+            "example": "ws://127.0.0.1:8000/api/v1/realtime/ws/vehicles/1?token=<JWT>&poll_ms=60000",
         },
         "event_format": {
             "event": "telemetry_update",
@@ -51,7 +51,7 @@ async def ws_vehicle_realtime(
     websocket: WebSocket,
     vehicle_id: int,
     token: str | None = Query(default=None),
-    poll_ms: int = Query(default=1500, ge=500, le=10000),
+    poll_ms: int = Query(default=60000, ge=1000, le=60000),
 ):
     try:
         params = RealtimeStreamParams(token=token, poll_ms=poll_ms)

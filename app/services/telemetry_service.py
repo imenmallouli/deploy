@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.db.mongodb import get_mongo_db
 from app.models.telemetry import TelemetryMongoModel
@@ -72,10 +72,15 @@ class TelemetryService:
                 "message": f"Metrics invalides: {', '.join(invalid_metrics)}",
             }
 
-        start_dt = start or datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
-        if not start:
-            start_dt = start_dt.replace(hour=0)
-        end_dt = end or datetime.now(timezone.utc)
+        now_utc = datetime.now(timezone.utc)
+        # Default to the last 7 days so yesterday's history is included automatically.
+        start_dt = start or (now_utc - timedelta(days=7))
+        end_dt = end or now_utc
+
+        if start_dt.tzinfo is None:
+            start_dt = start_dt.replace(tzinfo=timezone.utc)
+        if end_dt.tzinfo is None:
+            end_dt = end_dt.replace(tzinfo=timezone.utc)
 
         if start_dt >= end_dt:
             return {
