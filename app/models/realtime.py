@@ -14,6 +14,10 @@ class RealtimeTelemetryMetricsModel(BaseModel):
     fuel_level: float | None = None
     engine_temp: float | None = None
     battery_voltage: float | None = None
+    engine_load: float | None = None
+    ambient_air_temp: float | None = None
+    intake_temp: float | None = None
+    odometer: float | None = None
 
 
 class RealtimeTelemetryEventModel(BaseModel):
