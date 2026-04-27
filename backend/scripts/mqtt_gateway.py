@@ -445,6 +445,20 @@ class MqttGateway:
         result = self.api_client.post_telemetry(body)
         field_names = ", ".join(data.keys())
         print(f"[FORWARD] telemetry OK [{field_names}] topic={topic} status={result.get('status', 'unknown')}")
+        
+        # Display which metrics are received (green) vs missing (yellow)
+        expected_metrics = ["speed", "rpm", "fuel_level", "engine_temp", "battery_voltage", "engine_load", "ambient_air_temp", "intake_temp", "odometer"]
+        received = set(data.keys())
+        missing = set(expected_metrics) - received
+        
+        if missing:
+            green = '\033[92m'
+            yellow = '\033[93m'
+            reset = '\033[0m'
+            received_display = ', '.join(sorted(received)) if received else '(none)'
+            missing_display = ', '.join(sorted(missing))
+            print(f"  {green}✓ Received:{reset} {received_display}")
+            print(f"  {yellow}✗ Missing:{reset} {missing_display}")
 
     def _forward_event(self, event_type: str, level: str, message: str, metadata: dict, ts: str, topic: str):
         """POST an IoT log entry to /api/v1/dtc/iot/logs."""

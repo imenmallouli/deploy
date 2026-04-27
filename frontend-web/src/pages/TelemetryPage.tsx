@@ -99,6 +99,26 @@ function mergeByTimestamp(
   );
 }
 
+// Fill empty metric cells with the last known value.
+// AutoPi sends each PID at its own frequency (rpm every 2s, fuel_level every few minutes).
+function carryForwardValues(rows: MergedTelemetryRow[], metrics: string[]): MergedTelemetryRow[] {
+  const lastKnown: Record<string, unknown> = {};
+  return rows.map((row) => {
+    metrics.forEach((metric) => {
+      const v = row.values[metric];
+      if (v !== null && v !== undefined) {
+        lastKnown[metric] = v;
+      }
+    });
+    const filled: Record<string, unknown> = {};
+    metrics.forEach((metric) => {
+      const v = row.values[metric];
+      filled[metric] = (v !== null && v !== undefined) ? v : (lastKnown[metric] ?? null);
+    });
+    return { timestamp: row.timestamp, values: filled };
+  });
+}
+
 function dedupeRows(rows: MergedTelemetryRow[]): MergedTelemetryRow[] {
   const map = new Map<string, MergedTelemetryRow>();
 
@@ -129,6 +149,7 @@ export function TelemetryPage() {
   const [liveConnected, setLiveConnected] = useState(false);
   const [liveError, setLiveError] = useState('');
   const [liveEvents, setLiveEvents] = useState<RealtimeEvent[]>([]);
+  const [freshnessTick, setFreshnessTick] = useState(0);
   const [historyByVehicle, setHistoryByVehicle] = useState<Record<string, MergedTelemetryRow[]>>(() => {
     try {
       const raw = localStorage.getItem('telemetry-history-cache-v1');
@@ -204,12 +225,12 @@ export function TelemetryPage() {
     if (!currentVehicleKey) {
       return [];
     }
-
-    return dedupeRows([
+    const merged = dedupeRows([
       ...(historyByVehicle[currentVehicleKey] ?? []),
       ...mergedRowsFromApi,
     ]);
-  }, [currentVehicleKey, historyByVehicle, mergedRowsFromApi]);
+    return carryForwardValues(merged, metricsList);
+  }, [currentVehicleKey, historyByVehicle, mergedRowsFromApi, metricsList]);
   const liveRows = useMemo(() => {
     if (liveEvents.length === 0) {
       return [];
@@ -221,23 +242,13 @@ export function TelemetryPage() {
       return [];
     }
 
-    const chronological = [...liveEvents].reverse();
-    const latestValues: Record<string, unknown> = {};
-
-    return chronological.map((event) => {
-      displayMetrics.forEach((metricName) => {
-        const metricValue = event.metrics?.[metricName];
-        if (metricValue !== null && metricValue !== undefined) {
-          latestValues[metricName] = metricValue;
-        }
-      });
-
-      return {
-        timestamp: event.timestamp ?? new Date().toISOString(),
-        values: { ...latestValues },
-      };
-    }).reverse();
-  }, [displayMetrics, liveEvents]);
+    // Realtime stream: keep minute-by-minute events, but show only values
+    // that actually arrive from MQTT (no history seed, no carry-forward).
+    return liveEvents.map((event) => ({
+      timestamp: event.timestamp ?? new Date().toISOString(),
+      values: event.metrics ?? {},
+    }));
+  }, [liveEvents, freshnessTick]);
 
   useEffect(() => {
     if (!currentVehicleKey || mergedRowsFromApi.length === 0) {
@@ -269,46 +280,79 @@ export function TelemetryPage() {
     };
   }, []);
 
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     if (!vehicleId || !wsUrl || !hasVehicles) {
       return;
     }
 
-    if (wsRef.current) {
-      wsRef.current.close();
+    let destroyed = false;
+
+    function connect() {
+      if (destroyed) return;
+
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+
+      setLiveError('');
+
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        setLiveConnected(true);
+      };
+
+      ws.onerror = () => {
+        setLiveError('Erreur WebSocket');
+      };
+
+      ws.onclose = () => {
+        setLiveConnected(false);
+        // Do NOT clear liveEvents here — the freshness check (REALTIME_FRESHNESS_MS)
+        // will expire stale events naturally. Clearing here causes the backend to
+        // re-send the last stale document on every reconnect, making the table
+        // re-appear even when the car is off.
+        if (!destroyed) {
+          reconnectTimerRef.current = setTimeout(connect, 5000);
+        }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          // Backend signals that no fresh car data is available → clear table now.
+          if (payload?.event === 'no_data') {
+            setLiveEvents([]);
+            return;
+          }
+          setLiveEvents((prev) => [payload, ...prev].slice(0, 20));
+        } catch {
+          setLiveError('Message temps réel invalide');
+        }
+      };
     }
 
-    setLiveError('');
     setLiveEvents([]);
-
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      setLiveConnected(true);
-    };
-
-    ws.onerror = () => {
-      setLiveError('Erreur WebSocket');
-    };
-
-    ws.onclose = () => {
-      setLiveConnected(false);
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const payload = JSON.parse(event.data);
-        setLiveEvents((prev) => [payload, ...prev].slice(0, 20));
-      } catch {
-        setLiveError('Message temps réel invalide');
-      }
-    };
+    connect();
 
     return () => {
-      ws.close();
+      destroyed = true;
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+      }
+      wsRef.current?.close();
     };
   }, [vehicleId, wsUrl, hasVehicles]);
+
+  // Periodically re-evaluate liveRows so the freshness check can clear the
+  // realtime table even if no new WebSocket messages arrive (car is off).
+  useEffect(() => {
+    const id = setInterval(() => setFreshnessTick((t) => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   return (
     <section>
