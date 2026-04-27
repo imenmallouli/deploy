@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.db.mongodb import get_mongo_db
 from app.models.realtime import (
@@ -10,6 +10,19 @@ from app.services.user_service import UserService
 
 
 class RealtimeService:
+    FRESHNESS_WINDOW = timedelta(minutes=2)
+    METRIC_FIELDS = [
+        "speed",
+        "rpm",
+        "fuel_level",
+        "engine_temp",
+        "battery_voltage",
+        "engine_load",
+        "ambient_air_temp",
+        "intake_temp",
+        "odometer",
+    ]
+
     @staticmethod
     def validate_ws_token(token: str | None) -> bool:
         if not token:
@@ -20,20 +33,68 @@ class RealtimeService:
     @staticmethod
     async def get_latest_event(vehicle_id: int, last_seen_id: str | None):
         db = get_mongo_db()
-        doc = await db.telemetry_data.find_one(
+        latest_doc = await db.telemetry_data.find_one(
             {"vehicle_id": vehicle_id},
             sort=[("ts", -1)],
         )
 
-        if doc is None:
+        if latest_doc is None:
             return None, last_seen_id
 
-        doc_id = str(doc.get("_id"))
+        latest_ts = RealtimeService._normalize_timestamp(latest_doc.get("ts"))
+        if latest_ts is None:
+            return None, last_seen_id
+        if datetime.now(timezone.utc) - latest_ts > RealtimeService.FRESHNESS_WINDOW:
+            return None, last_seen_id
+
+        doc_id = str(latest_doc.get("_id"))
         if doc_id == last_seen_id:
             return None, last_seen_id
 
-        event = RealtimeService._to_realtime_event(vehicle_id=vehicle_id, doc=doc)
+        aggregated_doc = await RealtimeService._build_latest_metrics_snapshot(
+            db=db,
+            vehicle_id=vehicle_id,
+            latest_doc=latest_doc,
+        )
+
+        event = RealtimeService._to_realtime_event(vehicle_id=vehicle_id, doc=aggregated_doc)
         return event, doc_id
+
+    @staticmethod
+    def _normalize_timestamp(ts):
+        if isinstance(ts, datetime):
+            return ts if ts.tzinfo is not None else ts.replace(tzinfo=timezone.utc)
+        return None
+
+    @staticmethod
+    async def _build_latest_metrics_snapshot(db, vehicle_id: int, latest_doc: dict) -> dict:
+        latest_ts = RealtimeService._normalize_timestamp(latest_doc.get("ts"))
+
+        projection = {"ts": 1}
+        for field in RealtimeService.METRIC_FIELDS:
+            projection[field] = 1
+
+        cursor = db.telemetry_data.find(
+            {"vehicle_id": vehicle_id},
+            projection=projection,
+            sort=[("ts", -1)],
+            limit=250,
+        )
+        docs = await cursor.to_list(length=250)
+
+        snapshot = {"ts": latest_ts or latest_doc.get("ts")}
+        for field in RealtimeService.METRIC_FIELDS:
+            snapshot[field] = None
+
+        for doc in docs:
+            for field in RealtimeService.METRIC_FIELDS:
+                if snapshot[field] is None and doc.get(field) is not None:
+                    snapshot[field] = doc.get(field)
+
+            if all(snapshot[field] is not None for field in RealtimeService.METRIC_FIELDS):
+                break
+
+        return snapshot
 
     @staticmethod
     def _to_float(value):

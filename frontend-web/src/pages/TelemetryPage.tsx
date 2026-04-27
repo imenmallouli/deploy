@@ -22,6 +22,19 @@ type RealtimeEvent = {
   }>;
 };
 
+type TelemetryPoint = {
+  timestamp?: string;
+  ts?: string;
+  value?: unknown;
+};
+
+type MergedTelemetryRow = {
+  timestamp: string;
+  values: Record<string, unknown>;
+};
+
+const REALTIME_FRESHNESS_MS = 2 * 60 * 1000;
+
 function formatTelemetryValue(value: unknown): string {
   if (value === null || value === undefined) return '-';
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
@@ -38,14 +51,93 @@ function formatTelemetryValue(value: unknown): string {
   return String(value);
 }
 
+function formatRealtimeValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  return formatTelemetryValue(value);
+}
+
+function formatTimestamp(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+
+  return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+}
+
+function mergeByTimestamp(
+  telemetrySeries: Record<string, unknown[]>,
+  metrics: string[],
+): MergedTelemetryRow[] {
+  const rows = new Map<string, MergedTelemetryRow>();
+
+  metrics.forEach((metricName) => {
+    const points = telemetrySeries[metricName];
+    if (!Array.isArray(points)) return;
+
+    points.forEach((point) => {
+      if (!point || typeof point !== 'object') return;
+      const p = point as TelemetryPoint;
+      const ts = p.timestamp ?? p.ts;
+      if (!ts) return;
+
+      const existing = rows.get(ts) ?? { timestamp: ts, values: {} };
+      existing.values[metricName] = p.value;
+      rows.set(ts, existing);
+    });
+  });
+
+  return Array.from(rows.values()).sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+  );
+}
+
+function dedupeRows(rows: MergedTelemetryRow[]): MergedTelemetryRow[] {
+  const map = new Map<string, MergedTelemetryRow>();
+
+  rows.forEach((row) => {
+    const existing = map.get(row.timestamp);
+    if (!existing) {
+      map.set(row.timestamp, { timestamp: row.timestamp, values: { ...row.values } });
+      return;
+    }
+
+    map.set(row.timestamp, {
+      timestamp: row.timestamp,
+      values: { ...existing.values, ...row.values },
+    });
+  });
+
+  return Array.from(map.values()).sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+  );
+}
+
 export function TelemetryPage() {
   const [vehicleId, setVehicleId] = useState<number | null>(null);
-  const interval = '1h';
+  const interval = '1m';
   const metricsList = ['speed', 'rpm', 'fuel_level', 'engine_temp', 'battery_voltage', 'engine_load', 'ambient_air_temp', 'intake_temp', 'odometer'];
+  const historyStorageKey = 'telemetry-history-cache-v1';
 
   const [liveConnected, setLiveConnected] = useState(false);
   const [liveError, setLiveError] = useState('');
   const [liveEvents, setLiveEvents] = useState<RealtimeEvent[]>([]);
+  const [historyByVehicle, setHistoryByVehicle] = useState<Record<string, MergedTelemetryRow[]>>(() => {
+    try {
+      const raw = localStorage.getItem('telemetry-history-cache-v1');
+      if (!raw) return {};
+      return JSON.parse(raw) as Record<string, MergedTelemetryRow[]>;
+    } catch {
+      return {};
+    }
+  });
   const wsRef = useRef<WebSocket | null>(null);
 
   const vehiclesQuery = useQuery({
@@ -78,7 +170,12 @@ export function TelemetryPage() {
     const wsBase = base.startsWith('https://')
       ? base.replace('https://', 'wss://')
       : base.replace('http://', 'ws://');
-    const query = token ? `?token=${encodeURIComponent(token)}` : '';
+    const params = new URLSearchParams();
+    params.set('poll_ms', '60000');
+    if (token) {
+      params.set('token', token);
+    }
+    const query = `?${params.toString()}`;
     return `${wsBase}/api/v1/realtime/ws/vehicles/${vehicleId}${query}`;
   }, [vehicleId]);
 
@@ -86,6 +183,9 @@ export function TelemetryPage() {
     queryKey: ['telemetry-history', vehicleId, interval, metricsList.join(',')],
     queryFn: () => getTelemetryHistory({
       vehicle_id: vehicleId as number,
+      // Ask backend for full history range.
+      start: '1970-01-01T00:00:00Z',
+      end: new Date().toISOString(),
       interval,
       metrics: metricsList,
     }),
@@ -94,12 +194,72 @@ export function TelemetryPage() {
 
   const telemetryHistory = telemetryQuery.data as TelemetryHistoryResponse | undefined;
   const telemetrySeries = telemetryHistory?.data ?? {};
-  const telemetryMetrics = Object.keys(telemetrySeries);
-  const displayMetrics = telemetryMetrics.length > 0 ? telemetryMetrics : metricsList;
-  const telemetryRowCount = telemetryMetrics.reduce((max, metricName) => {
-    const entries = telemetrySeries[metricName];
-    return Math.max(max, Array.isArray(entries) ? entries.length : 0);
-  }, 0);
+  const displayMetrics = metricsList;
+  const currentVehicleKey = vehicleId ? String(vehicleId) : '';
+  const mergedRowsFromApi = useMemo(
+    () => mergeByTimestamp(telemetrySeries, metricsList),
+    [telemetrySeries],
+  );
+  const displayedRows = useMemo(() => {
+    if (!currentVehicleKey) {
+      return [];
+    }
+
+    return dedupeRows([
+      ...(historyByVehicle[currentVehicleKey] ?? []),
+      ...mergedRowsFromApi,
+    ]);
+  }, [currentVehicleKey, historyByVehicle, mergedRowsFromApi]);
+  const liveRows = useMemo(() => {
+    if (liveEvents.length === 0) {
+      return [];
+    }
+
+    const latestEvent = liveEvents[0];
+    const latestTimestamp = latestEvent.timestamp ? new Date(latestEvent.timestamp).getTime() : Number.NaN;
+    if (Number.isNaN(latestTimestamp) || Date.now() - latestTimestamp > REALTIME_FRESHNESS_MS) {
+      return [];
+    }
+
+    const chronological = [...liveEvents].reverse();
+    const latestValues: Record<string, unknown> = {};
+
+    return chronological.map((event) => {
+      displayMetrics.forEach((metricName) => {
+        const metricValue = event.metrics?.[metricName];
+        if (metricValue !== null && metricValue !== undefined) {
+          latestValues[metricName] = metricValue;
+        }
+      });
+
+      return {
+        timestamp: event.timestamp ?? new Date().toISOString(),
+        values: { ...latestValues },
+      };
+    }).reverse();
+  }, [displayMetrics, liveEvents]);
+
+  useEffect(() => {
+    if (!currentVehicleKey || mergedRowsFromApi.length === 0) {
+      return;
+    }
+
+    setHistoryByVehicle((previous) => {
+      const merged = dedupeRows([...(previous[currentVehicleKey] ?? []), ...mergedRowsFromApi]);
+      return {
+        ...previous,
+        [currentVehicleKey]: merged,
+      };
+    });
+  }, [currentVehicleKey, mergedRowsFromApi]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(historyStorageKey, JSON.stringify(historyByVehicle));
+    } catch {
+      // Ignore storage write errors in private/restricted browser modes.
+    }
+  }, [historyByVehicle, historyStorageKey]);
 
   useEffect(() => {
     return () => {
@@ -186,7 +346,7 @@ export function TelemetryPage() {
               Vehicle: ID {vehicleId} • Interval: {interval}
             </p>
             <p className="muted-note" style={{ marginTop: 0, marginBottom: 8 }}>
-              History is loaded automatically.
+              History shows saved values with their dates. It does not poll every minute.
             </p>
             {telemetryQuery.isLoading && <p className="muted-note">Loading telemetry history...</p>}
             {telemetryQuery.isError && <p className="muted-note">Unable to load telemetry history.</p>}
@@ -195,27 +355,29 @@ export function TelemetryPage() {
                 <table className="vehicles-table">
                   <thead>
                     <tr>
-                      <th>#</th>
+                      <th>Date</th>
                       {displayMetrics.map((metricName) => (
                         <th key={metricName}>{metricName}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {telemetryRowCount === 0 && (
+                    {displayedRows.length === 0 && (
                       <tr>
                         <td colSpan={displayMetrics.length + 1} className="empty-cell">
                           No telemetry data for this selection.
                         </td>
                       </tr>
                     )}
-                    {Array.from({ length: telemetryRowCount }).map((_, rowIndex) => (
-                      <tr key={rowIndex}>
-                        <td>{rowIndex + 1}</td>
+                    {displayedRows.map((row) => (
+                      <tr key={row.timestamp}>
+                        <td>{formatTimestamp(row.timestamp)}</td>
                         {displayMetrics.map((metricName) => {
-                          const values = telemetrySeries[metricName] ?? [];
-                          const value = Array.isArray(values) ? values[rowIndex] : undefined;
-                          return <td key={`${metricName}-${rowIndex}`}>{formatTelemetryValue(value)}</td>;
+                          return (
+                            <td key={`${row.timestamp}-${metricName}`}>
+                              {formatTelemetryValue(row.values[metricName])}
+                            </td>
+                          );
                         })}
                       </tr>
                     ))}
@@ -229,7 +391,7 @@ export function TelemetryPage() {
             <h3>Realtime Predictive Stream</h3>
             <p className="muted-note" style={{ margin: 0 }}>Selected vehicle ID: {vehicleId}</p>
             <p className="subtitle">
-              Status: {liveConnected ? 'connected' : 'disconnected'}
+              Status: {liveConnected ? 'connected' : 'disconnected'} • New vehicle data every 1 minute
               {liveError ? ` - ${liveError}` : ''}
             </p>
             <div className="table-shell" style={{ marginTop: 8 }}>
@@ -243,17 +405,17 @@ export function TelemetryPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {liveEvents.length === 0 && (
+                  {liveRows.length === 0 && (
                     <tr>
-                      <td colSpan={displayMetrics.length + 1} className="empty-cell">No realtime data yet.</td>
+                      <td colSpan={displayMetrics.length + 1} className="empty-cell">No fresh realtime data yet.</td>
                     </tr>
                   )}
-                  {liveEvents.map((event, index) => (
-                    <tr key={`${event.timestamp ?? 'ts'}-${index}`}>
-                      <td>{event.timestamp ?? '-'}</td>
+                  {liveRows.map((row, index) => (
+                    <tr key={`${row.timestamp}-${index}`}>
+                      <td>{formatTimestamp(row.timestamp)}</td>
                       {displayMetrics.map((metricName) => (
-                        <td key={`${event.timestamp ?? 'ts'}-${index}-${metricName}`}>
-                          {formatTelemetryValue(event.metrics?.[metricName])}
+                        <td key={`${row.timestamp}-${index}-${metricName}`}>
+                          {formatRealtimeValue(row.values[metricName])}
                         </td>
                       ))}
                     </tr>
