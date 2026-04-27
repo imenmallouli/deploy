@@ -78,9 +78,9 @@ class RealtimeService:
             {"vehicle_id": vehicle_id},
             projection=projection,
             sort=[("ts", -1)],
-            limit=250,
+            limit=2000,
         )
-        docs = await cursor.to_list(length=250)
+        docs = await cursor.to_list(length=2000)
 
         snapshot = {"ts": latest_ts or latest_doc.get("ts")}
         for field in RealtimeService.METRIC_FIELDS:

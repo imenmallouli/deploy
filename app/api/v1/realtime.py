@@ -77,6 +77,11 @@ async def ws_vehicle_realtime(
             if event is not None:
                 await websocket.send_json(event.model_dump())
                 last_seen_id = next_seen_id
+            else:
+                # Notify the frontend that no fresh data is available so it
+                # can clear the realtime table immediately instead of waiting
+                # for the client-side freshness timer to expire.
+                await websocket.send_json({"event": "no_data", "vehicle_id": vehicle_id})
 
             await asyncio.sleep(params.poll_ms / 1000)
     except WebSocketDisconnect:
