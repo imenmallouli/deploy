@@ -160,6 +160,7 @@ export function TelemetryPage() {
     }
   });
   const wsRef = useRef<WebSocket | null>(null);
+  const lastSeenIdRef = useRef<string | null>(null);
 
   const vehiclesQuery = useQuery({
     queryKey: ['vehicles', 'telemetry-page'],
@@ -196,6 +197,8 @@ export function TelemetryPage() {
     if (token) {
       params.set('token', token);
     }
+    // Note: last_seen_id is appended dynamically in the connect() function
+    // so reconnects don't re-show already-seen events.
     const query = `?${params.toString()}`;
     return `${wsBase}/api/v1/realtime/ws/vehicles/${vehicleId}${query}`;
   }, [vehicleId]);
@@ -298,7 +301,11 @@ export function TelemetryPage() {
 
       setLiveError('');
 
-      const ws = new WebSocket(wsUrl);
+      // Append last_seen_id so the backend skips the doc already shown.
+      const reconnectUrl = lastSeenIdRef.current
+        ? `${wsUrl}&last_seen_id=${encodeURIComponent(lastSeenIdRef.current)}`
+        : wsUrl;
+      const ws = new WebSocket(reconnectUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -328,6 +335,10 @@ export function TelemetryPage() {
             setLiveEvents([]);
             return;
           }
+          // Track the last doc ID so reconnects resume from here.
+          if (payload?._doc_id) {
+            lastSeenIdRef.current = payload._doc_id;
+          }
           setLiveEvents((prev) => [payload, ...prev].slice(0, 20));
         } catch {
           setLiveError('Message temps réel invalide');
@@ -335,6 +346,8 @@ export function TelemetryPage() {
       };
     }
 
+    // Reset last_seen_id when vehicle changes (new vehicle = fresh stream).
+    lastSeenIdRef.current = null;
     setLiveEvents([]);
     connect();
 

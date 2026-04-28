@@ -52,6 +52,7 @@ async def ws_vehicle_realtime(
     vehicle_id: int,
     token: str | None = Query(default=None),
     poll_ms: int = Query(default=60000, ge=1000, le=60000),
+    last_seen_id: str | None = Query(default=None),
 ):
     try:
         params = RealtimeStreamParams(token=token, poll_ms=poll_ms)
@@ -66,17 +67,20 @@ async def ws_vehicle_realtime(
         return
 
     await websocket.accept()
-    last_seen_id: str | None = None
+    # Restore last_seen_id from query param so reconnects don't re-send
+    # the same document that was already shown before disconnection.
 
     try:
         while True:
             event, next_seen_id = await RealtimeService.get_latest_event(
                 vehicle_id=vehicle_id,
-                last_seen_id=last_seen_id,
+                last_seen_id=current_last_seen_id,
             )
             if event is not None:
-                await websocket.send_json(event.model_dump())
-                last_seen_id = next_seen_id
+                payload = event.model_dump()
+                payload["_doc_id"] = next_seen_id
+                await websocket.send_json(payload)
+                current_last_seen_id = next_seen_id
             else:
                 # Notify the frontend that no fresh data is available so it
                 # can clear the realtime table immediately instead of waiting

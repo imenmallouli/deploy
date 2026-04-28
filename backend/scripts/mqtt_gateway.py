@@ -63,6 +63,8 @@ _OBD_TELEMETRY_MAP = {
     "obd.load":         "engine_load",
     "obd.ambient_air_temp": "ambient_air_temp",
     "obd.ambient_temp": "ambient_air_temp",
+    "obd.ambiant_air_temp": "ambient_air_temp",
+    "obd.ambiant_temp": "ambient_air_temp",
     "obd.intake_temp":  "intake_temp",
     "obd.intake_air_temp": "intake_temp",
     "obd.odometer":     "odometer",
@@ -70,6 +72,7 @@ _OBD_TELEMETRY_MAP = {
     "obd.vehicle_speed": "speed",
     "obd.fuel_tank_level_input": "fuel_level",
     "obd.ambient_air_temperature": "ambient_air_temp",
+    "obd.ambiant_air_temperature": "ambient_air_temp",
 }
 
 # @t prefixes that indicate a DTC fault code record
@@ -306,7 +309,7 @@ class MqttGateway:
                 "fuel_level": ["fuel", "fuel_level"],
                 "engine_temp": ["coolant", "coolant_temp", "engine_temp", "temp"],
                 "engine_load": ["load", "engine_load"],
-                "ambient_air_temp": ["ambient_air_temp", "ambient_temp", "temp"],
+                "ambient_air_temp": ["ambient_air_temp", "ambient_temp", "ambiant_air_temp", "ambiant_temp", "ambient_air_temperature", "ambiant_air_temperature", "temp"],
                 "intake_temp": ["intake_temp", "intake_air_temp", "temp"],
                 "odometer": ["odometer", "distance"],
                 "speed": ["speed"],
