@@ -6,11 +6,14 @@ from app.schemas.ops import (
     DeviceUpdate,
     GeofenceCheckRequest,
     GeofenceCreate,
+    GeofenceExitEvent,
+    GeofenceMonitoringSetup,
     GeofenceUpdate,
     GroupCreate,
     GroupUpdate,
     LocationCreate,
     LocationUpdate,
+    VehiclePositionSave,
 )
 from app.services.ops_service import OpsService
 from app.services.user_service import UserService
@@ -77,6 +80,50 @@ async def check_geofences(payload: GeofenceCheckRequest, context: dict = Depends
         longitude=payload.longitude,
         vehicle_id=payload.vehicle_id,
     )
+
+
+@router.get("/geofences/vehicle-positions")
+async def get_vehicle_positions(context: dict = Depends(get_current_context)):
+    _ = context
+    return await OpsService.get_vehicle_positions()
+
+
+@router.post("/geofences/vehicle-positions")
+async def save_vehicle_position(payload: VehiclePositionSave, context: dict = Depends(get_current_context)):
+    _ = context
+    await OpsService.save_vehicle_position(
+        vehicle_id=payload.vehicle_id,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
+        speed=payload.speed,
+    )
+    # Trigger transition detection in backend service.
+    await OpsService.check_geofences(
+        latitude=payload.latitude,
+        longitude=payload.longitude,
+        vehicle_id=payload.vehicle_id,
+    )
+    return {"status": "success"}
+
+
+@router.post("/geofences/monitoring/setup")
+async def setup_geofence_monitoring(
+    payload: GeofenceMonitoringSetup,
+    context: dict = Depends(get_current_context),
+):
+    if context["role"] not in ("admin",):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acces refuse")
+    return await OpsService.setup_geofence_monitoring(payload)
+
+
+@router.post("/geofences/exit")
+async def report_geofence_exit(
+    payload: GeofenceExitEvent,
+    context: dict = Depends(get_current_context),
+):
+    if context["role"] not in ("admin",):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acces refuse")
+    return await OpsService.handle_geofence_exit(payload)
 
 
 @router.get("/groups")

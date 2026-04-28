@@ -4,6 +4,7 @@ from math import asin, cos, radians, sin, sqrt
 from bson import ObjectId
 
 from app.db.mongodb import get_mongo_db
+from app.services.email_service import EmailService
 
 
 def _now_iso() -> str:
@@ -34,19 +35,9 @@ class OpsService:
                 if str(q).isdigit():
                     query["$or"].append({"vehicle_id": int(q)})
             elif collection == "locations":
-                query = {
-                    "$or": [
-                        {"name": q_regex},
-                        {"type": q_regex},
-                    ]
-                }
+                query = {"$or": [{"name": q_regex}, {"type": q_regex}]}
             elif collection == "geofences":
-                query = {
-                    "$or": [
-                        {"name": q_regex},
-                        {"description": q_regex},
-                    ]
-                }
+                query = {"$or": [{"name": q_regex}, {"description": q_regex}]}
             else:
                 query = {"name": q_regex}
 
@@ -116,6 +107,29 @@ class OpsService:
         return radius_earth_m * c
 
     @staticmethod
+    def _point_in_polygon(lat: float, lng: float, polygon: list[list[float]]) -> bool:
+        # Ray casting on [lat, lng] points.
+        x = lng
+        y = lat
+        inside = False
+        n = len(polygon)
+        j = n - 1
+        for i in range(n):
+            yi = polygon[i][0]
+            xi = polygon[i][1]
+            yj = polygon[j][0]
+            xj = polygon[j][1]
+
+            intersects = ((yi > y) != (yj > y)) and (
+                x < (xj - xi) * (y - yi) / ((yj - yi) or 1e-12) + xi
+            )
+            if intersects:
+                inside = not inside
+            j = i
+
+        return inside
+
+    @staticmethod
     async def check_geofences(latitude: float, longitude: float, vehicle_id: int | None = None):
         db = get_mongo_db()
         cursor = db.geofences.find({"enabled": {"$ne": False}})
@@ -124,22 +138,25 @@ class OpsService:
         events = []
 
         async for fence in cursor:
+            polygon = fence.get("polygon")
             center_lat = fence.get("center_lat")
             center_lng = fence.get("center_lng")
             radius_m = fence.get("radius_m")
 
-            if center_lat is None or center_lng is None or radius_m is None:
+            if polygon and len(polygon) >= 3:
+                inside = OpsService._point_in_polygon(latitude, longitude, polygon)
+                distance_m = 0.0
+            elif center_lat is not None and center_lng is not None and radius_m is not None:
+                distance_m = OpsService._distance_m(latitude, longitude, float(center_lat), float(center_lng))
+                inside = distance_m <= float(radius_m)
+            else:
                 continue
-
-            distance_m = OpsService._distance_m(latitude, longitude, float(center_lat), float(center_lng))
-            inside = distance_m <= float(radius_m)
 
             geofence_id = str(fence.get("_id"))
             item = {
                 "geofence_id": geofence_id,
                 "name": fence.get("name"),
                 "distance_m": round(distance_m, 2),
-                "radius_m": float(radius_m),
                 "inside": inside,
             }
 
@@ -182,6 +199,20 @@ class OpsService:
                     events.append(event_doc)
                     item["transition"] = transition
 
+                    if transition == "exit":
+                        monitoring = await db.geofence_monitoring.find_one(
+                            {"geofence_id": geofence_id, "vehicle_ids": vehicle_id, "enabled": {"$ne": False}}
+                        )
+                        if monitoring and monitoring.get("notification_email"):
+                            EmailService.send_geofence_exit_notification(
+                                recipient_email=monitoring["notification_email"],
+                                vehicle_id=vehicle_id,
+                                vehicle_license_plate=f"Vehicle {vehicle_id}",
+                                geofence_name=fence.get("name", "Zone"),
+                                latitude=latitude,
+                                longitude=longitude,
+                            )
+
             results.append(item)
 
         return {
@@ -192,3 +223,116 @@ class OpsService:
             "items": results,
             "events": events,
         }
+
+    @staticmethod
+    async def setup_geofence_monitoring(payload):
+        db = get_mongo_db()
+
+        if not ObjectId.is_valid(payload.geofence_id):
+            return {"status": "error", "message": "ID geocloture invalide"}
+
+        geofence = await db.geofences.find_one({"_id": ObjectId(payload.geofence_id)})
+        if not geofence:
+            return {"status": "error", "message": "Geocloture introuvable"}
+
+        config = {
+            "geofence_id": payload.geofence_id,
+            "geofence_name": geofence.get("name"),
+            "vehicle_ids": payload.vehicle_ids,
+            "notification_email": payload.notification_email,
+            "enabled": True,
+            "updated_at": _now_iso(),
+        }
+
+        existing = await db.geofence_monitoring.find_one({"geofence_id": payload.geofence_id})
+        if existing:
+            await db.geofence_monitoring.update_one({"_id": existing["_id"]}, {"$set": config})
+            config_id = str(existing["_id"])
+        else:
+            config["created_at"] = _now_iso()
+            inserted = await db.geofence_monitoring.insert_one(config)
+            config_id = str(inserted.inserted_id)
+
+        return {
+            "status": "success",
+            "message": "Configuration de monitoring sauvegardee",
+            "config_id": config_id,
+        }
+
+    @staticmethod
+    async def handle_geofence_exit(payload):
+        db = get_mongo_db()
+
+        if not ObjectId.is_valid(payload.geofence_id):
+            return {"status": "error", "message": "ID geocloture invalide"}
+
+        notification_email = payload.notification_email
+        if not notification_email:
+            monitoring = await db.geofence_monitoring.find_one(
+                {"geofence_id": payload.geofence_id, "vehicle_ids": payload.vehicle_id, "enabled": {"$ne": False}}
+            )
+            if monitoring:
+                notification_email = monitoring.get("notification_email")
+
+        if not notification_email:
+            return {"status": "error", "message": "Aucune adresse email de notification"}
+
+        geofence = await db.geofences.find_one({"_id": ObjectId(payload.geofence_id)}) or {}
+        geofence_name = geofence.get("name", "Zone")
+
+        email_sent = EmailService.send_geofence_exit_notification(
+            recipient_email=notification_email,
+            vehicle_id=payload.vehicle_id,
+            vehicle_license_plate=f"Vehicle {payload.vehicle_id}",
+            geofence_name=geofence_name,
+            latitude=payload.latitude,
+            longitude=payload.longitude,
+        )
+
+        event_doc = {
+            "geofence_id": payload.geofence_id,
+            "geofence_name": geofence_name,
+            "vehicle_id": payload.vehicle_id,
+            "event_type": "exit_notification",
+            "latitude": payload.latitude,
+            "longitude": payload.longitude,
+            "notification_email": notification_email,
+            "email_sent": email_sent,
+            "created_at": _now_iso(),
+        }
+
+        inserted = await db.geofence_exit_events.insert_one(event_doc)
+        return {
+            "status": "success",
+            "message": "Notification de sortie traitee",
+            "email_sent": email_sent,
+            "event_id": str(inserted.inserted_id),
+        }
+
+    @staticmethod
+    async def save_vehicle_position(vehicle_id: int, latitude: float, longitude: float, speed: float | None = None):
+        db = get_mongo_db()
+        await db.vehicle_positions.update_one(
+            {"vehicle_id": vehicle_id},
+            {
+                "$set": {
+                    "vehicle_id": vehicle_id,
+                    "latitude": latitude,
+                    "longitude": longitude,
+                    "speed": speed,
+                    "updated_at": _now_iso(),
+                }
+            },
+            upsert=True,
+        )
+
+    @staticmethod
+    async def get_vehicle_positions():
+        db = get_mongo_db()
+        cursor = db.vehicle_positions.find({})
+        items = []
+        async for doc in cursor:
+            item = dict(doc)
+            item["id"] = str(item.pop("_id"))
+            items.append(item)
+        return {"status": "success", "items": items}

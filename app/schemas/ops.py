@@ -7,6 +7,7 @@ class GeofenceCreate(BaseModel):
     on_enter: str | None = None
     on_exit: str | None = None
     vehicle_count: int = 0
+    polygon: list[list[float]] | None = None
     center_lat: float | None = None
     center_lng: float | None = None
     radius_m: float | None = None
@@ -19,6 +20,7 @@ class GeofenceUpdate(BaseModel):
     on_enter: str | None = None
     on_exit: str | None = None
     vehicle_count: int | None = None
+    polygon: list[list[float]] | None = None
     center_lat: float | None = None
     center_lng: float | None = None
     radius_m: float | None = None
@@ -29,6 +31,27 @@ class GeofenceCheckRequest(BaseModel):
     vehicle_id: int | None = None
     latitude: float
     longitude: float
+
+
+class GeofenceMonitoringSetup(BaseModel):
+    geofence_id: str
+    vehicle_ids: list[int]
+    notification_email: str
+
+
+class GeofenceExitEvent(BaseModel):
+    geofence_id: str
+    vehicle_id: int
+    latitude: float
+    longitude: float
+    notification_email: str | None = None
+
+
+class VehiclePositionSave(BaseModel):
+    vehicle_id: int
+    latitude: float
+    longitude: float
+    speed: float | None = None
 
 
 class GroupCreate(BaseModel):
