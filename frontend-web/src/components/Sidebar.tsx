@@ -41,6 +41,11 @@ export function Sidebar() {
                 Locations
               </NavLink>
             )}
+            {canManageFleet && (
+              <NavLink to="/geofences" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+                Geofences
+              </NavLink>
+            )}
             <NavLink to="/diagnostics" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
               Diagnostics
             </NavLink>

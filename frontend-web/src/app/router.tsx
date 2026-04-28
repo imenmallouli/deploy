@@ -8,6 +8,7 @@ import {
   DeviceOverviewPage,
   DevicesPage,
   DtcPage,
+  GeofencesPage,
   GetStartedPage,
   LoginPage,
   LocationsPage,
@@ -61,6 +62,14 @@ export const router = createBrowserRouter([
             element: (
               <RequireRole allowedRoles={['admin']}>
                 <LocationsPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: 'geofences',
+            element: (
+              <RequireRole allowedRoles={['admin']}>
+                <GeofencesPage />
               </RequireRole>
             ),
           },

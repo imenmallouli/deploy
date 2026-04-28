@@ -1,30 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
-import { createGeofence, deleteGeofence, listGeofences } from '../lib/api/endpoints';
-
-function parseDecimal(value: string) {
-  const normalized = value.trim().replace(',', '.');
-  if (!normalized) return Number.NaN;
-  return Number(normalized);
-}
-
-function buildMapEmbedUrl(latitude?: number, longitude?: number) {
-  if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
-    const lat = Number(latitude);
-    const lng = Number(longitude);
-    const lngDelta = 0.02;
-    const latDelta = 0.01;
-    const left = (lng - lngDelta).toFixed(6);
-    const bottom = (lat - latDelta).toFixed(6);
-    const right = (lng + lngDelta).toFixed(6);
-    const top = (lat + latDelta).toFixed(6);
-    const marker = `${lat.toFixed(6)}%2C${lng.toFixed(6)}`;
-
-    return `https://www.openstreetmap.org/export/embed.html?bbox=${left}%2C${bottom}%2C${right}%2C${top}&layer=mapnik&marker=${marker}`;
-  }
-
-  return 'https://www.openstreetmap.org/export/embed.html?bbox=-3.8%2C43.8%2C3.8%2C49.2&layer=mapnik';
-}
+import { useEffect, useRef, useState } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import 'leaflet-draw/dist/leaflet.draw.css';
+import 'leaflet-draw';
+import {
+  createGeofence,
+  deleteGeofence,
+  listGeofenceVehiclePositions,
+  listGeofences,
+  listVehicles,
+  setupGeofenceMonitoring,
+} from '../lib/api/endpoints';
 
 function getErrorMessage(error: unknown, fallback = 'Operation failed. Please try again.') {
   const data = (error as { response?: { data?: { message?: string; detail?: string } } })?.response?.data;
@@ -33,195 +20,485 @@ function getErrorMessage(error: unknown, fallback = 'Operation failed. Please tr
 
 export function GeofencesPage() {
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState('');
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [enabledDraft, setEnabledDraft] = useState<'all' | 'enabled' | 'disabled'>('all');
-  const [enabledFilter, setEnabledFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [onEnter, setOnEnter] = useState('');
-  const [onExit, setOnExit] = useState('');
-  const [centerLatInput, setCenterLatInput] = useState('');
-  const [centerLngInput, setCenterLngInput] = useState('');
-  const [radiusMInput, setRadiusMInput] = useState('');
-  const [checkVehicleId, setCheckVehicleId] = useState('');
-  const [checkLatInput, setCheckLatInput] = useState('');
-  const [checkLngInput, setCheckLngInput] = useState('');
-  const [createFeedback, setCreateFeedback] = useState('');
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const drawLayerRef = useRef<L.FeatureGroup | null>(null);
+  const geofenceLayerRef = useRef<L.LayerGroup | null>(null);
+  const vehicleLayerRef = useRef<L.LayerGroup | null>(null);
+  const userMarkerRef = useRef<L.CircleMarker | null>(null);
+
+  const [zoneName, setZoneName] = useState('');
+  const [drawnPolygon, setDrawnPolygon] = useState<number[][]>([]);
   const [createError, setCreateError] = useState('');
-  const geofencesQuery = useQuery({ queryKey: ['geofences', search], queryFn: () => listGeofences(search || undefined) });
+  const [createFeedback, setCreateFeedback] = useState('');
+
+  const [selectedGeofenceId, setSelectedGeofenceId] = useState('');
+  const [selectedVehicles, setSelectedVehicles] = useState<number[]>([]);
+  const [notificationEmail, setNotificationEmail] = useState('');
+  const [setupError, setSetupError] = useState('');
+  const [setupFeedback, setSetupFeedback] = useState('');
+
+  const geofencesQuery = useQuery({
+    queryKey: ['geofences'],
+    queryFn: () => listGeofences(),
+  });
+
+  const vehiclesQuery = useQuery({
+    queryKey: ['vehicles'],
+    queryFn: listVehicles,
+  });
+
+  const vehiclePositionsQuery = useQuery({
+    queryKey: ['geofence-vehicle-positions'],
+    queryFn: listGeofenceVehiclePositions,
+    refetchInterval: 10000,
+  });
+
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current) return;
+
+    const map = L.map(mapContainerRef.current).setView([35.8256, 10.6084], 13);
+    mapRef.current = map;
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(map);
+
+    const drawLayer = new L.FeatureGroup();
+    drawLayerRef.current = drawLayer;
+    map.addLayer(drawLayer);
+
+    const geofenceLayer = L.layerGroup().addTo(map);
+    geofenceLayerRef.current = geofenceLayer;
+
+    const vehicleLayer = L.layerGroup().addTo(map);
+    vehicleLayerRef.current = vehicleLayer;
+
+    const drawControl = new L.Control.Draw({
+      edit: {
+        featureGroup: drawLayer,
+        edit: false,
+        remove: true,
+      },
+      draw: {
+        polyline: false,
+        circle: false,
+        circlemarker: false,
+        marker: false,
+        polygon: {},
+        rectangle: {},
+      },
+    });
+
+    map.addControl(drawControl);
+
+    map.on(L.Draw.Event.CREATED, (event: any) => {
+      drawLayer.clearLayers();
+      const layer = event.layer as L.Polygon;
+      drawLayer.addLayer(layer);
+      const latLngs = layer.getLatLngs()[0] as L.LatLng[];
+      setDrawnPolygon(latLngs.map((p) => [p.lat, p.lng]));
+    });
+
+    map.on(L.Draw.Event.DELETED, () => {
+      setDrawnPolygon([]);
+    });
+
+    // Auto-locate user on load
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          map.setView([latitude, longitude], 15);
+          const marker = L.circleMarker([latitude, longitude], {
+            radius: 8,
+            color: '#1a56db',
+            fillColor: '#3b82f6',
+            fillOpacity: 0.9,
+            weight: 2,
+          }).bindPopup('My location').addTo(map);
+          userMarkerRef.current = marker;
+        },
+        () => { /* permission denied or unavailable – keep default view */ }
+      );
+    }
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const geofenceLayer = geofenceLayerRef.current;
+    if (!geofenceLayer) return;
+
+    geofenceLayer.clearLayers();
+    const geofences = geofencesQuery.data?.items ?? [];
+    geofences.forEach((g) => {
+      if (g.polygon && g.polygon.length >= 3) {
+        L.polygon(g.polygon as [number, number][], {
+          color: '#1465c0',
+          weight: 2,
+          fillOpacity: 0.2,
+        })
+          .bindPopup(`<strong>${g.name}</strong>`)
+          .addTo(geofenceLayer);
+      }
+    });
+  }, [geofencesQuery.data]);
+
+  useEffect(() => {
+    const vehicleLayer = vehicleLayerRef.current;
+    if (!vehicleLayer) return;
+
+    vehicleLayer.clearLayers();
+    const positions = vehiclePositionsQuery.data?.items ?? [];
+    positions.forEach((p) => {
+      const vehicle = vehiclesQuery.data?.items?.find((v) => v.id === p.vehicle_id);
+      const plateLabel = vehicle?.license_plate ? ` · ${vehicle.license_plate}` : '';
+      L.circleMarker([p.latitude, p.longitude], {
+        radius: 6,
+        color: '#0f8c4a',
+        fillColor: '#20bf6b',
+        fillOpacity: 0.9,
+      })
+        .bindPopup(`<strong>Vehicle ${p.vehicle_id}${plateLabel}</strong><br/>${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}`)
+        .addTo(vehicleLayer);
+    });
+  }, [vehiclePositionsQuery.data, vehiclesQuery.data]);
+
   const createMutation = useMutation({
     mutationFn: createGeofence,
     onSuccess: () => {
-      setName('');
-      setDescription('');
-      setOnEnter('');
-      setOnExit('');
+      setZoneName('');
+      setDrawnPolygon([]);
+      drawLayerRef.current?.clearLayers();
       setCreateError('');
-      setCreateFeedback('Geofence created successfully.');
+      setCreateFeedback('Geocloture creee avec succes.');
       queryClient.invalidateQueries({ queryKey: ['geofences'] });
+      setTimeout(() => setCreateFeedback(''), 3000);
     },
     onError: (error) => {
       setCreateFeedback('');
       setCreateError(getErrorMessage(error));
     },
   });
+
+  const setupMutation = useMutation({
+    mutationFn: setupGeofenceMonitoring,
+    onSuccess: () => {
+      setSelectedVehicles([]);
+      setNotificationEmail('');
+      setSetupError('');
+      setSetupFeedback('Monitoring sauvegarde avec succes.');
+      setTimeout(() => setSetupFeedback(''), 3000);
+    },
+    onError: (error) => {
+      setSetupFeedback('');
+      setSetupError(getErrorMessage(error));
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: deleteGeofence,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['geofences'] }); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['geofences'] });
+    },
   });
 
-  const sourceItems = geofencesQuery.data?.items ?? [];
-  const items = sourceItems.filter((item) => {
-    if (enabledFilter === 'enabled') return item.enabled !== false;
-    if (enabledFilter === 'disabled') return item.enabled === false;
-    return true;
-  });
-  const centerLat = parseDecimal(centerLatInput);
-  const centerLng = parseDecimal(centerLngInput);
-  const radiusM = parseDecimal(radiusMInput);
-  const checkLat = parseDecimal(checkLatInput);
-  const checkLng = parseDecimal(checkLngInput);
-  const canCreate = name.trim().length > 0 && Number.isFinite(centerLat) && Number.isFinite(centerLng) && Number.isFinite(radiusM) && radiusM > 0;
-  const mapLatitude = Number.isFinite(checkLat) ? checkLat : Number.isFinite(centerLat) ? centerLat : undefined;
-  const mapLongitude = Number.isFinite(checkLng) ? checkLng : Number.isFinite(centerLng) ? centerLng : undefined;
-  const mapSrc = buildMapEmbedUrl(mapLatitude, mapLongitude);
-
-  const handleCreate = () => {
-    setCreateFeedback('');
-    if (!name.trim()) {
-      setCreateError('Name is required.');
-      return;
-    }
-    if (!canCreate) {
-      setCreateError('Latitude, longitude and radius must be valid numbers.');
-      return;
-    }
+  const handleCreateGeofence = () => {
     setCreateError('');
+    if (!zoneName.trim()) {
+      setCreateError('Le nom de la zone est requis.');
+      return;
+    }
+    if (drawnPolygon.length < 3) {
+      setCreateError('Dessinez une zone (carre/polygone) sur la carte.');
+      return;
+    }
+
     createMutation.mutate({
-      name: name.trim(),
-      description: description.trim() || undefined,
-      on_enter: onEnter.trim() || undefined,
-      on_exit: onExit.trim() || undefined,
-      center_lat: centerLat,
-      center_lng: centerLng,
-      radius_m: radiusM,
+      name: zoneName.trim(),
+      polygon: drawnPolygon,
       enabled: true,
     });
   };
 
-  const applyFilters = () => {
-    setEnabledFilter(enabledDraft);
-    setFiltersOpen(false);
+  const toggleVehicleSelection = (vehicleId: number) => {
+    setSelectedVehicles((prev) =>
+      prev.includes(vehicleId) ? prev.filter((id) => id !== vehicleId) : [...prev, vehicleId]
+    );
   };
 
-  const resetFilters = () => {
-    setEnabledDraft('all');
-    setEnabledFilter('all');
+  const handleSetupMonitoring = () => {
+    setSetupError('');
+    if (!selectedGeofenceId) {
+      setSetupError('Selectionnez une geocloture.');
+      return;
+    }
+    if (selectedVehicles.length === 0) {
+      setSetupError('Selectionnez au moins un vehicule.');
+      return;
+    }
+    if (!notificationEmail.includes('@')) {
+      setSetupError('Entrez un email valide.');
+      return;
+    }
+
+    setupMutation.mutate({
+      geofence_id: selectedGeofenceId,
+      vehicle_ids: selectedVehicles,
+      notification_email: notificationEmail.trim(),
+    });
   };
+
+  const geofences = geofencesQuery.data?.items ?? [];
+  const vehicles = vehiclesQuery.data?.items ?? [];
+  const positions = vehiclePositionsQuery.data?.items ?? [];
+
+  // Point-in-polygon (ray casting) – runs client-side
+  function pointInPolygon(lat: number, lng: number, polygon: number[][]): boolean {
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const xi = polygon[i][0], yi = polygon[i][1];
+      const xj = polygon[j][0], yj = polygon[j][1];
+      const intersect = yi > lng !== yj > lng && lat < ((xj - xi) * (lng - yi)) / (yj - yi) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  // For each vehicle position, find which zone(s) it's currently inside
+  function getZoneForPosition(lat: number, lng: number): string {
+    const matched = geofences.filter(
+      (g) => g.polygon && g.polygon.length >= 3 && pointInPolygon(lat, lng, g.polygon as number[][])
+    );
+    if (matched.length === 0) return 'Outside all zones';
+    return matched.map((g) => g.name).join(', ');
+  }
 
   return (
     <section>
       <h2>Geofences</h2>
-      <div className="panel map-panel">
-        <iframe
-          title="Geofences map"
-          className="fleet-map compact"
-          src={mapSrc}
+      <p className="subtitle">Dessinez votre zone sur la carte puis configurez l'email de notification.</p>
+
+      <div className="panel table-shell" style={{ marginBottom: 16 }}>
+        <h3>Carte</h3>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <button
+            className="btn-secondary"
+            onClick={() => {
+              if (!navigator.geolocation || !mapRef.current) return;
+              navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                  const { latitude, longitude } = pos.coords;
+                  mapRef.current!.setView([latitude, longitude], 15);
+                  if (userMarkerRef.current) {
+                    userMarkerRef.current.setLatLng([latitude, longitude]);
+                  } else {
+                    userMarkerRef.current = L.circleMarker([latitude, longitude], {
+                      radius: 8,
+                      color: '#1a56db',
+                      fillColor: '#3b82f6',
+                      fillOpacity: 0.9,
+                      weight: 2,
+                    }).bindPopup('My location').addTo(mapRef.current!);
+                  }
+                },
+                () => alert('Unable to get your location.')
+              );
+            }}
+          >
+            📍 My Location
+          </button>
+        </div>
+        <div
+          ref={mapContainerRef}
+          style={{ width: '100%', height: 500, border: '1px solid #d4d4d4', borderRadius: 8 }}
         />
       </div>
 
       <div className="panel table-shell">
-        <div className="toolbar-row">
-          <input className="toolbar-input" placeholder="Search for geofences" value={search} onChange={(e) => setSearch(e.target.value)} />
-          <button className="btn-link" type="button" onClick={() => setFiltersOpen((open) => !open)}>Filters</button>
-          <input className="toolbar-input" placeholder="New geofence name" value={name} onChange={(e) => setName(e.target.value)} />
-          <input className="toolbar-input" placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
-          <input className="toolbar-input" placeholder="On enter action" value={onEnter} onChange={(e) => setOnEnter(e.target.value)} />
-          <input className="toolbar-input" placeholder="On exit action" value={onExit} onChange={(e) => setOnExit(e.target.value)} />
-          <input className="toolbar-input" type="text" inputMode="decimal" placeholder="Center lat" value={centerLatInput} onChange={(e) => setCenterLatInput(e.target.value)} />
-          <input className="toolbar-input" type="text" inputMode="decimal" placeholder="Center lng" value={centerLngInput} onChange={(e) => setCenterLngInput(e.target.value)} />
-          <input className="toolbar-input" type="text" inputMode="decimal" placeholder="Radius (m)" value={radiusMInput} onChange={(e) => setRadiusMInput(e.target.value)} />
-          <button
-            className="btn-primary"
-            type="button"
-            onClick={handleCreate}
-            disabled={createMutation.isPending}
+        <h3>Creer une geocloture</h3>
+        <div className="toolbar-row" style={{ flexWrap: 'wrap', gap: 8 }}>
+          <input
+            className="toolbar-input"
+            placeholder="Nom de la zone"
+            value={zoneName}
+            onChange={(e) => setZoneName(e.target.value)}
+            style={{ flex: '1 1 220px' }}
+          />
+          <button className="btn-primary" onClick={handleCreateGeofence} disabled={createMutation.isPending}>
+            {createMutation.isPending ? 'Creation...' : 'Creer'}
+          </button>
+        </div>
+        {createError && <p className="form-error">{createError}</p>}
+        {createFeedback && <p className="muted-note">{createFeedback}</p>}
+      </div>
+
+      <div className="panel table-shell">
+        <h3>Monitoring et email</h3>
+        <div className="toolbar-row" style={{ flexWrap: 'wrap', gap: 8 }}>
+          <select
+            className="toolbar-input"
+            value={selectedGeofenceId}
+            onChange={(e) => setSelectedGeofenceId(e.target.value)}
+            style={{ flex: '1 1 220px' }}
           >
-            {createMutation.isPending ? 'Creating...' : 'Create'}
+            <option value="">Selectionner une geocloture...</option>
+            {geofences.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+          <input
+            className="toolbar-input"
+            placeholder="Email notification"
+            value={notificationEmail}
+            onChange={(e) => setNotificationEmail(e.target.value)}
+            type="email"
+            style={{ flex: '1 1 240px' }}
+          />
+          <button className="btn-primary" onClick={handleSetupMonitoring} disabled={setupMutation.isPending}>
+            {setupMutation.isPending ? 'Sauvegarde...' : 'Sauvegarder'}
           </button>
         </div>
 
-        {filtersOpen && (
-          <div className="panel" style={{ marginBottom: 12 }}>
-            <div className="toolbar-row" style={{ marginBottom: 0 }}>
-              <select
-                className="toolbar-input"
-                value={enabledDraft}
-                onChange={(event) => setEnabledDraft(event.target.value as 'all' | 'enabled' | 'disabled')}
-              >
-                <option value="all">Enabled: All</option>
-                <option value="enabled">Enabled only</option>
-                <option value="disabled">Disabled only</option>
-              </select>
-              <button className="btn-link" type="button" onClick={resetFilters}>Reset</button>
-              <button className="btn-primary" type="button" onClick={applyFilters}>Apply</button>
+        {selectedGeofenceId && (
+          <div style={{ marginTop: 12, padding: 12, background: '#f7f7f7', borderRadius: 6 }}>
+            <strong>Vehicules surveilles:</strong>
+            <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', marginTop: 8 }}>
+              {vehicles.map((v) => (
+                <label key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedVehicles.includes(v.id)}
+                    onChange={() => toggleVehicleSelection(v.id)}
+                  />
+                  <span>Vehicule {v.id} - {v.license_plate || 'N/A'}</span>
+                </label>
+              ))}
             </div>
           </div>
         )}
 
-        {createError && <p className="form-error">{createError}</p>}
-        {createFeedback && <p className="muted-note">{createFeedback}</p>}
+        {setupError && <p className="form-error">{setupError}</p>}
+        {setupFeedback && <p className="muted-note">{setupFeedback}</p>}
+      </div>
 
-      
-        <div className="toolbar-row">
-          <input className="toolbar-input" type="number" placeholder="Vehicle ID (optional)" value={checkVehicleId} onChange={(e) => setCheckVehicleId(e.target.value)} />
-          <input className="toolbar-input" type="text" inputMode="decimal" placeholder="Position lat" value={checkLatInput} onChange={(e) => setCheckLatInput(e.target.value)} />
-          <input className="toolbar-input" type="text" inputMode="decimal" placeholder="Position lng" value={checkLngInput} onChange={(e) => setCheckLngInput(e.target.value)} />
-        </div>
+      <div className="panel table-shell">
+        <h3>Zones existantes</h3>
         <table className="vehicles-table">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Description</th>
-              <th>On Enter</th>
-              <th>On Exit</th>
-              <th>Center</th>
-              <th>Radius (m)</th>
-              <th>Vehicles</th>
+              <th>Nom</th>
+              <th>Type</th>
+              <th>Statut</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {items.length === 0 && (
+            {geofences.length === 0 && (
               <tr>
-                <td colSpan={8} className="empty-cell">No data to display</td>
+                <td colSpan={4} className="empty-cell">
+                  {geofencesQuery.isLoading ? 'Chargement...' : 'Aucune geocloture.'}
+                </td>
               </tr>
             )}
-            {items.map((item) => (
-              <tr key={item.id}>
-                <td>{item.name}</td>
-                <td>{item.description ?? '-'}</td>
-                <td>{item.on_enter ?? '-'}</td>
-                <td>{item.on_exit ?? '-'}</td>
-                <td>{item.center_lat ?? '-'}, {item.center_lng ?? '-'}</td>
-                <td>{item.radius_m ?? '-'}</td>
-                <td>{item.vehicle_count ?? 0}</td>
-                <td style={{ whiteSpace: 'nowrap' }}>
+            {geofences.map((g) => (
+              <tr key={g.id}>
+                <td>{g.name}</td>
+                <td>{g.polygon?.length ? 'Polygone' : 'Cercle'}</td>
+                <td>{g.enabled !== false ? 'Actif' : 'Inactif'}</td>
+                <td>
                   <button
                     className="btn-link"
-                    type="button"
                     style={{ color: 'var(--danger, #dc3545)' }}
                     disabled={deleteMutation.isPending}
-                    onClick={() => { if (window.confirm(`Delete "${item.name}"?`)) deleteMutation.mutate(item.id); }}
-                  >Delete</button>
+                    onClick={() => {
+                      if (window.confirm(`Supprimer ${g.name} ?`)) deleteMutation.mutate(g.id);
+                    }}
+                  >
+                    Supprimer
+                  </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+      </div>
 
-
+      {/* Vehicle Locations Table */}
+      <div className="panel table-shell">
+        <h3>
+          Vehicle Locations
+          <span style={{ fontSize: 12, fontWeight: 400, marginLeft: 8, color: '#888' }}>
+            (auto-refresh every 10s)
+          </span>
+        </h3>
+        <table className="vehicles-table">
+          <thead>
+            <tr>
+              <th>Vehicle ID</th>
+              <th>License Plate</th>
+              <th>Latitude</th>
+              <th>Longitude</th>
+              <th>Current Zone</th>
+              <th>Show on Map</th>
+            </tr>
+          </thead>
+          <tbody>
+            {positions.length === 0 && (
+              <tr>
+                <td colSpan={6} className="empty-cell">
+                  {vehiclePositionsQuery.isLoading ? 'Loading...' : 'No vehicle positions available.'}
+                </td>
+              </tr>
+            )}
+            {positions.map((p) => {
+              const vehicle = vehicles.find((v) => v.id === p.vehicle_id);
+              const zone = getZoneForPosition(p.latitude, p.longitude);
+              const isOutside = zone === 'Outside all zones';
+              return (
+                <tr key={p.vehicle_id}>
+                  <td>{p.vehicle_id}</td>
+                  <td>{vehicle?.license_plate || 'N/A'}</td>
+                  <td>{p.latitude.toFixed(6)}</td>
+                  <td>{p.longitude.toFixed(6)}</td>
+                  <td>
+                    <span
+                      style={{
+                        padding: '2px 8px',
+                        borderRadius: 12,
+                        fontSize: 12,
+                        background: isOutside ? '#fff3cd' : '#d1fae5',
+                        color: isOutside ? '#856404' : '#065f46',
+                        fontWeight: 600,
+                      }}
+                    >
+                      {zone}
+                    </span>
+                  </td>
+                  <td>
+                    <button
+                      className="btn-link"
+                      onClick={() => {
+                        if (mapRef.current) {
+                          mapRef.current.setView([p.latitude, p.longitude], 16);
+                        }
+                      }}
+                    >
+                      📍 Show
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </section>
   );

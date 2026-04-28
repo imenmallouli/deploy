@@ -4,6 +4,7 @@ export { DeviceOverviewPage } from './DeviceOverviewPage';
 export { DeviceDetailsPage } from './DeviceDetailsPage';
 export { DevicesPage } from './DevicesPage';
 export { DtcPage } from './DtcPage';
+export { GeofencesPage } from './GeofencesPage';
 export { GetStartedPage } from './GetStartedPage';
 export { LoginPage } from './LoginPage';
 export { LocationsPage } from './LocationsPage';

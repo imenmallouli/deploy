@@ -4,9 +4,28 @@ from bson import ObjectId
 
 from app.db.mongodb import get_mongo_db
 from app.models.dtc import DtcEventModel, IotDeviceLogModel, ObdRawPayloadModel
+from app.services.ops_service import OpsService
 
 
 class DtcService:
+    @staticmethod
+    def _extract_gps_from_iot_log(payload: IotDeviceLogModel) -> tuple[float, float] | None:
+        if (payload.event_type or "").lower() != "gps":
+            return None
+
+        metadata = payload.metadata or {}
+        loc = metadata.get("loc") if isinstance(metadata.get("loc"), dict) else {}
+        lat = loc.get("lat", metadata.get("lat"))
+        lng = loc.get("lon", metadata.get("lon", metadata.get("lng")))
+
+        if lat is None or lng is None:
+            return None
+
+        try:
+            return float(lat), float(lng)
+        except (TypeError, ValueError):
+            return None
+
     @staticmethod
     async def ping_mongo():
         db = get_mongo_db()
@@ -203,6 +222,23 @@ class DtcService:
         doc["created_by"] = user_id
 
         result = await db.iot_device_logs.insert_one(doc)
+
+        # Geofence logic stays in backend (Mongo + services), bridge just forwards data.
+        if payload.vehicle_id is not None:
+            gps = DtcService._extract_gps_from_iot_log(payload)
+            if gps:
+                latitude, longitude = gps
+                await OpsService.save_vehicle_position(
+                    vehicle_id=payload.vehicle_id,
+                    latitude=latitude,
+                    longitude=longitude,
+                )
+                await OpsService.check_geofences(
+                    latitude=latitude,
+                    longitude=longitude,
+                    vehicle_id=payload.vehicle_id,
+                )
+
         return {
             "status": "success",
             "message": "Log technique IoT enregistré",
