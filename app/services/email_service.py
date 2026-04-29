@@ -31,36 +31,36 @@ class EmailService:
             <html>
                             <body style=\"margin: 0; padding: 38px 24px; background-color: #f3f4f6; font-family: Arial, sans-serif; color: #111827;\">
                                 <div style=\"max-width: 720px; margin: 0 auto; background-color: #ffffff; border: 1px solid #d9dee7; border-radius: 14px; padding: 30px 28px 26px 28px;\">
-                                    <h2 style=\"margin: 0 0 14px 0; font-size: 24px; font-weight: 700; color: #e3342f; text-align: center;\">Alerte Geocloture</h2>
-                                    <p style=\"margin: 0 0 20px 0; font-size: 18px; text-align: center; color: #111827;\">Le vehicule a quitte la zone configuree.</p>
+                                    <h2 style=\"margin: 0 0 14px 0; font-size: 24px; font-weight: 700; color: #e3342f; text-align: center;\">Geofence Alert</h2>
+                                    <p style=\"margin: 0 0 20px 0; font-size: 18px; text-align: center; color: #111827;\">The vehicle has left the configured zone.</p>
                                     <div style=\"max-width: 660px; margin: 0 auto 20px auto; background-color: #f9fafb; border: 1px solid #d9dee7; border-radius: 10px; padding: 20px 22px; text-align: left;\">
-                                        <p style=\"margin: 0 0 14px 0; font-size: 17px; line-height: 1.5;\"><strong>Vehicule:</strong> {vehicle_license_plate}</p>
+                                        <p style=\"margin: 0 0 14px 0; font-size: 17px; line-height: 1.5;\"><strong>Vehicle:</strong> {vehicle_license_plate}</p>
                                         <p style=\"margin: 0 0 14px 0; font-size: 17px; line-height: 1.5;\"><strong>Zone:</strong> {geofence_name}</p>
                                         <p style=\"margin: 0 0 14px 0; font-size: 17px; line-height: 1.5;\"><strong>Position:</strong> {latitude:.4f}, {longitude:.4f}</p>
-                                        <p style=\"margin: 0; font-size: 17px; line-height: 1.5;\"><strong>Heure:</strong> {timestamp}</p>
+                                        <p style=\"margin: 0; font-size: 17px; line-height: 1.5;\"><strong>Time:</strong> {timestamp}</p>
                                     </div>
 
                                     <div style=\"margin-top: 20px; text-align: center;\">
-                                        <a href=\"{EmailService.APP_URL}\" style=\"display: inline-block; background-color: #182033; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 700; padding: 13px 20px; border-radius: 8px;\">Revenir a mon application</a>
+                                      <a href=\"{EmailService.APP_URL}\" style=\"display: inline-block; background-color: #182033; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 700; padding: 13px 20px; border-radius: 8px;\">Back to my application</a>
                                     </div>
                                 </div>
               </body>
             </html>
             """
             text = f"""
-ALERTE GEOCLOTURE
-Vehicule: {vehicle_license_plate}
+GEOFENCE ALERT
+Vehicle: {vehicle_license_plate}
 Zone: {geofence_name}
 Position: {latitude:.4f}, {longitude:.4f}
-Heure: {timestamp}
+Time: {timestamp}
 
-Revenir a mon application: {EmailService.APP_URL}
+Back to my application: {EmailService.APP_URL}
             """.strip()
 
             payload = {
                 "sender": {"email": EmailService.SENDER_EMAIL},
                 "to": [{"email": recipient_email}],
-                "subject": f"Alerte Geocloture: Vehicule {vehicle_license_plate} a quitte la zone",
+                "subject": f"Geofence Alert: Vehicle {vehicle_license_plate} left the zone",
                 "htmlContent": html,
                 "textContent": text,
             }
