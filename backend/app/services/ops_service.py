@@ -4,6 +4,8 @@ from math import asin, cos, radians, sin, sqrt
 from bson import ObjectId
 
 from app.db.mongodb import get_mongo_db
+from app.db.session import SessionLocal
+from app.models.vehicle import Vehicle
 from app.services.email_service import EmailService
 
 
@@ -17,6 +19,52 @@ class OpsService:
         payload = dict(doc)
         payload["id"] = str(payload.pop("_id"))
         return payload
+
+    @staticmethod
+    def _parse_notification_emails(raw_value: str | None) -> list[str]:
+        if not raw_value:
+            return []
+        # Accept comma-separated list: "a@x.com, b@y.com".
+        return [email.strip() for email in str(raw_value).split(",") if email and email.strip()]
+
+    @staticmethod
+    def _lookup_vehicle_name_sql(vehicle_id: int | None) -> str | None:
+        if vehicle_id is None:
+            return None
+        db = SessionLocal()
+        try:
+            vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
+            if not vehicle:
+                return None
+            if vehicle.license_plate:
+                return vehicle.license_plate
+            make = (vehicle.make or "").strip()
+            model = (vehicle.model or "").strip()
+            composed = f"{make} {model}".strip()
+            return composed or None
+        except Exception as exc:
+            print(f"[OPS] Unable to resolve vehicle name from SQL for vehicle_id={vehicle_id}: {exc}")
+            return None
+        finally:
+            db.close()
+
+    @staticmethod
+    async def _resolve_vehicle_name(vehicle_id: int | None) -> str:
+        # Priority: SQL vehicle license_plate -> Mongo device name -> generic label.
+        sql_name = OpsService._lookup_vehicle_name_sql(vehicle_id)
+        if sql_name:
+            return sql_name
+
+        if vehicle_id is not None:
+            db = get_mongo_db()
+            device = await db.devices.find_one({"vehicle_id": vehicle_id})
+            if device:
+                for key in ("name", "device_name", "vin", "autopi_device_id"):
+                    value = device.get(key)
+                    if value:
+                        return str(value)
+
+        return "Vehicule"
 
     @staticmethod
     async def list_items(collection: str, q: str | None = None):
@@ -195,8 +243,13 @@ class OpsService:
                         "distance_m": round(distance_m, 2),
                         "created_at": _now_iso(),
                     }
-                    await db.geofence_events.insert_one(event_doc)
-                    events.append(event_doc)
+                    inserted = await db.geofence_events.insert_one(event_doc)
+                    safe_event = {
+                        key: (str(value) if isinstance(value, ObjectId) else value)
+                        for key, value in event_doc.items()
+                    }
+                    safe_event["event_id"] = str(inserted.inserted_id)
+                    events.append(safe_event)
                     item["transition"] = transition
 
                     if transition == "exit":
@@ -204,14 +257,19 @@ class OpsService:
                             {"geofence_id": geofence_id, "vehicle_ids": vehicle_id, "enabled": {"$ne": False}}
                         )
                         if monitoring and monitoring.get("notification_email"):
-                            EmailService.send_geofence_exit_notification(
-                                recipient_email=monitoring["notification_email"],
-                                vehicle_id=vehicle_id,
-                                vehicle_license_plate=f"Vehicle {vehicle_id}",
-                                geofence_name=fence.get("name", "Zone"),
-                                latitude=latitude,
-                                longitude=longitude,
+                            vehicle_name = await OpsService._resolve_vehicle_name(vehicle_id)
+                            recipients = OpsService._parse_notification_emails(
+                                monitoring.get("notification_email")
                             )
+                            for recipient in recipients:
+                                EmailService.send_geofence_exit_notification(
+                                    recipient_email=recipient,
+                                    vehicle_id=vehicle_id,
+                                    vehicle_license_plate=vehicle_name,
+                                    geofence_name=fence.get("name", "Zone"),
+                                    latitude=latitude,
+                                    longitude=longitude,
+                                )
 
             results.append(item)
 
@@ -277,17 +335,25 @@ class OpsService:
         if not notification_email:
             return {"status": "error", "message": "Aucune adresse email de notification"}
 
+        recipients = OpsService._parse_notification_emails(notification_email)
+        if not recipients:
+            return {"status": "error", "message": "Aucune adresse email de notification"}
+
         geofence = await db.geofences.find_one({"_id": ObjectId(payload.geofence_id)}) or {}
         geofence_name = geofence.get("name", "Zone")
+        vehicle_name = await OpsService._resolve_vehicle_name(payload.vehicle_id)
 
-        email_sent = EmailService.send_geofence_exit_notification(
-            recipient_email=notification_email,
-            vehicle_id=payload.vehicle_id,
-            vehicle_license_plate=f"Vehicle {payload.vehicle_id}",
-            geofence_name=geofence_name,
-            latitude=payload.latitude,
-            longitude=payload.longitude,
-        )
+        email_results = {}
+        for recipient in recipients:
+            email_results[recipient] = EmailService.send_geofence_exit_notification(
+                recipient_email=recipient,
+                vehicle_id=payload.vehicle_id,
+                vehicle_license_plate=vehicle_name,
+                geofence_name=geofence_name,
+                latitude=payload.latitude,
+                longitude=payload.longitude,
+            )
+        email_sent = any(email_results.values())
 
         event_doc = {
             "geofence_id": payload.geofence_id,
@@ -297,6 +363,8 @@ class OpsService:
             "latitude": payload.latitude,
             "longitude": payload.longitude,
             "notification_email": notification_email,
+            "notification_emails": recipients,
+            "email_results": email_results,
             "email_sent": email_sent,
             "created_at": _now_iso(),
         }
@@ -306,6 +374,7 @@ class OpsService:
             "status": "success",
             "message": "Notification de sortie traitee",
             "email_sent": email_sent,
+            "email_results": email_results,
             "event_id": str(inserted.inserted_id),
         }
 

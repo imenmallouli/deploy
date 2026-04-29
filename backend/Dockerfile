@@ -22,7 +22,8 @@ RUN pip install --no-cache-dir \
     numpy \
     pandas \
     scikit-learn \
-    joblib
+    joblib \
+    requests
 
 COPY ./app ./app
 

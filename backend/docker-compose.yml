@@ -21,6 +21,8 @@ services:
         condition: service_healthy
       mqtt:
         condition: service_started
+      mailpit:
+        condition: service_started
 
   mqtt:
     image: eclipse-mosquitto:2
@@ -32,6 +34,14 @@ services:
       - ./mosquitto-no-auth.conf/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: adp-mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
+      - "1025:1025"
 
   postgres:
     image: postgres:16
