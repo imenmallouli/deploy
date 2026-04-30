@@ -17,7 +17,7 @@ BENCHMARK_PATH = MODELS_DIR / "algorithm_benchmark.json"
 def _load_bundle(path: Path) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(
-            f"Model file not found: {path}. Run backend/scripts/train_alert_model.py first."
+            "AI model not found. Run backend/scripts/train_alert_model.py to generate model files."
         )
     return joblib.load(path)
 

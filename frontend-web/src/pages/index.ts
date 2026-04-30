@@ -11,5 +11,4 @@ export { LocationsPage } from './LocationsPage';
 export { RegisterPage } from './RegisterPage';
 export { TelemetryPage } from './TelemetryPage';
 export { VehicleDetailsPage } from './VehicleDetailsPage';
-export { VehicleStatusPage } from './VehicleStatusPage';
 export { VehiclesPage } from './VehiclesPage';

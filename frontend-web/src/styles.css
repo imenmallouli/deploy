@@ -449,6 +449,7 @@ h2 {
 }
 
 .btn-primary,
+.btn-secondary,
 .btn-danger,
 .btn-link {
   border-radius: 8px;
@@ -462,6 +463,11 @@ h2 {
 .btn-primary {
   background: #1d4ed8;
   color: white;
+}
+
+.btn-secondary {
+  background: #e5e7eb;
+  color: #111827;
 }
 
 .btn-danger {
@@ -504,6 +510,274 @@ h2 {
 
 .form-grid button {
   width: fit-content;
+}
+
+.vehicles-page-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.vehicles-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vehicles-title {
+  margin: 0;
+  font-size: 38px;
+  line-height: 1;
+}
+
+.vehicles-subtitle {
+  margin: 8px 0 0;
+  color: #6b7280;
+  font-size: 16px;
+}
+
+.vehicle-add-trigger {
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  padding: 9px 14px;
+  background: #2563eb;
+  color: #f9fafb;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 160ms ease, opacity 160ms ease;
+}
+
+.vehicle-add-trigger:hover {
+  transform: translateY(-1px);
+  opacity: 0.96;
+}
+
+.vehicle-create-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(3, 7, 18, 0.74);
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.vehicle-create-modal {
+  width: min(100%, 560px);
+  border-radius: 16px;
+  border: 1px solid #dbe3f0;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 24px;
+  box-shadow: 0 22px 46px rgba(15, 23, 42, 0.18);
+}
+
+.vehicle-create-modal h3 {
+  margin: 0 0 18px;
+  font-size: 32px;
+  line-height: 1;
+}
+
+.vehicle-create-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.vehicle-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vehicle-field span {
+  font-size: 16px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.vehicle-field input,
+.vehicle-field select {
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  color: #0f172a;
+  background: #ffffff;
+}
+
+.vehicle-field input::placeholder {
+  color: #94a3b8;
+}
+
+.vehicle-field-full {
+  grid-column: 1 / -1;
+}
+
+.vehicle-modal-actions {
+  margin-top: 18px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.vehicle-modal-actions .btn-secondary {
+  background: #e2e8f0;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+}
+
+.vehicle-modal-actions .btn-primary {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.fleet-list-shell {
+  background: #ffffff;
+  color: #111827;
+  border: 1px solid #e5e7eb;
+}
+
+.fleet-list-heading {
+  margin-bottom: 14px;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fleet-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.fleet-list-header .fleet-list-heading {
+  margin-bottom: 0;
+}
+
+.fleet-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fleet-cards {
+  display: grid;
+  gap: 12px;
+}
+
+.fleet-vehicle-card {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.fleet-vehicle-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: #e7eefb;
+  font-size: 22px;
+}
+
+.fleet-vehicle-main {
+  min-width: 0;
+}
+
+.fleet-vehicle-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.fleet-vehicle-title {
+  color: #111827;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.fleet-vehicle-meta {
+  margin-top: 4px;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.fleet-vehicle-side {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  justify-self: end;
+}
+
+.fleet-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 84px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.fleet-status.active {
+  background: #e6f7cf;
+  color: #4d7c0f;
+}
+
+.fleet-status.maintenance {
+  background: #fff1d6;
+  color: #a16207;
+}
+
+.fleet-status.critical {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.fleet-status.pending {
+  background: #e5e7eb;
+  color: #4b5563;
+}
+
+.fleet-vehicle-mileage {
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.fleet-vehicle-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.fleet-vehicle-actions .inline-link {
+  color: #1d4ed8;
+}
+
+.fleet-vehicle-actions .inline-danger {
+  color: #dc2626;
 }
 
 .form-error {
@@ -1047,6 +1321,35 @@ h2 {
     grid-template-columns: 1fr;
   }
 
+  .vehicles-header-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .fleet-vehicle-card {
+    grid-template-columns: auto 1fr;
+  }
+
+  .fleet-list-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .fleet-top-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .fleet-vehicle-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .fleet-vehicle-side {
+    grid-column: 2;
+    justify-self: start;
+  }
+
   .get-started-hero,
   .get-started-banner,
   .get-started-shortcuts,
@@ -1069,5 +1372,349 @@ h2 {
   .can-terminal-panel {
     border-left: 0;
     padding-left: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .vehicles-title {
+    font-size: 32px;
+  }
+
+  .vehicle-create-overlay {
+    padding: 12px;
+  }
+
+  .vehicle-create-modal {
+    padding: 16px;
+  }
+
+  .vehicle-create-modal h3 {
+    font-size: 28px;
+  }
+
+  .vehicle-create-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .vehicle-field-full {
+    grid-column: auto;
+  }
+
+  .fleet-vehicle-card {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
+  .fleet-vehicle-side,
+  .fleet-vehicle-actions {
+    flex-wrap: wrap;
+  }
+}
+
+/* ── Per-card View Details button ── */
+.fleet-view-details-btn {
+  display: inline-block;
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.fleet-view-details-btn:hover {
+  background: #dbeafe;
+}
+
+/* ═══════════════════════════════════════════
+   Vehicle Details Page  (vd-*)
+   ═══════════════════════════════════════════ */
+
+.vd-page {
+  padding: 28px 32px;
+  max-width: 880px;
+}
+
+/* ── Page header ── */
+.vd-page-header {
+  margin-bottom: 24px;
+}
+
+.vd-page-title {
+  margin: 0 0 4px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.vd-page-sub {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* ── White card ── */
+.vd-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 20px 24px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.05);
+}
+
+.vd-card-label {
+  margin: 0 0 14px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: #9ca3af;
+}
+
+/* ── Identity + Assignment row ── */
+.vd-info-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+/* ── Field label/value pairs ── */
+.vd-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vd-field {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.vd-field-key {
+  font-size: 13px;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.vd-field-val {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  text-align: right;
+}
+
+/* ── Status badges ── */
+.vd-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.vd-badge-active {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.vd-badge-warning {
+  background: #fef9c3;
+  color: #ca8a04;
+}
+
+.vd-badge-critical {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.vd-badge-pending {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+/* ── AI outer card ── */
+.vd-ai-card-outer {
+  margin-bottom: 16px;
+}
+
+.vd-ai-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.vd-ai-sub {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.vd-refresh-btn {
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.vd-refresh-btn:hover {
+  background: #dbeafe;
+}
+
+/* ── AI metric sub-cards ── */
+.vd-ai-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.vd-ai-metric {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  min-height: 110px;
+}
+
+.vd-metric-title {
+  margin: 0 0 10px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: #9ca3af;
+}
+
+.vd-metric-loading,
+.vd-metric-error {
+  margin: 0;
+  font-size: 12px;
+  color: #9ca3af;
+  line-height: 1.5;
+}
+
+.vd-metric-error {
+  color: #b45309;
+}
+
+/* ── Risk score circle ── */
+.vd-score-circle {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 1px;
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1;
+  border: 3px solid;
+  border-radius: 999px;
+  width: 68px;
+  height: 68px;
+  justify-content: center;
+  align-items: center;
+}
+
+.vd-score-denom {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 2px;
+  color: #6b7280;
+}
+
+.vd-metric-sub {
+  margin: 6px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* ── Recommendation list ── */
+.vd-rec-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vd-rec-list li {
+  font-size: 13px;
+  color: #374151;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.vd-rec-msg {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* ── Insights ── */
+.vd-insight-line {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.vd-insight-action {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* ── Actions ── */
+.vd-actions {
+  margin-top: 4px;
+  display: flex;
+  gap: 10px;
+}
+
+.vd-btn-danger {
+  padding: 9px 18px;
+  border-radius: 9px;
+  border: none;
+  background: #fee2e2;
+  color: #dc2626;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.vd-btn-danger:hover:not(:disabled) {
+  background: #fecaca;
+}
+
+.vd-btn-danger:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+/* responsive */
+@media (max-width: 700px) {
+  .vd-page {
+    padding: 16px;
+  }
+
+  .vd-info-row,
+  .vd-ai-cards {
+    grid-template-columns: 1fr;
   }
 }

@@ -30,9 +30,6 @@ export function Sidebar() {
                 Vehicles
               </NavLink>
             )}
-            <NavLink to="/vehicle-status" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-              Vehicle Status
-            </NavLink>
             <NavLink to="/telemetry" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
               Telemetry
             </NavLink>

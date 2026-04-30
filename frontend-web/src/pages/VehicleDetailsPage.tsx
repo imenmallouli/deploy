@@ -1,41 +1,37 @@
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
 import {
   deleteVehicle,
   getAiInsights,
   getAiRecommendations,
   getAiRiskScore,
   getVehicle,
-  updateVehicle,
 } from '../lib/api/endpoints';
-
-function parseOptionalNumber(value: string): number | undefined {
-  if (value.trim() === '') {
-    return undefined;
-  }
-
-  const parsedValue = Number(value);
-  return Number.isFinite(parsedValue) ? parsedValue : undefined;
-}
 
 function getErrorMessage(error: unknown): string {
   const maybeAxiosError = error as { response?: { data?: { message?: string; detail?: string } }; message?: string };
-  return maybeAxiosError.response?.data?.message ?? maybeAxiosError.response?.data?.detail ?? maybeAxiosError.message ?? 'Request failed.';
+  const rawMessage = maybeAxiosError.response?.data?.message ?? maybeAxiosError.response?.data?.detail ?? maybeAxiosError.message ?? 'Request failed.';
+  if (rawMessage.includes('Model file not found') || rawMessage.includes('Modele IA introuvable')) {
+    return 'AI model is not available yet. Run backend/scripts/train_alert_model.py and then click Refresh AI.';
+  }
+  return rawMessage;
 }
 
-function formatScore(value?: number | null): string {
-  if (typeof value !== 'number' || Number.isNaN(value)) {
-    return '-';
+function getStatusMeta(status?: string) {
+  switch ((status ?? '').toLowerCase()) {
+    case 'healthy':  return { label: 'Active',      cls: 'vd-badge vd-badge-active' };
+    case 'warning':  return { label: 'Maintenance', cls: 'vd-badge vd-badge-warning' };
+    case 'critical': return { label: 'Critical',    cls: 'vd-badge vd-badge-critical' };
+    default:         return { label: 'Pending',     cls: 'vd-badge vd-badge-pending' };
   }
-  return `${value.toFixed(1)} / 100`;
 }
 
-function formatPercent(value?: number | null): string {
-  if (typeof value !== 'number' || Number.isNaN(value)) {
-    return '-';
+function getRiskColor(severity?: string): string {
+  switch ((severity ?? '').toLowerCase()) {
+    case 'critical': return '#dc2626';
+    case 'warning':  return '#f59e0b';
+    default:         return '#16a34a';
   }
-  return `${value.toFixed(1)}%`;
 }
 
 export function VehicleDetailsPage() {
@@ -70,62 +66,6 @@ export function VehicleDetailsPage() {
     retry: false,
   });
 
-  const [make, setMake] = useState('');
-  const [model, setModel] = useState('');
-  const [status, setStatus] = useState('');
-  const [vin, setVin] = useState('');
-  const [licensePlate, setLicensePlate] = useState('');
-  const [year, setYear] = useState('');
-  const [mileage, setMileage] = useState('');
-  const [fleetId, setFleetId] = useState('');
-  const [dongleId, setDongleId] = useState('');
-  const [autopiDeviceId, setAutopiDeviceId] = useState('');
-  const [autopiUnitId, setAutopiUnitId] = useState('');
-  const [formFeedback, setFormFeedback] = useState('');
-
-  const updateMutation = useMutation({
-    mutationFn: () => {
-      if (!Number.isFinite(id)) {
-        throw new Error('Vehicle ID invalide');
-      }
-
-      const payload: Record<string, unknown> = {};
-
-      if (status.trim() !== '') payload.status = status;
-
-      if (vin.trim() !== '') payload.vin = vin;
-      if (licensePlate.trim() !== '') payload.license_plate = licensePlate;
-      if (make.trim() !== '') payload.make = make;
-      if (model.trim() !== '') payload.model = model;
-
-      const yearValue = parseOptionalNumber(year);
-      if (yearValue !== undefined) payload.year = yearValue;
-
-      const mileageValue = parseOptionalNumber(mileage);
-      if (mileageValue !== undefined) payload.mileage = mileageValue;
-
-      const fleetIdValue = parseOptionalNumber(fleetId);
-      if (fleetIdValue !== undefined) payload.fleet_id = fleetIdValue;
-
-      if (dongleId.trim() !== '') payload.dongle_id = dongleId;
-      if (autopiDeviceId.trim() !== '') payload.autopi_device_id = autopiDeviceId;
-      if (autopiUnitId.trim() !== '') payload.autopi_unit_id = autopiUnitId;
-
-      return updateVehicle(id, payload);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['vehicle', id] });
-      queryClient.invalidateQueries({ queryKey: ['vehicles'] });
-      setFormFeedback('Update réussi');
-    },
-    onError: (error: unknown) => {
-      const maybeAxiosError = error as { response?: { data?: { message?: string; detail?: string } }; message?: string };
-      const apiMessage = maybeAxiosError.response?.data?.message ?? maybeAxiosError.response?.data?.detail;
-      const fallbackMessage = maybeAxiosError.message ?? 'Échec de mise à jour';
-      setFormFeedback(apiMessage || fallbackMessage);
-    },
-  });
-
   const deleteMutation = useMutation({
     mutationFn: () => deleteVehicle(id),
     onSuccess: () => {
@@ -135,145 +75,171 @@ export function VehicleDetailsPage() {
   });
 
   const vehicle = vehicleQuery.data?.vehicle;
+  const statusMeta = getStatusMeta(vehicle?.status);
+  const riskSeverity = aiRiskQuery.data?.predicted_severity;
+  const riskScore = aiRiskQuery.data?.predicted_risk_score;
+  const riskColor = getRiskColor(riskSeverity);
 
   return (
-    <section>
-      <h2>Vehicle Details</h2>
-      <p className="subtitle">Technical card and assignment data for vehicle #{vehicleId ?? '-'}</p>
+    <section className="vd-page">
+      {/* ── Page header ── */}
+      <div className="vd-page-header">
+        <h2 className="vd-page-title">Vehicle Details</h2>
+        <p className="vd-page-sub">Technical card and assignment — vehicle #{vehicleId ?? '-'}</p>
+      </div>
 
-      <div className="panel details-grid">
-        <div>
-          <h3>Identity</h3>
-          <ul>
-            <li>VIN: {vehicle?.vin ?? '-'}</li>
-            <li>Plate: {vehicle?.license_plate ?? '-'}</li>
-            <li>Make / Model: {vehicle?.make ?? '-'} {vehicle?.model ?? ''}</li>
-            <li>Year: {vehicle?.year ?? '-'}</li>
-          </ul>
+      {/* ── Identity + Assignment cards ── */}
+      <div className="vd-info-row">
+        {/* Identity */}
+        <div className="vd-card">
+          <p className="vd-card-label">Identity</p>
+          <div className="vd-fields">
+            <div className="vd-field">
+              <span className="vd-field-key">VIN</span>
+              <span className="vd-field-val">{vehicle?.vin ?? '-'}</span>
+            </div>
+            <div className="vd-field">
+              <span className="vd-field-key">Plate</span>
+              <span className="vd-field-val">{vehicle?.license_plate ?? '-'}</span>
+            </div>
+            <div className="vd-field">
+              <span className="vd-field-key">Make</span>
+              <span className="vd-field-val">{vehicle?.make ?? '-'} {vehicle?.model ?? ''}</span>
+            </div>
+            <div className="vd-field">
+              <span className="vd-field-key">Year</span>
+              <span className="vd-field-val">{vehicle?.year ?? '-'}</span>
+            </div>
+          </div>
         </div>
-        <div>
-          <h3>Assignment</h3>
-          <ul>
-            
-            <li>Dongle ID: {vehicle?.dongle_id ?? '-'}</li>
-          </ul>
+
+        {/* Assignment */}
+        <div className="vd-card">
+          <p className="vd-card-label">Assignment</p>
+          <div className="vd-fields">
+            <div className="vd-field">
+              <span className="vd-field-key">Dongle ID</span>
+              <span className="vd-field-val">{vehicle?.dongle_id ?? '-'}</span>
+            </div>
+            <div className="vd-field">
+              <span className="vd-field-key">Status</span>
+              <span className={statusMeta.cls}>{statusMeta.label}</span>
+            </div>
+            <div className="vd-field">
+              <span className="vd-field-key">Mileage</span>
+              <span className="vd-field-val">
+                {vehicle?.mileage != null ? `${vehicle.mileage.toLocaleString()} km` : '-'}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="panel">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+      {/* ── AI Diagnostic ── */}
+      <div className="vd-card vd-ai-card-outer">
+        <div className="vd-ai-header">
           <div>
-            <h3>AI Diagnostic</h3>
-            <p className="subtitle">Latest AI risk score, recommendations and insights for this vehicle.</p>
+            <p className="vd-card-label">AI Diagnostic</p>
+            <p className="vd-ai-sub">Risk score, recommendations and insights for this vehicle</p>
           </div>
           <button
             type="button"
-            className="btn-link"
+            className="vd-refresh-btn"
             onClick={() => {
               queryClient.invalidateQueries({ queryKey: ['ai-risk-score', id] });
               queryClient.invalidateQueries({ queryKey: ['ai-recommendations', id] });
               queryClient.invalidateQueries({ queryKey: ['ai-insights', id] });
             }}
           >
-            Refresh AI
+            ↺ Refresh AI
           </button>
         </div>
 
-        <div className="details-grid">
-          <div>
-            <h4>Risk Summary</h4>
+        <div className="vd-ai-cards">
+          {/* Risk Score */}
+          <div className="vd-ai-metric">
+            <p className="vd-metric-title">RISK SCORE</p>
             {aiRiskQuery.isLoading ? (
-              <p className="subtitle">Loading AI risk score...</p>
+              <p className="vd-metric-loading">Loading...</p>
             ) : aiRiskQuery.isError ? (
-              <p className="subtitle">{getErrorMessage(aiRiskQuery.error)}</p>
+              <p className="vd-metric-error">{getErrorMessage(aiRiskQuery.error)}</p>
             ) : (
-              <ul>
-                <li>Severity: {aiRiskQuery.data?.predicted_severity ?? '-'}</li>
-                <li>Risk score: {formatScore(aiRiskQuery.data?.predicted_risk_score)}</li>
-                <li>Confidence: {formatPercent(aiRiskQuery.data?.confidence)}</li>
-              </ul>
+              <>
+                <div className="vd-score-circle" style={{ borderColor: riskColor, color: riskColor }}>
+                  {riskScore != null ? riskScore.toFixed(1) : '-'}
+                  <span className="vd-score-denom">/10</span>
+                </div>
+                <p className="vd-metric-sub" style={{ color: riskColor }}>
+                  {riskSeverity ?? '-'}
+                </p>
+              </>
             )}
           </div>
 
-          <div>
-            <h4>Maintenance Recommendations</h4>
+          {/* Maintenance */}
+          <div className="vd-ai-metric">
+            <p className="vd-metric-title">MAINTENANCE</p>
             {aiRecommendationsQuery.isLoading ? (
-              <p className="subtitle">Loading recommendations...</p>
+              <p className="vd-metric-loading">Loading...</p>
             ) : aiRecommendationsQuery.isError ? (
-              <p className="subtitle">{getErrorMessage(aiRecommendationsQuery.error)}</p>
+              <p className="vd-metric-error">{getErrorMessage(aiRecommendationsQuery.error)}</p>
             ) : aiRecommendationsQuery.data?.recommendations?.length ? (
-              <ul>
-                {aiRecommendationsQuery.data.recommendations.map((item, index) => (
+              <ul className="vd-rec-list">
+                {aiRecommendationsQuery.data.recommendations.slice(0, 3).map((item, index) => (
                   <li key={`${item.title}-${index}`}>
-                    <strong>{item.title}</strong> ({item.priority}) — {item.message}
+                    <strong>{item.title}</strong>
+                    <span className="vd-rec-msg">{item.message}</span>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="subtitle">No recommendation available.</p>
+              <p className="vd-metric-sub">No recommendations.</p>
+            )}
+          </div>
+
+          {/* AI Insights */}
+          <div className="vd-ai-metric">
+            <p className="vd-metric-title">AI INSIGHTS</p>
+            {aiInsightsQuery.isLoading ? (
+              <p className="vd-metric-loading">Loading...</p>
+            ) : aiInsightsQuery.isError ? (
+              <p className="vd-metric-error">{getErrorMessage(aiInsightsQuery.error)}</p>
+            ) : (
+              <>
+                <p className="vd-insight-line">
+                  {aiInsightsQuery.data?.insights?.summary ?? 'No anomalies detected'}
+                </p>
+                {aiInsightsQuery.data?.insights?.next_action && (
+                  <p className="vd-insight-action">
+                    Next: {aiInsightsQuery.data.insights.next_action}
+                  </p>
+                )}
+                {aiInsightsQuery.data?.predicted_risks?.length ? (
+                  <ul className="vd-rec-list">
+                    {aiInsightsQuery.data.predicted_risks.slice(0, 2).map((risk, index) => (
+                      <li key={`${risk.type}-${index}`}>
+                        <strong>{risk.type}</strong>
+                        <span className="vd-rec-msg">{risk.message}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </>
             )}
           </div>
         </div>
-
-        <div>
-          <h4>AI Insights</h4>
-          {aiInsightsQuery.isLoading ? (
-            <p className="subtitle">Loading insights...</p>
-          ) : aiInsightsQuery.isError ? (
-            <p className="subtitle">{getErrorMessage(aiInsightsQuery.error)}</p>
-          ) : (
-            <>
-              <p><strong>Summary:</strong> {aiInsightsQuery.data?.insights?.summary ?? '-'}</p>
-              <p><strong>Priority:</strong> {aiInsightsQuery.data?.insights?.priority ?? '-'}</p>
-              <p><strong>Next action:</strong> {aiInsightsQuery.data?.insights?.next_action ?? '-'}</p>
-
-              {aiInsightsQuery.data?.predicted_risks?.length ? (
-                <ul>
-                  {aiInsightsQuery.data.predicted_risks.map((risk, index) => (
-                    <li key={`${risk.type}-${index}`}>
-                      <strong>{risk.type}</strong> ({risk.severity}) — {risk.message}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="subtitle">No predicted risks returned.</p>
-              )}
-            </>
-          )}
-        </div>
       </div>
 
-      <form className="panel form-grid" onSubmit={(e) => { e.preventDefault(); setFormFeedback(''); updateMutation.mutate(); }}>
-        <h3>Update vehicle</h3>
-        <input placeholder="VIN (17 caractères, ex: VF1AAAAA123456789)" value={vin} onChange={(e) => setVin(e.target.value)} />
-        <input placeholder="License plate (ex: 12345-A-1)" value={licensePlate} onChange={(e) => setLicensePlate(e.target.value)} />
-        <input placeholder="Make (ex: Renault)" value={make} onChange={(e) => setMake(e.target.value)} />
-        <input placeholder="Model (ex: Clio 5)" value={model} onChange={(e) => setModel(e.target.value)} />
-        <input type="number" placeholder="Year" value={year} onChange={(e) => setYear(e.target.value)} />
-        <input type="number" placeholder="Mileage (ex: 125000)" value={mileage} onChange={(e) => setMileage(e.target.value)} />
-        
-        <input placeholder="ID dongle exact (ex: dongle_001)" value={dongleId} onChange={(e) => setDongleId(e.target.value)} />
-      
-        <select value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">choose a status </option>
-          <option value="pending">pending</option>
-          <option value="healthy">healthy</option>
-          <option value="warning">warning</option>
-          <option value="critical">critical</option>
-        </select>
-        <button type="submit" className="btn-primary" disabled={updateMutation.isPending}>
-          {updateMutation.isPending ? 'Saving...' : 'Update'}
+      {/* ── Actions ── */}
+      <div className="vd-actions">
+        <button
+          type="button"
+          className="vd-btn-danger"
+          onClick={() => deleteMutation.mutate()}
+          disabled={deleteMutation.isPending}
+        >
+          {deleteMutation.isPending ? 'Deleting…' : 'Delete Vehicle'}
         </button>
-        {formFeedback && <p className="subtitle">{formFeedback}</p>}
-      </form>
-
-      <div className="detail-actions">
-        <button type="button" className="btn-danger" onClick={() => deleteMutation.mutate()}>
-          DELETE Vehicle
-        </button>
-        <Link to={`/vehicle-status/${vehicleId ?? ''}`} className="btn-link">
-          Go to Status
-        </Link>
       </div>
     </section>
   );

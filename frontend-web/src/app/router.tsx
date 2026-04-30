@@ -15,7 +15,6 @@ import {
   RegisterPage,
   TelemetryPage,
   VehicleDetailsPage,
-  VehicleStatusPage,
   VehiclesPage,
 } from '../pages/index';
 
@@ -74,8 +73,6 @@ export const router = createBrowserRouter([
             ),
           },
           { path: 'diagnostics', element: <DtcPage /> },
-          { path: 'vehicle-status', element: <VehicleStatusPage /> },
-          { path: 'vehicle-status/:vehicleId', element: <VehicleStatusPage /> },
           { path: 'devices/overview', element: <DeviceOverviewPage /> },
           { path: 'devices/list', element: <DevicesPage /> },
           { path: 'devices/:deviceId', element: <DeviceDetailsPage /> },
