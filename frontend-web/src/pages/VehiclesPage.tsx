@@ -1,7 +1,42 @@
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
-import { createVehicle, deleteVehicle, listVehicles, updateVehicle } from '../lib/api/endpoints';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { createVehicle, deleteVehicle, listAlertsByVehicle, listIotLogs, listVehicles, updateVehicle } from '../lib/api/endpoints';
+
+type IotLogItem = {
+  event_type?: string;
+  event_at?: string;
+  created_at?: string;
+  metadata?: Record<string, unknown>;
+};
+
+type RoutePoint = {
+  lat: number;
+  lng: number;
+  at: string;
+};
+
+function extractRoutePoint(log: IotLogItem): RoutePoint | null {
+  const metadata = log.metadata ?? {};
+  const loc = (metadata.loc ?? {}) as Record<string, unknown>;
+  const rawLat = loc.lat ?? metadata.lat;
+  const rawLng = loc.lon ?? metadata.lon ?? metadata.lng;
+  const at = String(log.event_at ?? log.created_at ?? '');
+
+  const lat = Number(rawLat);
+  const lng = Number(rawLng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || at.length === 0) {
+    return null;
+  }
+
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return null;
+  }
+
+  return { lat, lng, at };
+}
 
 function formatMileage(value: number) {
   return new Intl.NumberFormat('fr-FR').format(value);
@@ -29,6 +64,9 @@ function getVehicleEmoji(make: string, model: string) {
 
 export function VehiclesPage() {
   const queryClient = useQueryClient();
+  const routeMapRef = useRef<L.Map | null>(null);
+  const routeLayerRef = useRef<L.LayerGroup | null>(null);
+  const routeMapContainerRef = useRef<HTMLDivElement | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const [createVin, setCreateVin] = useState('');
@@ -48,7 +86,28 @@ export function VehiclesPage() {
   const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null);
   const [hasManualSelection, setHasManualSelection] = useState(false);
 
-  const vehiclesQuery = useQuery({ queryKey: ['vehicles'], queryFn: listVehicles });
+  const vehiclesQuery = useQuery({
+    queryKey: ['vehicles'],
+    queryFn: listVehicles,
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true,
+  });
+  const vehicleAlertsQuery = useQuery({
+    queryKey: ['vehicle-alerts', selectedVehicleId],
+    queryFn: () => listAlertsByVehicle(selectedVehicleId as number),
+    enabled: selectedVehicleId !== null,
+  });
+  const gpsRouteQuery = useQuery({
+    queryKey: ['vehicle-gps-route', selectedVehicleId],
+    queryFn: () =>
+      listIotLogs({
+        vehicle_id: selectedVehicleId as number,
+        limit: 500,
+      }),
+    enabled: selectedVehicleId !== null,
+    refetchInterval: 10000,
+    refetchIntervalInBackground: true,
+  });
 
   const createMutation = useMutation({
     mutationFn: async (payload: Parameters<typeof createVehicle>[0]) => {
@@ -98,6 +157,31 @@ export function VehiclesPage() {
   });
 
   const vehicles = vehiclesQuery.data?.items ?? [];
+  const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId) ?? null;
+  const activeAlertCount = vehicleAlertsQuery.data?.pending ?? 0;
+  const latestVehicleAlert = vehicleAlertsQuery.data?.alerts?.[0] ?? null;
+  const gpsRoutePoints = useMemo(() => {
+    const logs = ((gpsRouteQuery.data as { items?: IotLogItem[] } | undefined)?.items ?? []).filter(
+      (item) => (item.event_type ?? '').toLowerCase() === 'gps'
+    );
+    const points = logs
+      .map(extractRoutePoint)
+      .filter((point): point is RoutePoint => point !== null)
+      .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+
+    // Keep order stable while removing exact duplicates sent by the device.
+    const unique: RoutePoint[] = [];
+    let previousKey = '';
+    for (const point of points) {
+      const key = `${point.lat.toFixed(6)}:${point.lng.toFixed(6)}:${point.at}`;
+      if (key === previousKey) {
+        continue;
+      }
+      unique.push(point);
+      previousKey = key;
+    }
+    return unique;
+  }, [gpsRouteQuery.data]);
 
   useEffect(() => {
     if (vehicles.length === 0) {
@@ -108,6 +192,79 @@ export function VehiclesPage() {
     // Keep detail navigation usable by default with first vehicle selected.
     setSelectedVehicleId((current) => (current && vehicles.some((v) => v.id === current) ? current : vehicles[0].id));
   }, [vehicles]);
+
+  useEffect(() => {
+    if (!routeMapContainerRef.current || routeMapRef.current) {
+      return;
+    }
+
+    const map = L.map(routeMapContainerRef.current).setView([35.8256, 10.6084], 12);
+    routeMapRef.current = map;
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(map);
+
+    const routeLayer = L.layerGroup().addTo(map);
+    routeLayerRef.current = routeLayer;
+
+    return () => {
+      map.remove();
+      routeMapRef.current = null;
+      routeLayerRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const map = routeMapRef.current;
+    const routeLayer = routeLayerRef.current;
+    if (!map || !routeLayer) {
+      return;
+    }
+
+    routeLayer.clearLayers();
+
+    if (gpsRoutePoints.length === 0) {
+      return;
+    }
+
+    const latLngs = gpsRoutePoints.map((point) => [point.lat, point.lng] as [number, number]);
+    L.polyline(latLngs, {
+      color: '#0f5bd7',
+      weight: 4,
+      opacity: 0.9,
+    }).addTo(routeLayer);
+
+    const startPoint = gpsRoutePoints[0];
+    const endPoint = gpsRoutePoints[gpsRoutePoints.length - 1];
+
+    L.circleMarker([startPoint.lat, startPoint.lng], {
+      radius: 6,
+      color: '#15803d',
+      fillColor: '#22c55e',
+      fillOpacity: 0.95,
+      weight: 2,
+    })
+      .bindPopup(`Start<br/>${new Date(startPoint.at).toLocaleString()}`)
+      .addTo(routeLayer);
+
+    L.circleMarker([endPoint.lat, endPoint.lng], {
+      radius: 7,
+      color: '#9a3412',
+      fillColor: '#f97316',
+      fillOpacity: 0.95,
+      weight: 2,
+    })
+      .bindPopup(`Now<br/>${new Date(endPoint.at).toLocaleString()}`)
+      .addTo(routeLayer);
+
+    if (latLngs.length === 1) {
+      map.setView(latLngs[0], 15);
+    } else {
+      map.fitBounds(L.latLngBounds(latLngs), { padding: [24, 24] });
+    }
+  }, [gpsRoutePoints, selectedVehicleId]);
 
   const onCreate: React.FormEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
@@ -292,72 +449,105 @@ export function VehiclesPage() {
         </div>
       ) : null}
 
-      <div className="panel fleet-list-shell">
-        <div className="fleet-list-header">
-          <div className="fleet-list-heading">CURRENT FLEET</div>
-          <div className="fleet-top-actions">
-            <select
-              className="toolbar-input"
-              value={selectedVehicleId ?? ''}
-              onChange={(e) => {
-                setHasManualSelection(true);
-                setSelectedVehicleId(e.target.value === '' ? null : Number(e.target.value));
-              }}
-              style={{ minWidth: 220 }}
-            >
-              {vehicles.map((vehicle) => (
-                <option key={vehicle.id} value={vehicle.id}>
-                  {vehicle.make} {vehicle.model} ({vehicle.license_plate})
-                </option>
-              ))}
-            </select>
-            <button
-              className="btn-primary"
-              type="button"
-              disabled={!selectedVehicleId || updateMutation.isPending}
-              onClick={onOpenUpdateModal}
-            >
-              {updateMutation.isPending ? 'Updating...' : 'Update'}
-            </button>
-            <button
-              className="btn-danger"
-              type="button"
-              disabled={!selectedVehicleId || !hasManualSelection || deleteMutation.isPending}
-              onClick={() => {
-                if (!selectedVehicleId) return;
-                if (!window.confirm('Delete this vehicle?')) return;
-                deleteMutation.mutate(selectedVehicleId);
-              }}
-            >
-              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
-            </button>
+      <div className="vehicles-content-layout">
+        <div className="panel fleet-list-shell">
+          <div className="fleet-list-header">
+            <div className="fleet-list-heading">CURRENT FLEET</div>
+            <div className="fleet-top-actions">
+              <select
+                className="toolbar-input"
+                value={selectedVehicleId ?? ''}
+                onChange={(e) => {
+                  setHasManualSelection(true);
+                  setSelectedVehicleId(e.target.value === '' ? null : Number(e.target.value));
+                }}
+                style={{ minWidth: 220 }}
+              >
+                {vehicles.map((vehicle) => (
+                  <option key={vehicle.id} value={vehicle.id}>
+                    {vehicle.make} {vehicle.model} ({vehicle.license_plate})
+                  </option>
+                ))}
+              </select>
+              <button
+                className="btn-primary"
+                type="button"
+                disabled={!selectedVehicleId || updateMutation.isPending}
+                onClick={onOpenUpdateModal}
+              >
+                {updateMutation.isPending ? 'Updating...' : 'Update'}
+              </button>
+              <button
+                className="btn-danger"
+                type="button"
+                disabled={!selectedVehicleId || !hasManualSelection || deleteMutation.isPending}
+                onClick={() => {
+                  if (!selectedVehicleId) return;
+                  if (!window.confirm('Delete this vehicle?')) return;
+                  deleteMutation.mutate(selectedVehicleId);
+                }}
+              >
+                {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+          {vehiclesQuery.isLoading ? <p>Loading vehicles...</p> : null}
+          {!vehiclesQuery.isLoading && vehicles.length === 0 ? <p className="empty-cell">No vehicles available.</p> : null}
+          <div className="fleet-cards">
+            {vehicles.map((vehicle) => {
+              const statusMeta = getVehicleStatusMeta(vehicle.status);
+              return (
+                <article key={vehicle.id} className="fleet-vehicle-card">
+                  <div className="fleet-vehicle-icon">{getVehicleEmoji(vehicle.make, vehicle.model)}</div>
+                  <div className="fleet-vehicle-main">
+                    <div className="fleet-vehicle-head">
+                      <div className="fleet-vehicle-title">{vehicle.make} {vehicle.model} {vehicle.year}</div>
+                    </div>
+                    <div className="fleet-vehicle-meta">{vehicle.license_plate} • VIN {vehicle.vin.slice(-6)}</div>
+                  </div>
+                  <div className="fleet-vehicle-side">
+                    <span className={statusMeta.className}>{statusMeta.label}</span>
+                    <span className="fleet-vehicle-mileage">{formatMileage(vehicle.mileage)} km</span>
+                    <Link to={`/vehicles/${vehicle.id}`} className="fleet-view-details-btn">
+                      View Details
+                    </Link>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+          <div className="vehicles-tracking-stats">
+            <article className="vehicles-tracking-stat-card">
+              <p className="vehicles-tracking-stat-label">Kilometrage</p>
+              <p className="vehicles-tracking-stat-value">
+                {selectedVehicle ? formatMileage(selectedVehicle.mileage) : '0'}
+              </p>
+              <p className="vehicles-tracking-stat-note">
+                {selectedVehicle ? `${selectedVehicle.make} ${selectedVehicle.model}` : 'No vehicle selected'}
+              </p>
+            </article>
+            <article className="vehicles-tracking-stat-card">
+              <p className="vehicles-tracking-stat-label">Alertes actives</p>
+              <p className="vehicles-tracking-stat-value">{activeAlertCount}</p>
+              <p className="vehicles-tracking-stat-note">
+                {latestVehicleAlert ? latestVehicleAlert.title : 'Aucune alerte active'}
+              </p>
+            </article>
           </div>
         </div>
-        {vehiclesQuery.isLoading ? <p>Loading vehicles...</p> : null}
-        {!vehiclesQuery.isLoading && vehicles.length === 0 ? <p className="empty-cell">No vehicles available.</p> : null}
-        <div className="fleet-cards">
-          {vehicles.map((vehicle) => {
-            const statusMeta = getVehicleStatusMeta(vehicle.status);
-            return (
-              <article key={vehicle.id} className="fleet-vehicle-card">
-                <div className="fleet-vehicle-icon">{getVehicleEmoji(vehicle.make, vehicle.model)}</div>
-                <div className="fleet-vehicle-main">
-                  <div className="fleet-vehicle-head">
-                    <div className="fleet-vehicle-title">{vehicle.make} {vehicle.model} {vehicle.year}</div>
-                  </div>
-                  <div className="fleet-vehicle-meta">{vehicle.license_plate} • VIN {vehicle.vin.slice(-6)}</div>
-                </div>
-                <div className="fleet-vehicle-side">
-                  <span className={statusMeta.className}>{statusMeta.label}</span>
-                  <span className="fleet-vehicle-mileage">{formatMileage(vehicle.mileage)} km</span>
-                  <Link to={`/vehicles/${vehicle.id}`} className="fleet-view-details-btn">
-                    View Details
-                  </Link>
-                </div>
-              </article>
-            );
-          })}
-        </div>
+
+        <aside className="panel fleet-tracking-panel vehicles-tracking-panel">
+          <div className="panel-title-row">
+            <h3>Fleet Tracking</h3>
+            <span className="muted-note">{selectedVehicle ? selectedVehicle.license_plate : 'No vehicle selected'}</span>
+          </div>
+          <div ref={routeMapContainerRef} className="fleet-map" aria-label="Vehicle trip map" />
+          <p className="vehicles-map-note">
+            {gpsRoutePoints.length > 1
+              ? `Route tracee avec ${gpsRoutePoints.length} points GPS du dongle.`
+              : 'Trip routes will appear here once GPS points are available from the dongle.'}
+          </p>
+        </aside>
       </div>
     </section>
   );

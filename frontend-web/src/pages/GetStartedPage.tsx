@@ -27,15 +27,30 @@ export function GetStartedPage() {
 
       {showWelcome && (
         <article className="get-started-hero">
-          <div>
-            <h3>Discover, Shop, Learn, and Thrive with MALLOULIAUTO Cloud</h3>
-            <p>
-              Manage your fleet operations, diagnostics and connected devices from one place.
-              Vehicles: {totalVehicles} · Open alerts: {pendingAlerts} · DTC: {dtcQuery.data?.count ?? 0}
-            </p>
-            <button className="btn-primary" type="button">Get expert guidance</button>
+          <div className="get-started-hero-main">
+            <p className="get-started-hero-kicker">Cloud Fleet Platform</p>
+            <h3 className="get-started-hero-title">Discover, shop, learn and thrive with MALLOULIAUTO Cloud</h3>
+            <div className="get-started-hero-stats" aria-label="Fleet summary metrics">
+              <div className="get-started-hero-stat">
+                <strong>{totalVehicles}</strong>
+                <span>Vehicles</span>
+              </div>
+              <div className="get-started-hero-stat">
+                <strong>{pendingAlerts}</strong>
+                <span>Open alerts</span>
+              </div>
+              <div className="get-started-hero-stat">
+                <strong>{dtcQuery.data?.count ?? 0}</strong>
+                <span>Active DTC</span>
+              </div>
+            </div>
+            <button className="get-started-hero-cta" type="button">Get expert guidance ↗</button>
           </div>
-          <div className="get-started-hero-device" aria-hidden="true">OBD</div>
+          <div className="get-started-hero-side">
+            <p className="get-started-hero-kicker">Active connector</p>
+            <p className="get-started-hero-side-title">OBD-II</p>
+            <p className="get-started-hero-side-sub">Real-time diagnostics via connected dongle</p>
+          </div>
         </article>
       )}
 
