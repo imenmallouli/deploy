@@ -56,7 +56,7 @@ export function RegisterPage() {
 
   return (
     <div className="auth-screen">
-      <section className="auth-page">
+      <section className="auth-page auth-shared-card">
         <h2>Register</h2>
         <p className="subtitle">Create a new account for fleet operations.</p>
         <form className="auth-form" onSubmit={handleSubmit}>

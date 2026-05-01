@@ -45,7 +45,7 @@ export function LoginPage() {
 
   return (
     <div className="auth-screen">
-      <section className="auth-page">
+      <section className="auth-page auth-shared-card">
         <h2>Login</h2>
         <p className="subtitle">Authenticate to access the operations dashboard.</p>
         <form className="auth-form" onSubmit={handleSubmit}>

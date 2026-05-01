@@ -217,6 +217,23 @@ h2 {
 
 .overview-page h2 {
   margin-bottom: 14px;
+  color: #0f2f57;
+}
+
+.overview-page {
+  background: #eef5ff;
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.overview-page .panel {
+  background: #f7fbff;
+  border: 1px solid #cfe3ff;
+  box-shadow: 0 8px 20px rgba(30, 64, 175, 0.08);
+}
+
+.overview-page .panel ul {
+  color: #1f4f8f;
 }
 
 .overview-layout {
@@ -245,12 +262,12 @@ h2 {
 }
 
 .getting-started-info {
-  color: #6b7280;
+  color: #4a6b90;
   font-size: 14px;
 }
 
 .getting-started-link {
-  color: #1d4ed8;
+  color: #2159b8;
   text-decoration: none;
 }
 
@@ -275,7 +292,7 @@ h2 {
 }
 
 .muted-note {
-  color: #6b7280;
+  color: #4a6b90;
   font-size: 13px;
 }
 
@@ -287,26 +304,26 @@ h2 {
 }
 
 .overview-stat-card {
-  border: 1px solid #e5e7eb;
+  border: 1px solid #c8ddff;
   border-radius: 10px;
   padding: 12px;
   min-height: 120px;
-  background: #f8fafc;
+  background: #edf5ff;
 }
 
 .overview-stat-card.is-highlight {
-  background: #eaf2ff;
+  background: #dcebff;
 }
 
 .overview-stat-title {
   margin: 0;
-  color: #4b5563;
+  color: #4a6b90;
   font-size: 14px;
 }
 
 .overview-stat-value {
   margin: 22px 0 0;
-  color: #111827;
+  color: #0f2f57;
   font-size: 26px;
   font-weight: 700;
 }
@@ -871,6 +888,8 @@ h2 {
 }
 
 .auth-screen {
+  --auth-card-bg: linear-gradient(145deg, rgba(35, 49, 70, 0.9) 0%, rgba(44, 67, 98, 0.9) 100%);
+  --auth-card-border: rgba(147, 197, 253, 0.45);
   min-height: 100vh;
   display: grid;
   place-items: center;
@@ -890,8 +909,6 @@ h2 {
 
 .auth-screen .auth-page {
   width: min(100%, 460px);
-  background: linear-gradient(145deg, rgba(23, 23, 23, 0.92) 0%, rgba(31, 41, 55, 0.92) 100%);
-  border: 1px solid rgba(148, 163, 184, 0.28);
   border-radius: 14px;
   padding: 22px;
   position: relative;
@@ -900,8 +917,13 @@ h2 {
   color: #e5e7eb;
 }
 
+.auth-screen .auth-page.auth-shared-card {
+  background: var(--auth-card-bg);
+  border: 1px solid var(--auth-card-border);
+}
+
 .auth-page h2 {
-  color: #f8fafc;
+  color: #c6d7e8;
 }
 
 .auth-page .subtitle {
@@ -928,18 +950,18 @@ h2 {
   border: 1px solid #334155;
   border-radius: 10px;
   padding: 10px;
-  background: rgba(15, 23, 42, 0.55);
-  color: #f8fafc;
+  background: rgba(186, 202, 240, 0.55);
+  color: #9fc8f1;
 }
 
 .auth-form input::placeholder {
-  color: #94a3b8;
+  color: #010812;
 }
 
 .auth-form input.auth-input-white {
-  background: #ffffff;
+  background: #fcfafa;
   border-color: #cbd5e1;
-  color: #111827;
+  color: #e9ebf0;
 }
 
 .auth-form input.auth-input-white::placeholder {
