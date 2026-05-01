@@ -19,10 +19,10 @@ body {
 }
 
 .sidebar {
-  background: #f8fafc;
-  color: #1f2937;
+  background: #eef5ff;
+  color: #0f2f57;
   padding: 24px 16px;
-  border-right: 1px solid #e5e7eb;
+  border-right: none;
 }
 
 .brand h1 {
@@ -32,7 +32,7 @@ body {
 
 .brand p {
   margin: 6px 0 20px;
-  color: #6b7280;
+  color: #4a6b90;
   font-size: 13px;
 }
 
@@ -42,7 +42,7 @@ body {
 
 .nav-section-title {
   margin: 0 0 8px;
-  color: #6b7280;
+  color: #4a6b90;
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
@@ -55,19 +55,19 @@ body {
 }
 
 .nav-item {
-  color: #374151;
+  color: #1f4f8f;
   text-decoration: none;
   padding: 10px 12px;
   border-radius: 10px;
 }
 
 .nav-item:hover {
-  background: #e5eef8;
+  background: #dcebff;
 }
 
 .nav-item.active {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: #cfe3ff;
+  color: #0f2f57;
   border-left: 3px solid #1d4ed8;
 }
 
@@ -85,19 +85,19 @@ body {
 }
 
 .nav-subitem {
-  color: #4b5563;
+  color: #1f4f8f;
   text-decoration: none;
   padding: 8px 10px;
   border-radius: 8px;
 }
 
 .nav-subitem:hover {
-  background: #e5eef8;
+  background: #dcebff;
 }
 
 .nav-subitem.active {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: #cfe3ff;
+  color: #0f2f57;
   border-left: 3px solid #1d4ed8;
 }
 
@@ -112,15 +112,17 @@ body {
   gap: 16px;
   align-items: center;
   padding: 16px 24px;
-  border-bottom: 1px solid #e5e7eb;
-  background: white;
+  border-bottom: none;
+  background: #f7fbff;
 }
 
 .search {
   width: min(520px, 100%);
-  border: 1px solid #d1d5db;
+  border: none;
   border-radius: 10px;
   padding: 10px 12px;
+  background: #edf5ff;
+  color: #0f2f57;
 }
 
 .topbar-right {
@@ -130,7 +132,9 @@ body {
 }
 
 .chip {
-  border: 1px solid #d1d5db;
+  border: none;
+  background: #dcebff;
+  color: #0f2f57;
   border-radius: 999px;
   padding: 4px 10px;
   font-size: 12px;
@@ -156,7 +160,7 @@ h2 {
 
 .subtitle {
   margin: 6px 0 20px;
-  color: #6b7280;
+  color: #1f4f8f;
 }
 
 .stats-grid {
@@ -166,8 +170,8 @@ h2 {
 }
 
 .stat-card {
-  background: white;
-  border: 1px solid #e5e7eb;
+  background: #f7fbff;
+  border: none;
   border-radius: 12px;
   padding: 14px;
 }
@@ -182,7 +186,7 @@ h2 {
 
 .stat-title {
   margin: 0;
-  color: #6b7280;
+  color: #4a6b90;
   font-size: 13px;
 }
 
@@ -200,8 +204,8 @@ h2 {
 }
 
 .panel {
-  background: white;
-  border: 1px solid #e5e7eb;
+  background: #f7fbff;
+  border: none;
   border-radius: 12px;
   padding: 14px;
 }
@@ -209,7 +213,7 @@ h2 {
 .panel ul {
   margin: 0;
   padding-left: 18px;
-  color: #374151;
+  color: #1f4f8f;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -228,7 +232,7 @@ h2 {
 
 .overview-page .panel {
   background: #f7fbff;
-  border: 1px solid #cfe3ff;
+  border: none;
   box-shadow: 0 8px 20px rgba(30, 64, 175, 0.08);
 }
 
@@ -304,7 +308,7 @@ h2 {
 }
 
 .overview-stat-card {
-  border: 1px solid #c8ddff;
+  border: none;
   border-radius: 10px;
   padding: 12px;
   min-height: 120px;
@@ -336,7 +340,7 @@ h2 {
   margin-top: 12px;
   width: 100%;
   min-height: 640px;
-  border: 1px solid #e5e7eb;
+  border: none;
   border-radius: 10px;
 }
 
@@ -380,9 +384,11 @@ h2 {
 
 .toolbar-input {
   min-width: 280px;
-  border: 1px solid #d1d5db;
+  border: none;
   border-radius: 8px;
   padding: 9px;
+  background: #edf5ff;
+  color: #0f2f57;
 }
 
 .empty-cell {
@@ -512,10 +518,12 @@ h2 {
 .form-grid input,
 .form-grid select,
 .form-grid textarea {
-  border: 1px solid #d1d5db;
+  border: none;
   border-radius: 8px;
   padding: 9px;
   font: inherit;
+  background: #edf5ff;
+  color: #0f2f57;
 }
 
 .checkbox-row {
@@ -602,7 +610,7 @@ h2 {
 
 .vehicles-subtitle {
   margin: 8px 0 0;
-  color: #6b7280;
+  color: #4a6b90;
   font-size: 14px;
 }
 
@@ -639,7 +647,7 @@ h2 {
 .vehicle-create-modal {
   width: min(100%, 560px);
   border-radius: 16px;
-  border: 1px solid #dbe3f0;
+  border: none;
   background: #ffffff;
   color: #0f172a;
   padding: 24px;
@@ -672,7 +680,7 @@ h2 {
 
 .vehicle-field input,
 .vehicle-field select {
-  border: 1px solid #cbd5e1;
+  border: none;
   border-radius: 10px;
   padding: 10px 12px;
   font: inherit;
@@ -698,7 +706,7 @@ h2 {
 .vehicle-modal-actions .btn-secondary {
   background: #e2e8f0;
   color: #0f172a;
-  border: 1px solid #cbd5e1;
+  border: none;
 }
 
 .vehicle-modal-actions .btn-primary {
@@ -707,9 +715,9 @@ h2 {
 }
 
 .fleet-list-shell {
-  background: #ffffff;
-  color: #111827;
-  border: 1px solid #e5e7eb;
+  background: #f7fbff;
+  color: #0f2f57;
+  border: none;
 }
 
 .fleet-list-heading {
@@ -763,9 +771,9 @@ h2 {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  border: 1px solid #e5e7eb;
+  border: none;
   border-radius: 14px;
-  background: #ffffff;
+  background: #edf5ff;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
 }
 
@@ -791,7 +799,7 @@ h2 {
 }
 
 .fleet-vehicle-title {
-  color: #111827;
+  color: #0f2f57;
   font-size: 15px;
   font-weight: 700;
   line-height: 1.2;
@@ -799,7 +807,7 @@ h2 {
 
 .fleet-vehicle-meta {
   margin-top: 4px;
-  color: #6b7280;
+  color: #4a6b90;
   font-size: 13px;
   font-weight: 600;
 }
@@ -843,7 +851,7 @@ h2 {
 }
 
 .fleet-vehicle-mileage {
-  color: #6b7280;
+  color: #1f4f8f;
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
