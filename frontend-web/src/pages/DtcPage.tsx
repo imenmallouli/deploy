@@ -1,13 +1,54 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   clearDtc,
-  createDtc,
+  getAiInsights,
+  getAiRecommendations,
+  getAiRiskScore,
   getDtcHistory,
-  listDtc,
+  getTelemetryHistory,
   listDtcByVehicle,
+  listVehicles,
   pingDtc,
 } from '../lib/api/endpoints';
+
+type TelemetryPoint = {
+  timestamp: string;
+  value: number;
+};
+
+type TelemetryHistoryResponse = {
+  status?: string;
+  vehicle_id?: number;
+  data?: Record<string, TelemetryPoint[]>;
+};
+
+type DtcRow = {
+  id?: string;
+  vehicle_id: number;
+  code?: string;
+  dtc_code?: string;
+  severity?: string;
+  description?: string;
+  resolved?: boolean;
+  created_at?: string;
+  firstOccurrence: string;
+  lastOccurrence: string;
+  count: number;
+};
+
+type PredictedRisk = {
+  type?: string;
+  severity?: string;
+  message?: string;
+};
+
+type SystemStatus = {
+  key: string;
+  label: string;
+  status: 'ok' | 'warn' | 'danger';
+  detail: string;
+};
 
 function getErrorMessage(error: unknown) {
   const data = (error as { response?: { data?: { message?: string; detail?: string } } })?.response?.data;
@@ -31,18 +72,91 @@ function parseBackendDate(value?: string | null) {
   return new Date(Number(year), month, Number(day), Number(hour), Number(minute));
 }
 
-function DtcTrendChart({ rows, baseTemp }: { rows: Array<{ lastOccurrence: string; count: number; resolved?: boolean }>; baseTemp: number }) {
-  const source = rows.slice(-8);
-  const points = (source.length ? source : Array.from({ length: 8 }, (_, index) => ({
-    lastOccurrence: `2026-05-01T${String(13 + Math.floor(index / 2)).padStart(2, '0')}:${index % 2 === 0 ? '45' : '57'}:00`,
-    count: index + 1,
-    resolved: false,
-  }))).map((item, index) => {
-    const adjustment = item.resolved ? -1.5 : 0.8;
-    const temp = Math.max(85, Math.min(100, baseTemp - 6 + index * 0.9 + item.count * 0.35 + adjustment));
-    return { label: item.lastOccurrence, temp };
-  });
+function formatShortDate(value?: string | null) {
+  if (!value) return '-';
+  const parsed = parseBackendDate(value);
+  if (!parsed) return value;
+  return `${String(parsed.getDate()).padStart(2, '0')}/${String(parsed.getMonth() + 1).padStart(2, '0')} ${String(parsed.getHours()).padStart(2, '0')}:${String(parsed.getMinutes()).padStart(2, '0')}`;
+}
 
+function formatMetric(value: number | null | undefined, suffix = '', maximumFractionDigits = 0) {
+  if (value === null || value === undefined || Number.isNaN(value)) return `0${suffix}`;
+  return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits }).format(value)}${suffix}`;
+}
+
+function normalizeDtcCode(row: { code?: string; dtc_code?: string }) {
+  return String(row.code ?? row.dtc_code ?? '').trim().toUpperCase();
+}
+
+function severityToTone(value?: string): 'ok' | 'warn' | 'danger' {
+  const severity = String(value ?? '').toLowerCase();
+  if (severity === 'critical') return 'danger';
+  if (severity === 'warning') return 'warn';
+  return 'ok';
+}
+
+function toneLabel(value: 'ok' | 'warn' | 'danger') {
+  if (value === 'danger') return 'Defaut';
+  if (value === 'warn') return 'Avert.';
+  return 'OK';
+}
+
+function findMetricValue(data: TelemetryHistoryResponse | undefined, metric: string) {
+  const points = data?.data?.[metric] ?? [];
+  if (!points.length) return null;
+  return points[points.length - 1]?.value ?? null;
+}
+
+function findMetricTimestamp(data: TelemetryHistoryResponse | undefined, metric: string) {
+  const points = data?.data?.[metric] ?? [];
+  if (!points.length) return null;
+  return points[points.length - 1]?.timestamp ?? null;
+}
+
+function buildSystemStatuses(rows: DtcRow[], fuelLevel: number | null, predictedRisks: PredictedRisk[] = []): SystemStatus[] {
+  const activeRows = rows.filter((row) => !row.resolved);
+
+  const evaluate = (label: string, patterns: RegExp[], riskTypes: string[] = []) => {
+    const matchedRow = activeRows.find((row) => patterns.some((pattern) => pattern.test(normalizeDtcCode(row))));
+    const matchedRisk = predictedRisks.find((risk) => riskTypes.includes(String(risk.type ?? '').toLowerCase()));
+    const rowTone = matchedRow ? severityToTone(matchedRow.severity) : 'ok';
+    const riskTone = matchedRisk ? severityToTone(matchedRisk.severity) : 'ok';
+
+    const status = rowTone === 'danger' || riskTone === 'danger'
+      ? 'danger'
+      : rowTone === 'warn' || riskTone === 'warn'
+        ? 'warn'
+        : 'ok';
+
+    const detail = matchedRow?.description
+      ?? matchedRisk?.message
+      ?? 'Aucun probleme detecte';
+
+    return { key: label.toLowerCase(), label, status, detail } as SystemStatus;
+  };
+
+  const fuelStatus = evaluate('Carburant', [/^P017/, /^P008/, /^P019/, /^P023/, /^P025/], ['fuel']);
+  if (fuelStatus.status === 'ok' && fuelLevel !== null && fuelLevel < 15) {
+    fuelStatus.status = 'warn';
+    fuelStatus.detail = 'Niveau carburant faible';
+  }
+
+  return [
+    evaluate('Catalyseur', [/^P042/, /^P043/], ['exhaust', 'catalyst']),
+    evaluate('Sonde O2', [/^P013/, /^P014/, /^P015/, /^P016/], ['oxygen_sensor']),
+    evaluate('Systeme EGR', [/^P040/], ['egr']),
+    evaluate('Evaporation carb.', [/^P044/, /^P045/, /^P046/], ['evap']),
+    evaluate('Allumage', [/^P03/], ['ignition', 'misfire']),
+    fuelStatus,
+  ];
+}
+
+function DtcTrendChart({ points }: { points: TelemetryPoint[] }) {
+  if (points.length < 2) {
+    return <p className="muted-note">Pas assez de donnees moteur pour afficher la courbe.</p>;
+  }
+
+  const displayPoints = points.slice(-8);
   const W = 900;
   const H = 250;
   const PL = 52;
@@ -51,21 +165,22 @@ function DtcTrendChart({ rows, baseTemp }: { rows: Array<{ lastOccurrence: strin
   const PB = 34;
   const cW = W - PL - PR;
   const cH = H - PT - PB;
-  const MIN_Y = 85;
-  const MAX_Y = 100;
-  const ticks = [85, 88, 90, 92, 94, 96, 98, 100];
+  const values = displayPoints.map((point) => point.value);
+  const minValue = Math.min(...values, 85);
+  const maxValue = Math.max(...values, 100);
+  const minY = Math.max(0, Math.floor(minValue) - 1);
+  const maxY = Math.ceil(maxValue) + 1;
 
-  const sx = (i: number) => PL + (i / Math.max(1, points.length - 1)) * cW;
-  const sy = (val: number) => PT + (1 - (val - MIN_Y) / (MAX_Y - MIN_Y)) * cH;
+  const tickCandidates = [85, 88, 90, 92, 94, 96, 98, 100].filter((tick) => tick >= minY && tick <= maxY);
+  const ticks = tickCandidates.length ? tickCandidates : [minY, maxY];
 
-  const line = points.map((point, index) => `${index === 0 ? 'M' : 'L'}${sx(index).toFixed(1)},${sy(point.temp).toFixed(1)}`).join(' ');
-  const area = `${line} L${sx(points.length - 1).toFixed(1)},${H - PB} L${sx(0).toFixed(1)},${H - PB} Z`;
+  const sx = (i: number) => PL + (i / Math.max(1, displayPoints.length - 1)) * cW;
+  const sy = (val: number) => PT + (1 - (val - minY) / Math.max(1, maxY - minY)) * cH;
 
-  const formatLabel = (value: string) => {
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return value.slice(11, 16);
-    return `${String(parsed.getHours()).padStart(2, '0')}:${String(parsed.getMinutes()).padStart(2, '0')}`;
-  };
+  const line = displayPoints
+    .map((point, index) => `${index === 0 ? 'M' : 'L'}${sx(index).toFixed(1)},${sy(point.value).toFixed(1)}`)
+    .join(' ');
+  const area = `${line} L${sx(displayPoints.length - 1).toFixed(1)},${H - PB} L${sx(0).toFixed(1)},${H - PB} Z`;
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="dtc-curve-svg" role="img" aria-label="Temperature trend">
@@ -78,9 +193,9 @@ function DtcTrendChart({ rows, baseTemp }: { rows: Array<{ lastOccurrence: strin
       <path d={area} fill="rgba(254, 202, 202, 0.45)" />
       <path d={line} fill="none" stroke="#ef4444" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
       <line x1={PL} y1={sy(90)} x2={W - PR} y2={sy(90)} stroke="#f59e0b" strokeWidth="2" strokeDasharray="8 6" />
-      {points.map((point, index) => (
-        <text key={`${point.label}-${index}`} x={sx(index)} y={H - 10} textAnchor="middle" fontSize="12" fill="#4a6b90">
-          {formatLabel(point.label)}
+      {displayPoints.map((point, index) => (
+        <text key={`${point.timestamp}-${index}`} x={sx(index)} y={H - 10} textAnchor="middle" fontSize="12" fill="#4a6b90">
+          {formatShortDate(point.timestamp).slice(-5)}
         </text>
       ))}
     </svg>
@@ -94,18 +209,79 @@ export function DtcPage() {
   const [dateInput, setDateInput] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [dateError, setDateError] = useState('');
-
-  const [vehicleId, setVehicleId] = useState(1);
-  const [code, setCode] = useState('P0420');
-  const [severity, setSeverity] = useState('warning');
-  const [description, setDescription] = useState('');
-  const [dtcHistoryId, setDtcHistoryId] = useState('P0420');
+  const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null);
   const [actionMessage, setActionMessage] = useState('');
   const [actionError, setActionError] = useState('');
 
-  const dtcQuery = useQuery({ queryKey: ['dtc'], queryFn: () => listDtc(100) });
-  const pingMutation = useMutation({ mutationFn: pingDtc });
-  const byVehicleMutation = useMutation({ mutationFn: ({ id, limit }: { id: number; limit?: number }) => listDtcByVehicle(id, limit ?? 100) });
+  const vehiclesQuery = useQuery({
+    queryKey: ['vehicles'],
+    queryFn: listVehicles,
+  });
+
+  useEffect(() => {
+    if (selectedVehicleId !== null) return;
+    const firstVehicleId = vehiclesQuery.data?.items?.[0]?.id;
+    if (firstVehicleId) {
+      setSelectedVehicleId(firstVehicleId);
+    }
+  }, [selectedVehicleId, vehiclesQuery.data]);
+
+  const dtcQuery = useQuery({
+    queryKey: ['dtc', selectedVehicleId],
+    queryFn: () => listDtcByVehicle(selectedVehicleId as number, 100),
+    enabled: selectedVehicleId !== null,
+  });
+
+  const telemetryQuery = useQuery({
+    queryKey: ['dtc-telemetry', selectedVehicleId],
+    queryFn: () => getTelemetryHistory({
+      vehicle_id: selectedVehicleId as number,
+      interval: '1m',
+      metrics: ['speed', 'rpm', 'fuel_level', 'engine_temp', 'battery_voltage', 'engine_load', 'intake_temp', 'ambient_air_temp'],
+    }) as Promise<TelemetryHistoryResponse>,
+    enabled: selectedVehicleId !== null,
+  });
+
+  const aiRiskQuery = useQuery({
+    queryKey: ['dtc-ai-risk', selectedVehicleId],
+    queryFn: () => getAiRiskScore(selectedVehicleId as number),
+    enabled: selectedVehicleId !== null,
+    retry: false,
+  });
+
+  const aiRecommendationsQuery = useQuery({
+    queryKey: ['dtc-ai-recommendations', selectedVehicleId],
+    queryFn: () => getAiRecommendations(selectedVehicleId as number),
+    enabled: selectedVehicleId !== null,
+    retry: false,
+  });
+
+  const aiInsightsQuery = useQuery({
+    queryKey: ['dtc-ai-insights', selectedVehicleId],
+    queryFn: () => getAiInsights(selectedVehicleId as number),
+    enabled: selectedVehicleId !== null,
+    retry: false,
+  });
+
+  const pingMutation = useMutation({
+    mutationFn: pingDtc,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['dtc', selectedVehicleId] }),
+        queryClient.invalidateQueries({ queryKey: ['dtc-telemetry', selectedVehicleId] }),
+        queryClient.invalidateQueries({ queryKey: ['dtc-ai-risk', selectedVehicleId] }),
+        queryClient.invalidateQueries({ queryKey: ['dtc-ai-recommendations', selectedVehicleId] }),
+        queryClient.invalidateQueries({ queryKey: ['dtc-ai-insights', selectedVehicleId] }),
+      ]);
+      setActionError('');
+      setActionMessage('Scan complet termine et donnees actualisees.');
+    },
+    onError: (error) => {
+      setActionMessage('');
+      setActionError(getErrorMessage(error));
+    },
+  });
+
   const historyMutation = useMutation({
     mutationFn: getDtcHistory,
     onSuccess: () => {
@@ -117,16 +293,18 @@ export function DtcPage() {
       setActionError(getErrorMessage(error));
     },
   });
-  const createMutation = useMutation({
-    mutationFn: createDtc,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['dtc'] }),
-  });
+
   const clearMutation = useMutation({
     mutationFn: clearDtc,
-    onSuccess: () => {
+    onSuccess: async () => {
       setActionError('');
       setActionMessage('DTC clear executed.');
-      queryClient.invalidateQueries({ queryKey: ['dtc'] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['dtc', selectedVehicleId] }),
+        queryClient.invalidateQueries({ queryKey: ['dtc-ai-risk', selectedVehicleId] }),
+        queryClient.invalidateQueries({ queryKey: ['dtc-ai-recommendations', selectedVehicleId] }),
+        queryClient.invalidateQueries({ queryKey: ['dtc-ai-insights', selectedVehicleId] }),
+      ]);
     },
     onError: (error) => {
       setActionMessage('');
@@ -137,54 +315,73 @@ export function DtcPage() {
   const fromDate = dateFilter ? new Date(dateFilter) : null;
   const hasValidDateRange = !fromDate || !Number.isNaN(fromDate.getTime());
 
-  const rows = (dtcQuery.data?.items ?? [])
-    .filter((item) => {
-      const codeValue = String(item.code ?? item.dtc_code ?? '').toLowerCase();
-      const descValue = String(item.description ?? '').toLowerCase();
-      const q = search.trim().toLowerCase();
-      if (!q) return true;
-      return codeValue.includes(q) || descValue.includes(q);
-    })
-    .filter((item) => {
-      if (!hasValidDateRange) return true;
-      if (!fromDate) return true;
-      const rowDate = parseBackendDate(
-        (item as { first_detected?: string; last_occurrence?: string; created_at?: string }).last_occurrence
-        ?? (item as { first_detected?: string; last_occurrence?: string; created_at?: string }).first_detected
-        ?? item.created_at,
-      );
-      if (!rowDate) return true;
-      if (fromDate && rowDate < fromDate) return false;
-      return true;
-    })
-    .map((item) => {
-      const firstOccurrence = (item as { first_detected?: string; created_at?: string }).first_detected
-        ?? item.created_at
-        ?? '-';
-      const lastOccurrence = (item as { last_occurrence?: string; created_at?: string }).last_occurrence
-        ?? item.created_at
-        ?? '-';
-      const count = (item as { occurrence_count?: number }).occurrence_count ?? 1;
-      return {
+  const rows = useMemo<DtcRow[]>(() => {
+    const items = dtcQuery.data?.items ?? [];
+
+    return items
+      .filter((item) => {
+        const codeValue = String(item.code ?? item.dtc_code ?? '').toLowerCase();
+        const descValue = String(item.description ?? '').toLowerCase();
+        const q = search.trim().toLowerCase();
+        if (!q) return true;
+        return codeValue.includes(q) || descValue.includes(q);
+      })
+      .filter((item) => {
+        if (!hasValidDateRange || !fromDate) return true;
+        const rowDate = parseBackendDate(
+          (item as { first_detected?: string; last_occurrence?: string; created_at?: string }).last_occurrence
+          ?? (item as { first_detected?: string; last_occurrence?: string; created_at?: string }).first_detected
+          ?? item.created_at,
+        );
+        if (!rowDate) return true;
+        return rowDate >= fromDate;
+      })
+      .map((item) => ({
         ...item,
-        firstOccurrence,
-        lastOccurrence,
-        count,
-      };
-    });
+        firstOccurrence: (item as { first_detected?: string; created_at?: string }).first_detected ?? item.created_at ?? '-',
+        lastOccurrence: (item as { last_occurrence?: string; created_at?: string }).last_occurrence ?? item.created_at ?? '-',
+        count: (item as { occurrence_count?: number }).occurrence_count ?? 1,
+      }));
+  }, [dtcQuery.data, hasValidDateRange, fromDate, search]);
+
+  const selectedVehicle = useMemo(
+    () => vehiclesQuery.data?.items?.find((vehicle) => vehicle.id === selectedVehicleId) ?? null,
+    [vehiclesQuery.data, selectedVehicleId],
+  );
 
   const activeCount = rows.filter((item) => !item.resolved).length;
-  const criticalCount = rows.filter((item) => String((item as { severity?: string }).severity ?? '').toLowerCase() === 'critical').length;
-  const warningCount = rows.filter((item) => String((item as { severity?: string }).severity ?? '').toLowerCase() === 'warning').length;
-  const vehicleCount = new Set(rows.map((item) => item.vehicle_id)).size;
-  const topVehicleId = rows[0]?.vehicle_id ?? vehicleId;
-  const speedValue = Math.min(140, 42 + activeCount * 6);
-  const rpmValue = Math.min(4500, 1400 + activeCount * 260);
-  const tempValue = Math.min(115, 86 + criticalCount * 4 + warningCount * 2);
-  const loadValue = Math.min(100, 45 + warningCount * 8 + criticalCount * 6);
-  const pressureValue = Math.min(140, 88 + criticalCount * 6);
-  const batteryValue = Math.min(15.0, 12.4 + activeCount * 0.15);
-  const fuelValue = Math.max(8, 62 - activeCount * 4);
+  const criticalCount = rows.filter((item) => String(item.severity ?? '').toLowerCase() === 'critical').length;
+  const warningCount = rows.filter((item) => String(item.severity ?? '').toLowerCase() === 'warning').length;
+  const lastOccurrence = rows[0]?.lastOccurrence ?? null;
+
+  const speedValue = findMetricValue(telemetryQuery.data, 'speed');
+  const rpmValue = findMetricValue(telemetryQuery.data, 'rpm');
+  const tempValue = findMetricValue(telemetryQuery.data, 'engine_temp')
+    ?? findMetricValue(telemetryQuery.data, 'intake_temp')
+    ?? findMetricValue(telemetryQuery.data, 'ambient_air_temp');
+  const loadValue = findMetricValue(telemetryQuery.data, 'engine_load');
+  const batteryValue = findMetricValue(telemetryQuery.data, 'battery_voltage');
+  const fuelValue = findMetricValue(telemetryQuery.data, 'fuel_level');
+  const telemetryTimestamp = findMetricTimestamp(telemetryQuery.data, 'engine_temp')
+    ?? findMetricTimestamp(telemetryQuery.data, 'intake_temp')
+    ?? findMetricTimestamp(telemetryQuery.data, 'ambient_air_temp')
+    ?? findMetricTimestamp(telemetryQuery.data, 'speed');
+
+  const aiScoreValue = aiRiskQuery.data?.predicted_risk_score
+    ?? aiRecommendationsQuery.data?.predicted_risk_score
+    ?? aiInsightsQuery.data?.predicted_risk_score
+    ?? null;
+  const aiSeverityLabel = aiRiskQuery.data?.predicted_severity
+    ?? aiRecommendationsQuery.data?.predicted_severity
+    ?? aiInsightsQuery.data?.predicted_severity
+    ?? null;
+  const lastOccurrenceValue = lastOccurrence ?? telemetryTimestamp ?? null;
+
+  const curvePoints = (telemetryQuery.data?.data?.engine_temp ?? []).slice(-8);
+  const aiPredictedRisks = aiInsightsQuery.data?.predicted_risks?.slice(0, 3) ?? [];
+  const aiCards = aiRecommendationsQuery.data?.recommendations?.slice(0, 3) ?? [];
+  const systemStatuses = buildSystemStatuses(rows, fuelValue, aiInsightsQuery.data?.predicted_risks ?? []);
+  const recentHistory = rows.slice(0, 3);
 
   const handleSearch = () => {
     const nextDate = dateInput ? new Date(dateInput) : null;
@@ -198,7 +395,6 @@ export function DtcPage() {
     setDateError('');
     setSearch(searchInput.trim());
     setDateFilter(dateInput);
-    dtcQuery.refetch();
   };
 
   const handleSearchKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (event) => {
@@ -213,20 +409,50 @@ export function DtcPage() {
       <div className="dtc-topbar">
         <div className="dtc-header">
           <h2 className="dtc-title">Diagnostic vehicule</h2>
-          <p className="dtc-subtitle">Lecture OBD-II en temps reel · Dongle {topVehicleId}</p>
+          <p className="dtc-subtitle">
+            Lecture OBD-II en temps reel{selectedVehicle?.dongle_id ? ` · Dongle ${selectedVehicle.dongle_id}` : ''}
+          </p>
         </div>
         <div className="dtc-top-actions">
-          <span className="dtc-live-pill">Live</span>
-          <button type="button" className="dtc-action-btn">Exporter PDF</button>
-          <button type="button" className="dtc-action-btn">Lancer scan complet</button>
+          <span className="dtc-live-pill">{telemetryTimestamp ? 'Live' : 'Offline'}</span>
+          <button
+            type="button"
+            className="dtc-action-btn"
+            onClick={() => window.print()}
+          >
+            Exporter PDF
+          </button>
+          <button
+            type="button"
+            className="dtc-action-btn"
+            onClick={() => pingMutation.mutate()}
+            disabled={pingMutation.isPending}
+          >
+            {pingMutation.isPending ? 'Scan...' : 'Lancer scan complet'}
+          </button>
         </div>
       </div>
 
       <div className="dtc-vehicle-strip">
-        <div className="dtc-vehicle-id">Vehicule #{topVehicleId}</div>
-        <div className="dtc-vehicle-meta">{vehicleCount} vehicules actifs</div>
-        <div className="dtc-vehicle-meta">{rows.length} evenements</div>
-        <div className="dtc-vehicle-meta">{activeCount} DTC actifs</div>
+        <div className="dtc-strip-primary">
+          <div className="dtc-vehicle-id">
+            {selectedVehicle ? `${selectedVehicle.make} ${selectedVehicle.model} ${selectedVehicle.year}` : 'Vehicule non disponible'}
+          </div>
+          <div className="dtc-vehicle-meta">Plaque : {selectedVehicle?.license_plate ?? '-'}</div>
+          <div className="dtc-vehicle-meta">VIN : {selectedVehicle?.vin ?? '-'}</div>
+        </div>
+        <div className="dtc-strip-secondary">
+          <strong>{formatMetric(selectedVehicle?.mileage ?? null, ' km')}</strong>
+          <span>km total</span>
+        </div>
+        <div className="dtc-strip-secondary">
+          <strong>{selectedVehicle?.year ?? '-'}</strong>
+          <span>annee</span>
+        </div>
+        <div className="dtc-strip-secondary">
+          <strong>{activeCount}</strong>
+          <span>DTC actifs</span>
+        </div>
       </div>
 
       <div className="dtc-kpi-grid">
@@ -236,19 +462,19 @@ export function DtcPage() {
           <p className="dtc-kpi-note">{criticalCount} critiques · {warningCount} avertissements</p>
         </article>
         <article className="dtc-kpi-card">
-          <p className="dtc-kpi-label">Vehicules touches</p>
-          <p className="dtc-kpi-value">{vehicleCount}</p>
-          <p className="dtc-kpi-note">Analyse en direct du parc</p>
+          <p className="dtc-kpi-label">Score IA</p>
+          <p className="dtc-kpi-value">{aiScoreValue !== null ? formatMetric(aiScoreValue, '/100') : '0/100'}</p>
+          <p className="dtc-kpi-note">{aiSeverityLabel ?? (aiRiskQuery.isError ? getErrorMessage(aiRiskQuery.error) : 'Analyse IA en attente')}</p>
         </article>
         <article className="dtc-kpi-card">
-          <p className="dtc-kpi-label">Total evenements</p>
-          <p className="dtc-kpi-value">{rows.length}</p>
-          <p className="dtc-kpi-note">Historique filtre selon recherche/date</p>
+          <p className="dtc-kpi-label">Temp. moteur</p>
+          <p className="dtc-kpi-value">{tempValue !== null ? formatMetric(tempValue, '°C') : '0°C'}</p>
+          <p className="dtc-kpi-note">Mesure la plus recente {telemetryTimestamp ? `· ${formatShortDate(telemetryTimestamp)}` : ''}</p>
         </article>
         <article className="dtc-kpi-card">
-          <p className="dtc-kpi-label">Derniere vidange</p>
-          <p className="dtc-kpi-value">8 200</p>
-          <p className="dtc-kpi-note">km · verification conseillee</p>
+          <p className="dtc-kpi-label">Derniere occurrence</p>
+          <p className="dtc-kpi-value">{lastOccurrenceValue ? formatShortDate(lastOccurrenceValue) : '0'}</p>
+          <p className="dtc-kpi-note">Basee sur le dernier DTC du vehicule</p>
         </article>
       </div>
 
@@ -263,12 +489,14 @@ export function DtcPage() {
               className="dtc-clear-btn"
               type="button"
               onClick={() => {
+                if (selectedVehicleId === null) return;
                 setActionMessage('');
                 setActionError('');
-                clearMutation.mutate({ vehicle_id: topVehicleId });
+                clearMutation.mutate({ vehicle_id: selectedVehicleId });
               }}
+              disabled={selectedVehicleId === null || clearMutation.isPending}
             >
-              Effacer les codes
+              {clearMutation.isPending ? 'Effacement...' : 'Effacer les codes'}
             </button>
           </div>
 
@@ -327,7 +555,6 @@ export function DtcPage() {
                         if (historyKey) {
                           setActionMessage('');
                           setActionError('');
-                          setDtcHistoryId(String(historyKey));
                           historyMutation.mutate(String(historyKey));
                         }
                       }}
@@ -362,58 +589,56 @@ export function DtcPage() {
         <aside className="dtc-sensors-panel">
           <h3 className="dtc-panel-title">Capteurs en temps reel</h3>
           <p className="dtc-panel-sub">Donnees live du bus OBD</p>
-          <div className="dtc-sensor-list">
-            <div className="dtc-sensor-row">
-              <span>Vitesse vehicule</span>
-              <strong>{speedValue} km/h</strong>
-            </div>
-            <div className="dtc-bar"><span style={{ width: `${Math.min(100, speedValue)}%` }} /></div>
+          {!telemetryQuery.data?.data ? (
+            <p className="muted-note">Aucune telemetrie disponible pour ce vehicule.</p>
+          ) : (
+            <div className="dtc-sensor-list">
+              <div className="dtc-sensor-row">
+                <span>Vitesse vehicule</span>
+                <strong>{formatMetric(speedValue, ' km/h')}</strong>
+              </div>
+              <div className="dtc-bar"><span style={{ width: `${Math.min(100, Math.max(0, speedValue ?? 0))}%` }} /></div>
 
-            <div className="dtc-sensor-row">
-              <span>Regime moteur (RPM)</span>
-              <strong>{rpmValue.toLocaleString()} tr/min</strong>
-            </div>
-            <div className="dtc-bar"><span style={{ width: `${Math.min(100, rpmValue / 50)}%` }} /></div>
+              <div className="dtc-sensor-row">
+                <span>Regime moteur (RPM)</span>
+                <strong>{formatMetric(rpmValue, ' tr/min')}</strong>
+              </div>
+              <div className="dtc-bar"><span style={{ width: `${Math.min(100, Math.max(0, (rpmValue ?? 0) / 50))}%` }} /></div>
 
-            <div className="dtc-sensor-row">
-              <span>Temp. moteur</span>
-              <strong>{tempValue} °C</strong>
-            </div>
-            <div className="dtc-bar"><span style={{ width: `${Math.min(100, tempValue)}%` }} /></div>
+              <div className="dtc-sensor-row">
+                <span>Temp. moteur</span>
+                <strong>{formatMetric(tempValue, ' °C')}</strong>
+              </div>
+              <div className="dtc-bar"><span style={{ width: `${Math.min(100, Math.max(0, tempValue ?? 0))}%` }} /></div>
 
-            <div className="dtc-sensor-row">
-              <span>Charge moteur</span>
-              <strong>{loadValue}%</strong>
-            </div>
-            <div className="dtc-bar"><span style={{ width: `${loadValue}%` }} /></div>
+              <div className="dtc-sensor-row">
+                <span>Charge moteur</span>
+                <strong>{formatMetric(loadValue, '%')}</strong>
+              </div>
+              <div className="dtc-bar"><span style={{ width: `${Math.min(100, Math.max(0, loadValue ?? 0))}%` }} /></div>
 
-            <div className="dtc-sensor-row">
-              <span>Pression admission</span>
-              <strong>{pressureValue} kPa</strong>
-            </div>
-            <div className="dtc-bar"><span style={{ width: `${Math.min(100, pressureValue)}%` }} /></div>
+              <div className="dtc-sensor-row">
+                <span>Tension batterie</span>
+                <strong>{formatMetric(batteryValue, ' V', 1)}</strong>
+              </div>
+              <div className="dtc-bar"><span style={{ width: `${Math.min(100, Math.max(0, (batteryValue ?? 0) * 6.25))}%` }} /></div>
 
-            <div className="dtc-sensor-row">
-              <span>Tension batterie</span>
-              <strong>{batteryValue.toFixed(1)} V</strong>
+              <div className="dtc-sensor-row">
+                <span>Carburant restant</span>
+                <strong>{formatMetric(fuelValue, '%')}</strong>
+              </div>
+              <div className="dtc-bar"><span style={{ width: `${Math.min(100, Math.max(0, fuelValue ?? 0))}%` }} /></div>
             </div>
-            <div className="dtc-bar"><span style={{ width: `${Math.min(100, batteryValue * 6.2)}%` }} /></div>
-
-            <div className="dtc-sensor-row">
-              <span>Carburant restant</span>
-              <strong>{fuelValue}%</strong>
-            </div>
-            <div className="dtc-bar"><span style={{ width: `${fuelValue}%` }} /></div>
-          </div>
+          )}
         </aside>
       </div>
 
       <section className="dtc-curve-panel">
         <div className="dtc-curve-head">
           <h3 className="dtc-lower-title">Courbe temperature moteur</h3>
-          <p className="dtc-lower-sub">Evolution recente basee sur les evenements diagnostiques</p>
+          <p className="dtc-lower-sub">Historique reel des dernieres mesures de temperature</p>
         </div>
-        <DtcTrendChart rows={rows} baseTemp={tempValue} />
+        <DtcTrendChart points={curvePoints} />
       </section>
 
       <div className="dtc-lower-grid">
@@ -422,63 +647,42 @@ export function DtcPage() {
             <h3 className="dtc-lower-title">Systemes OBD verifies</h3>
           </div>
           <div className="dtc-status-grid">
-            <div className="dtc-status-item">
-              <span className="dtc-status-label">Catalyseur</span>
-              <span className="dtc-status-pill dtc-status-pill-danger">Defaut</span>
-            </div>
-            <div className="dtc-status-item">
-              <span className="dtc-status-label">Sonde O₂</span>
-              <span className="dtc-status-pill dtc-status-pill-ok">OK</span>
-            </div>
-            <div className="dtc-status-item">
-              <span className="dtc-status-label">Systeme EGR</span>
-              <span className="dtc-status-pill dtc-status-pill-ok">OK</span>
-            </div>
-            <div className="dtc-status-item">
-              <span className="dtc-status-label">Evaporation carb.</span>
-              <span className="dtc-status-pill dtc-status-pill-warn">Avert.</span>
-            </div>
-            <div className="dtc-status-item">
-              <span className="dtc-status-label">Allumage</span>
-              <span className="dtc-status-pill dtc-status-pill-ok">OK</span>
-            </div>
-            <div className="dtc-status-item">
-              <span className="dtc-status-label">Carburant</span>
-              <span className="dtc-status-pill dtc-status-pill-ok">OK</span>
-            </div>
+            {systemStatuses.map((item) => (
+              <div key={item.key} className="dtc-status-item">
+                <div className="dtc-status-copy">
+                  <span className="dtc-status-label">{item.label}</span>
+                  <span className="dtc-status-sub">{item.detail}</span>
+                </div>
+                <span className={`dtc-status-pill dtc-status-pill-${item.status}`}>{toneLabel(item.status)}</span>
+              </div>
+            ))}
           </div>
         </section>
 
         <section className="dtc-lower-card">
           <div className="dtc-lower-head">
-            <h3 className="dtc-lower-title">Historique maintenances</h3>
+            <h3 className="dtc-lower-title">Historique DTC recents</h3>
           </div>
-          <div className="dtc-maintenance-list">
-            <article className="dtc-maintenance-item">
-              <span className="dtc-maintenance-dot dtc-maintenance-dot-ok" />
-              <div className="dtc-maintenance-copy">
-                <strong>Vidange + filtres</strong>
-                <span>54 200 km · Jan 2026</span>
-              </div>
-              <span className="dtc-status-pill dtc-status-pill-ok">Fait</span>
-            </article>
-            <article className="dtc-maintenance-item">
-              <span className="dtc-maintenance-dot dtc-maintenance-dot-warn" />
-              <div className="dtc-maintenance-copy">
-                <strong>Plaquettes de frein</strong>
-                <span>60 000 km · prevu</span>
-              </div>
-              <span className="dtc-status-pill dtc-status-pill-warn">A faire</span>
-            </article>
-            <article className="dtc-maintenance-item">
-              <span className="dtc-maintenance-dot dtc-maintenance-dot-danger" />
-              <div className="dtc-maintenance-copy">
-                <strong>Thermostat</strong>
-                <span>DTC P0128 · urgent</span>
-              </div>
-              <span className="dtc-status-pill dtc-status-pill-danger">Urgent</span>
-            </article>
-          </div>
+          {recentHistory.length === 0 ? (
+            <p className="muted-note">Aucun historique DTC disponible.</p>
+          ) : (
+            <div className="dtc-maintenance-list">
+              {recentHistory.map((item, index) => {
+                const tone = severityToTone(item.severity);
+                return (
+                  <article key={`${normalizeDtcCode(item)}-${index}`} className="dtc-maintenance-item">
+                    <span className={`dtc-maintenance-dot dtc-maintenance-dot-${tone}`} />
+                    <div className="dtc-maintenance-copy">
+                      <strong>{normalizeDtcCode(item) || 'DTC'}</strong>
+                      <span>{item.description ?? 'Description indisponible'}</span>
+                      <span className="dtc-history-meta">{formatShortDate(item.lastOccurrence)} · Occurrences: {item.count}</span>
+                    </div>
+                    <span className={`dtc-status-pill dtc-status-pill-${tone}`}>{toneLabel(tone)}</span>
+                  </article>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         <section className="dtc-lower-card dtc-ai-card">
@@ -487,22 +691,51 @@ export function DtcPage() {
               <h3 className="dtc-lower-title">AI Diagnostic</h3>
               <p className="dtc-lower-sub">Recommandations intelligentes</p>
             </div>
-            <button type="button" className="dtc-refresh-ai-btn">Refresh</button>
+            <button
+              type="button"
+              className="dtc-refresh-ai-btn"
+              onClick={() => {
+                if (selectedVehicleId === null) return;
+                queryClient.invalidateQueries({ queryKey: ['dtc-ai-risk', selectedVehicleId] });
+                queryClient.invalidateQueries({ queryKey: ['dtc-ai-recommendations', selectedVehicleId] });
+                queryClient.invalidateQueries({ queryKey: ['dtc-ai-insights', selectedVehicleId] });
+              }}
+            >
+              Refresh
+            </button>
           </div>
-          <div className="dtc-ai-list">
-            <article className="dtc-ai-item">
-              <strong>Thermostat a remplacer</strong>
-              <p>P0128 indique un thermostat defaillant. Remplacement conseille sous 500 km.</p>
-            </article>
-            <article className="dtc-ai-item">
-              <strong>Catalyseur degrade</strong>
-              <p>Efficacite en baisse. Inspection des sondes O₂ recommandee avant renouvellement.</p>
-            </article>
-            <article className="dtc-ai-item">
-              <strong>Prochaine vidange</strong>
-              <p>Depassee de 2 200 km. Planifier des que possible.</p>
-            </article>
-          </div>
+          {aiInsightsQuery.isError || aiRecommendationsQuery.isError ? (
+            <p className="form-error">{getErrorMessage(aiInsightsQuery.error ?? aiRecommendationsQuery.error)}</p>
+          ) : aiInsightsQuery.isLoading || aiRecommendationsQuery.isLoading ? (
+            <p className="muted-note">Chargement du diagnostic IA...</p>
+          ) : (
+            <div className="dtc-ai-list">
+              {aiInsightsQuery.data?.insights?.summary ? (
+                <article className="dtc-ai-item">
+                  <strong>Resume IA</strong>
+                  <p>{aiInsightsQuery.data.insights.summary}</p>
+                </article>
+              ) : null}
+
+              {aiCards.map((item, index) => (
+                <article key={`${item.title}-${index}`} className="dtc-ai-item">
+                  <strong>{item.title}</strong>
+                  <p>{item.message}</p>
+                </article>
+              ))}
+
+              {!aiCards.length && aiPredictedRisks.map((item, index) => (
+                <article key={`${item.type}-${index}`} className="dtc-ai-item">
+                  <strong>{item.type ?? 'Risque detecte'}</strong>
+                  <p>{item.message ?? 'Detail indisponible'}</p>
+                </article>
+              ))}
+
+              {!aiCards.length && !aiPredictedRisks.length && !aiInsightsQuery.data?.insights?.summary ? (
+                <p className="muted-note">Aucune recommandation IA disponible pour ce vehicule.</p>
+              ) : null}
+            </div>
+          )}
         </section>
       </div>
     </section>

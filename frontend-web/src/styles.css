@@ -479,7 +479,7 @@ h2 {
 .dtc-kpi-value {
   margin: 10px 0 0;
   color: #0f2f57;
-  font-size: 38px;
+  font-size: 30px;
   font-weight: 800;
   line-height: 1;
 }
@@ -860,6 +860,10 @@ h2 {
 
   .dtc-kpi-grid {
     grid-template-columns: 1fr;
+  }
+
+  .dtc-kpi-value {
+    font-size: 26px;
   }
 }
 
