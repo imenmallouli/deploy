@@ -1,7 +1,11 @@
 from datetime import datetime, timedelta, timezone
 
 from app.db.mongodb import get_mongo_db
+from app.db.session import SessionLocal
+from app.models.vehicle import Vehicle
 from app.models.telemetry import TelemetryMongoModel
+from app.services.ia.inference_engine import AIInferenceService
+from app.services.ia.recommendation_engine import RecommendationEngine
 
 
 class TelemetryService:
@@ -41,11 +45,70 @@ class TelemetryService:
         doc["created_by"] = user_id
 
         result = await db.telemetry_data.insert_one(doc)
+
+        ai_sync = await TelemetryService._sync_vehicle_status_with_ai(doc)
         return {
             "status": "success",
             "message": "Point télémétrie enregistré",
             "id": str(result.inserted_id),
+            "ai_status_sync": ai_sync,
         }
+
+    @staticmethod
+    def _map_ai_severity_to_vehicle_status(ai_severity: str | None) -> str:
+        normalized = (ai_severity or "").strip().lower()
+        if normalized == "critical":
+            return "critical"
+        if normalized == "warning":
+            return "warning"
+        return "healthy"
+
+    @staticmethod
+    async def _sync_vehicle_status_with_ai(telemetry_doc: dict):
+        vehicle_id = telemetry_doc.get("vehicle_id")
+        if not vehicle_id:
+            return {"status": "skipped", "reason": "vehicle_id manquant"}
+
+        try:
+            prediction = AIInferenceService.predict_from_payload(telemetry_doc)
+            enriched = RecommendationEngine.enrich_prediction(prediction)
+            computed_status = TelemetryService._map_ai_severity_to_vehicle_status(enriched.get("predicted_severity"))
+
+            sql_db = SessionLocal()
+            try:
+                vehicle = sql_db.query(Vehicle).filter(Vehicle.id == int(vehicle_id)).first()
+                if not vehicle:
+                    return {"status": "skipped", "reason": "vehicule introuvable"}
+
+                vehicle.status = computed_status
+                vehicle.last_connection = datetime.now(timezone.utc).replace(tzinfo=None)
+
+                # Keep vehicle mileage aligned with dongle odometer without allowing rollback.
+                odometer_value = telemetry_doc.get("odometer")
+                if odometer_value is not None:
+                    try:
+                        parsed_odometer = float(odometer_value)
+                        if parsed_odometer >= 0:
+                            next_mileage = int(round(parsed_odometer))
+                            current_mileage = int(vehicle.mileage or 0)
+                            vehicle.mileage = max(current_mileage, next_mileage)
+                    except (TypeError, ValueError):
+                        pass
+
+                sql_db.commit()
+            finally:
+                sql_db.close()
+
+            return {
+                "status": "success",
+                "vehicle_id": int(vehicle_id),
+                "vehicle_status": computed_status,
+                "predicted_severity": enriched.get("predicted_severity"),
+                "predicted_risk_score": enriched.get("predicted_risk_score"),
+            }
+        except Exception as exc:
+            # Telemetry write should remain successful even if AI/model sync fails.
+            return {"status": "error", "reason": str(exc)}
 
     @staticmethod
     async def get_telemetry_history(
