@@ -62,11 +62,11 @@ export function RegisterPage() {
         <form className="auth-form" onSubmit={handleSubmit}>
           <label>
             First Name
-            <input value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+            <input className="auth-input-white" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
           </label>
           <label>
             Last Name
-            <input value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+            <input className="auth-input-white" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
           </label>
           <label>
             Email
@@ -81,7 +81,7 @@ export function RegisterPage() {
           </label>
           <label>
             Phone
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} required />
+            <input className="auth-input-white" value={phone} onChange={(e) => setPhone(e.target.value)} required />
           </label>
           <label>
             Password
