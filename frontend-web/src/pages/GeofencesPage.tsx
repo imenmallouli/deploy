@@ -382,37 +382,37 @@ export function GeofencesPage() {
       <div className="panel table-shell" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <h3>Map</h3>
-          <button className="btn-primary" onClick={() => setShowCreateModal(true)}>
-            ➕ New Geofence
-          </button>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-          <button
-            className="btn-secondary"
-            onClick={() => {
-              if (!navigator.geolocation || !mapRef.current) return;
-              navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                  const { latitude, longitude } = pos.coords;
-                  mapRef.current!.setView([latitude, longitude], 15);
-                  if (userMarkerRef.current) {
-                    userMarkerRef.current.setLatLng([latitude, longitude]);
-                  } else {
-                    userMarkerRef.current = L.circleMarker([latitude, longitude], {
-                      radius: 8,
-                      color: '#1a56db',
-                      fillColor: '#3b82f6',
-                      fillOpacity: 0.9,
-                      weight: 2,
-                    }).bindPopup('My location').addTo(mapRef.current!);
-                  }
-                },
-                () => alert('Unable to get your location.')
-              );
-            }}
-          >
-            📍 My Location
-          </button>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button className="btn-secondary" onClick={() => setShowCreateModal(true)}>
+              ➕ New Geofence
+            </button>
+            <button
+              className="btn-secondary"
+              onClick={() => {
+                if (!navigator.geolocation || !mapRef.current) return;
+                navigator.geolocation.getCurrentPosition(
+                  (pos) => {
+                    const { latitude, longitude } = pos.coords;
+                    mapRef.current!.setView([latitude, longitude], 15);
+                    if (userMarkerRef.current) {
+                      userMarkerRef.current.setLatLng([latitude, longitude]);
+                    } else {
+                      userMarkerRef.current = L.circleMarker([latitude, longitude], {
+                        radius: 8,
+                        color: '#1a56db',
+                        fillColor: '#3b82f6',
+                        fillOpacity: 0.9,
+                        weight: 2,
+                      }).bindPopup('My location').addTo(mapRef.current!);
+                    }
+                  },
+                  () => alert('Unable to get your location.')
+                );
+              }}
+            >
+              📍 My Location
+            </button>
+          </div>
         </div>
         <div
           ref={mapContainerRef}
