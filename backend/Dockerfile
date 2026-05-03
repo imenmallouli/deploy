@@ -23,9 +23,11 @@ RUN pip install --no-cache-dir \
     pandas \
     scikit-learn \
     joblib \
-    requests
+    requests \
+    paho-mqtt
 
 COPY ./app ./app
+COPY ./scripts ./scripts
 
 EXPOSE 8000
 

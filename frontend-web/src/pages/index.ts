@@ -1,4 +1,5 @@
 export { AlertsPage } from './AlertsPage';
+export { AutoPiSettingsPage } from './AutoPiSettingsPage';
 export { DashboardPage } from './DashboardPage';
 export { DeviceOverviewPage } from './DeviceOverviewPage';
 export { DeviceDetailsPage } from './DeviceDetailsPage';

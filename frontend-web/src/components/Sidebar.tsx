@@ -61,6 +61,11 @@ export function Sidebar() {
             <NavLink to="/devices/list" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
               Devices
             </NavLink>
+            {canManageFleet && (
+              <NavLink to="/settings/autopi" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+                AutoPi Settings
+              </NavLink>
+            )}
           </div>
         </div>
       </nav>

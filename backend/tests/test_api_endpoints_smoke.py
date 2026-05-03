@@ -67,7 +67,7 @@ def _body_for_endpoint(path: str, method: str) -> dict:
     if path == "/api/v1/auth/register" and method == "post":
         return {"first_name": "Another", "last_name": "User",
                 "email": f"r_{uuid.uuid4().hex[:8]}@example.com",
-                "role": "driver", "phone": "+212600000002", "password": "PytestPass123!"}
+                "role": "admin", "phone": "+212600000002", "password": "PytestPass123!"}
     if path == "/api/v1/auth/login" and method == "post":
         return {"email": "unknown@example.com", "password": "wrong"}
     return {}

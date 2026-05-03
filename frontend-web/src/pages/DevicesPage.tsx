@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { createDevice, getDevicesOverview, listDevices } from '../lib/api/endpoints';
+import { createDevice, deleteDevice, getDevicesOverview, listDevices, listVehicles } from '../lib/api/endpoints';
 
 function formatDate(value?: string | null) {
   if (!value) return '-';
@@ -32,6 +32,7 @@ export function DevicesPage() {
 
   const devicesQuery = useQuery({ queryKey: ['devices'], queryFn: () => listDevices() });
   const overviewQuery = useQuery({ queryKey: ['devices-overview'], queryFn: getDevicesOverview });
+  const vehiclesQuery = useQuery({ queryKey: ['vehicles', 'devices-page'], queryFn: listVehicles });
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -61,7 +62,27 @@ export function DevicesPage() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await deleteDevice(id);
+      if (response.status !== 'success') {
+        throw new Error(response.message || 'Échec de suppression du device');
+      }
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+      queryClient.invalidateQueries({ queryKey: ['devices-overview'] });
+      setActionMessage('Appareil supprimé avec succès.');
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Échec de suppression du device';
+      setActionMessage(message);
+    },
+  });
+
   const allDevices = devicesQuery.data?.items ?? [];
+  const vehicleOptions = vehiclesQuery.data?.items ?? [];
   const devices = useMemo(() => {
     if (!search.trim()) return allDevices;
     const q = search.trim().toLowerCase();
@@ -91,6 +112,15 @@ export function DevicesPage() {
       event.preventDefault();
       handleSearch();
     }
+  };
+
+  const handleDeleteDevice = (id: string, label: string) => {
+    const confirmed = window.confirm(`Supprimer l'appareil ${label} ? Cette action est irreversible.`);
+    if (!confirmed) {
+      return;
+    }
+    setActionMessage('');
+    deleteMutation.mutate(id);
   };
 
   return (
@@ -152,13 +182,18 @@ export function DevicesPage() {
               onChange={(e) => setDeviceId(e.target.value)}
               required
             />
-            <input
+            <select
               className="devices-input"
-              type="number"
-              placeholder="ID du véhicule optionnel (ex: 5)"
               value={vehicleId}
               onChange={(e) => setVehicleId(e.target.value)}
-            />
+            >
+              <option value="">Associer plus tard (optionnel)</option>
+              {vehicleOptions.map((vehicle) => (
+                <option key={vehicle.id} value={String(vehicle.id)}>
+                  #{vehicle.id} · {vehicle.license_plate || 'Plaque N/A'} · {vehicle.make} {vehicle.model}
+                </option>
+              ))}
+            </select>
             <input
               className="devices-input"
               placeholder="VIN optionnel (17 caractères)"
@@ -202,29 +237,40 @@ export function DevicesPage() {
             const lastComm = (device as { updated_at?: string; created_at?: string }).updated_at
               ?? (device as { updated_at?: string; created_at?: string }).created_at;
             return (
-              <Link
-                key={device.id}
-                to={`/devices/${encodeURIComponent(device.device_id)}`}
-                className="devices-item-link"
-              >
-                <article className="devices-item">
-                  <div className="devices-item-header">
-                    <div className="devices-item-info">
-                      <h4 className="devices-item-name">{device.device_id}</h4>
-                      <p className="devices-item-meta">
-                        {device.vehicle_id ? `Véhicule #${device.vehicle_id}` : 'Non associé'}
-                        {device.vin ? ` · VIN: ${device.vin}` : ''}
-                      </p>
+              <div key={device.id} className="devices-item-row">
+                <Link
+                  to={`/devices/${encodeURIComponent(device.device_id)}`}
+                  className="devices-item-link"
+                >
+                  <article className="devices-item">
+                    <div className="devices-item-header">
+                      <div className="devices-item-info">
+                        <h4 className="devices-item-name">{device.device_id}</h4>
+                        <p className="devices-item-meta">
+                          {device.vehicle_id ? `Véhicule #${device.vehicle_id}` : 'Non associé'}
+                          {device.vin ? ` · VIN: ${device.vin}` : ''}
+                        </p>
+                      </div>
+                      <span className={`devices-status-badge devices-status-badge-${statusTone}`}>
+                        {String(device.status ?? 'offline')}
+                      </span>
                     </div>
-                    <span className={`devices-status-badge devices-status-badge-${statusTone}`}>
-                      {String(device.status ?? 'offline')}
-                    </span>
-                  </div>
-                  <div className="devices-item-footer">
-                    <span className="devices-item-date">{formatDate(lastComm)}</span>
-                  </div>
-                </article>
-              </Link>
+                    <div className="devices-item-footer">
+                      <span className="devices-item-date">{formatDate(lastComm)}</span>
+                    </div>
+                  </article>
+                </Link>
+                <div className="devices-item-actions">
+                  <button
+                    type="button"
+                    className="devices-delete-btn"
+                    onClick={() => handleDeleteDevice(String(device.id), device.device_id)}
+                    disabled={deleteMutation.isPending}
+                  >
+                    {deleteMutation.isPending ? 'Suppression...' : 'Supprimer'}
+                  </button>
+                </div>
+              </div>
             );
           })}
         </div>

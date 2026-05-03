@@ -2,12 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.schemas.ops import (
+    AutoPiSettingsUpdate,
     DeviceCreate,
     DeviceUpdate,
     GeofenceCheckRequest,
     GeofenceCreate,
     GeofenceExitEvent,
     GeofenceMonitoringSetup,
+    AutoPiSettingsResponse,
     GeofenceUpdate,
     GroupCreate,
     GroupUpdate,
@@ -15,6 +17,8 @@ from app.schemas.ops import (
     LocationUpdate,
     VehiclePositionSave,
 )
+from app.services.autopi_bridge_runner import restart_autopi_bridge
+from app.services.autopi_settings_service import AutoPiSettingsService
 from app.services.ops_service import OpsService
 from app.services.user_service import UserService
 
@@ -202,3 +206,23 @@ async def update_device(item_id: str, payload: DeviceUpdate, context: dict = Dep
 async def delete_device(item_id: str, context: dict = Depends(get_current_context)):
     _ = context
     return await OpsService.delete_item("devices", item_id)
+
+
+@router.get("/autopi/settings", response_model=AutoPiSettingsResponse)
+async def get_autopi_settings(context: dict = Depends(get_current_context)):
+    if context["role"] not in ("admin",):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acces refuse")
+    result = await AutoPiSettingsService.get_settings()
+    return result["settings"]
+
+
+@router.put("/autopi/settings")
+async def update_autopi_settings(payload: AutoPiSettingsUpdate, context: dict = Depends(get_current_context)):
+    if context["role"] not in ("admin",):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acces refuse")
+    try:
+        result = await AutoPiSettingsService.save_settings(payload.model_dump())
+        restart_autopi_bridge()
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

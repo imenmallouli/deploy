@@ -32,6 +32,10 @@ class TelemetryHistoryResponse(BaseModel):
 
 class TelemetryIngest(BaseModel):
     vehicle_id: int
+    device_id: Optional[str] = None
+    dongle_id: Optional[str] = None
+    autopi_device_id: Optional[str] = None
+    autopi_unit_id: Optional[str] = None
     ts: Optional[datetime] = None
     speed: Optional[float] = None
     rpm: Optional[int] = None

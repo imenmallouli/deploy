@@ -503,7 +503,10 @@ export function VehiclesPage() {
                     <div className="fleet-vehicle-head">
                       <div className="fleet-vehicle-title">{vehicle.make} {vehicle.model} {vehicle.year}</div>
                     </div>
-                    <div className="fleet-vehicle-meta">{vehicle.license_plate} • VIN {vehicle.vin.slice(-6)}</div>
+                    <div className="fleet-vehicle-meta">
+                      #{vehicle.id} • {vehicle.license_plate} • VIN {vehicle.vin.slice(-6)}
+                      {vehicle.dongle_id ? ` • Dongle ${vehicle.dongle_id}` : ''}
+                    </div>
                   </div>
                   <div className="fleet-vehicle-side">
                     <span className={statusMeta.className}>{statusMeta.label}</span>
@@ -523,7 +526,9 @@ export function VehiclesPage() {
                 {selectedVehicle ? formatMileage(selectedVehicle.mileage) : '0'}
               </p>
               <p className="vehicles-tracking-stat-note">
-                {selectedVehicle ? `${selectedVehicle.make} ${selectedVehicle.model}` : 'No vehicle selected'}
+                {selectedVehicle
+                  ? `${selectedVehicle.make} ${selectedVehicle.model}${selectedVehicle.dongle_id ? ` · Dongle ${selectedVehicle.dongle_id}` : ''}`
+                  : 'No vehicle selected'}
               </p>
             </article>
             <article className="vehicles-tracking-stat-card">

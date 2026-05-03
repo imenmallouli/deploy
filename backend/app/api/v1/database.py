@@ -52,7 +52,7 @@ def sync_schema(db: Session = Depends(get_db)):
     try:
         db.execute(text("""
             ALTER TABLE users
-            ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'driver'
+            ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'admin'
         """))
 
         db.execute(text("""

@@ -10,7 +10,6 @@ export function RegisterPage() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState('driver');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +47,7 @@ export function RegisterPage() {
       first_name: firstName,
       last_name: lastName,
       email,
-      role,
+      role: 'admin',
       phone,
       password,
     });
@@ -71,13 +70,6 @@ export function RegisterPage() {
           <label>
             Email
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          </label>
-          <label>
-            Role
-            <select value={role} onChange={(e) => setRole(e.target.value)}>
-              <option value="driver">driver</option>
-              <option value="admin">admin</option>
-            </select>
           </label>
           <label>
             Phone

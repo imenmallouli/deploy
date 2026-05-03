@@ -242,21 +242,11 @@ export function TelemetryPage() {
   const [vehicleId, setVehicleId] = useState<number | null>(null);
   const interval = '1m';
   const metricsList = ['speed', 'rpm', 'fuel_level', 'engine_temp', 'battery_voltage', 'engine_load', 'ambient_air_temp', 'intake_temp', 'odometer'];
-  const historyStorageKey = 'telemetry-history-cache-v1';
 
   const [liveConnected, setLiveConnected] = useState(false);
   const [liveError, setLiveError] = useState('');
   const [liveEvents, setLiveEvents] = useState<RealtimeEvent[]>([]);
   const [freshnessTick, setFreshnessTick] = useState(0);
-  const [historyByVehicle, setHistoryByVehicle] = useState<Record<string, MergedTelemetryRow[]>>(() => {
-    try {
-      const raw = localStorage.getItem('telemetry-history-cache-v1');
-      if (!raw) return {};
-      return JSON.parse(raw) as Record<string, MergedTelemetryRow[]>;
-    } catch {
-      return {};
-    }
-  });
   const wsRef = useRef<WebSocket | null>(null);
   const lastSeenIdRef = useRef<string | null>(null);
 
@@ -317,21 +307,11 @@ export function TelemetryPage() {
   const telemetryHistory = telemetryQuery.data as TelemetryHistoryResponse | undefined;
   const telemetrySeries = telemetryHistory?.data ?? {};
   const displayMetrics = metricsList;
-  const currentVehicleKey = vehicleId ? String(vehicleId) : '';
   const mergedRowsFromApi = useMemo(
     () => mergeByTimestamp(telemetrySeries, metricsList),
     [telemetrySeries],
   );
-  const displayedRows = useMemo(() => {
-    if (!currentVehicleKey) {
-      return [];
-    }
-    const merged = dedupeRows([
-      ...(historyByVehicle[currentVehicleKey] ?? []),
-      ...mergedRowsFromApi,
-    ]);
-    return carryForwardValues(merged, metricsList);
-  }, [currentVehicleKey, historyByVehicle, mergedRowsFromApi, metricsList]);
+  const displayedRows = useMemo(() => carryForwardValues(dedupeRows(mergedRowsFromApi), metricsList), [mergedRowsFromApi, metricsList]);
   const liveRows = useMemo(() => {
     if (liveEvents.length === 0) {
       return [];
@@ -350,28 +330,6 @@ export function TelemetryPage() {
       values: event.metrics ?? {},
     }));
   }, [liveEvents, freshnessTick]);
-
-  useEffect(() => {
-    if (!currentVehicleKey || mergedRowsFromApi.length === 0) {
-      return;
-    }
-
-    setHistoryByVehicle((previous) => {
-      const merged = dedupeRows([...(previous[currentVehicleKey] ?? []), ...mergedRowsFromApi]);
-      return {
-        ...previous,
-        [currentVehicleKey]: merged,
-      };
-    });
-  }, [currentVehicleKey, mergedRowsFromApi]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(historyStorageKey, JSON.stringify(historyByVehicle));
-    } catch {
-      // Ignore storage write errors in private/restricted browser modes.
-    }
-  }, [historyByVehicle, historyStorageKey]);
 
   useEffect(() => {
     return () => {
@@ -564,7 +522,7 @@ export function TelemetryPage() {
                     const csv = [
                       'Date,' + displayMetrics.join(','),
                       ...displayedRows.map((r) =>
-                        [formatTimestamp(r.timestamp), ...displayMetrics.map((m) => formatTelemetryValue(r.values[m]))].join(',')
+                          [formatTimestamp(r.timestamp), ...displayMetrics.map((m) => formatTelemetryValue(r.values[m]))].join(',')
                       ),
                     ].join('\n');
                     const a = document.createElement('a');

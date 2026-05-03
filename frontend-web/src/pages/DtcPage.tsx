@@ -228,7 +228,7 @@ export function DtcPage() {
 
   const dtcQuery = useQuery({
     queryKey: ['dtc', selectedVehicleId],
-    queryFn: () => listDtcByVehicle(selectedVehicleId as number, 100),
+    queryFn: () => listDtcByVehicle(selectedVehicleId as number, 500),
     enabled: selectedVehicleId !== null,
   });
 
@@ -534,7 +534,7 @@ export function DtcPage() {
             <tbody>
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="empty-cell">No data to display</td>
+                  <td colSpan={8} className="empty-cell">Aucun code defaut recu depuis AutoPi. Verifie le logger GET_DTC et le retour MQTT dans AutoPi Cloud.</td>
                 </tr>
               )}
               {rows.map((item, index) => (

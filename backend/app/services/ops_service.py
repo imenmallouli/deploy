@@ -102,6 +102,14 @@ class OpsService:
         doc = {**payload, "created_at": _now_iso(), "updated_at": _now_iso()}
         result = await db[collection].insert_one(doc)
         created = await db[collection].find_one({"_id": result.inserted_id})
+
+        if collection == "devices" and created:
+            OpsService._sync_vehicle_link_from_device(
+                vehicle_id=created.get("vehicle_id"),
+                device_id=created.get("device_id"),
+                vin=created.get("vin"),
+            )
+
         return {"status": "success", "item": OpsService._serialize(created)}
 
     @staticmethod
@@ -117,6 +125,14 @@ class OpsService:
         updated = await db[collection].find_one({"_id": ObjectId(item_id)})
         if not updated:
             return {"status": "error", "message": "Item introuvable"}
+
+        if collection == "devices":
+            OpsService._sync_vehicle_link_from_device(
+                vehicle_id=updated.get("vehicle_id"),
+                device_id=updated.get("device_id"),
+                vin=updated.get("vin"),
+            )
+
         return {"status": "success", "item": OpsService._serialize(updated)}
 
     @staticmethod
@@ -143,6 +159,128 @@ class OpsService:
             "online": online,
             "offline": offline,
             "warning": warning,
+        }
+
+    @staticmethod
+    def _lookup_vehicle_identity_sql(vehicle_id: int | None) -> dict:
+        """Resolve SQL vehicle details used to enrich Mongo device documents."""
+        if vehicle_id is None:
+            return {}
+
+        db = SessionLocal()
+        try:
+            vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
+            if not vehicle:
+                return {}
+            return {
+                "vin": vehicle.vin,
+                "dongle_id": vehicle.dongle_id,
+                "autopi_device_id": vehicle.autopi_device_id,
+                "autopi_unit_id": vehicle.autopi_unit_id,
+            }
+        except Exception as exc:
+            print(f"[OPS] Unable to resolve SQL vehicle identity for vehicle_id={vehicle_id}: {exc}")
+            return {}
+        finally:
+            db.close()
+
+    @staticmethod
+    def _sync_vehicle_link_from_device(vehicle_id: int | None, device_id: str | None, vin: str | None = None):
+        """Mirror device linking done in Mongo to SQL vehicle aliases used by ingestion guard."""
+        if vehicle_id is None or not device_id:
+            return
+
+        normalized_device_id = str(device_id).strip()
+        if not normalized_device_id:
+            return
+
+        db = SessionLocal()
+        try:
+            vehicle = db.query(Vehicle).filter(Vehicle.id == int(vehicle_id)).first()
+            if not vehicle:
+                return
+
+            if not vehicle.dongle_id:
+                vehicle.dongle_id = normalized_device_id
+
+            if vin and not vehicle.vin:
+                vehicle.vin = vin
+
+            db.commit()
+        except Exception as exc:
+            db.rollback()
+            print(
+                f"[OPS] Unable to sync device->vehicle link vehicle_id={vehicle_id} "
+                f"device_id={normalized_device_id}: {exc}"
+            )
+        finally:
+            db.close()
+
+    @staticmethod
+    async def upsert_device_activity(
+        device_id: str | None,
+        vehicle_id: int | None = None,
+        status: str = "online",
+        metadata: dict | None = None,
+    ):
+        """Create/update a device record so Devices page reflects live dongle activity."""
+        db = get_mongo_db()
+        now_iso = _now_iso()
+
+        # Fallback to an existing linked device when source payload does not include device_id.
+        effective_device_id = (device_id or "").strip() or None
+        if not effective_device_id and vehicle_id is not None:
+            existing = await db.devices.find_one({"vehicle_id": vehicle_id}, sort=[("updated_at", -1)])
+            if existing and existing.get("device_id"):
+                effective_device_id = str(existing.get("device_id"))
+
+        if not effective_device_id:
+            return {"status": "skipped", "reason": "device_id manquant"}
+
+        vehicle_identity = OpsService._lookup_vehicle_identity_sql(vehicle_id)
+        set_doc = {
+            "status": status,
+            "updated_at": now_iso,
+        }
+        if vehicle_id is not None:
+            set_doc["vehicle_id"] = int(vehicle_id)
+        if vehicle_identity.get("vin"):
+            set_doc["vin"] = vehicle_identity["vin"]
+
+        # Keep useful linkage aliases so future mapping is robust.
+        aliases = []
+        for alias in (
+            effective_device_id,
+            vehicle_identity.get("dongle_id"),
+            vehicle_identity.get("autopi_device_id"),
+            vehicle_identity.get("autopi_unit_id"),
+        ):
+            if alias:
+                aliases.append(str(alias))
+        if aliases:
+            set_doc["aliases"] = sorted(set(aliases))
+
+        if metadata:
+            compact_metadata = {k: v for k, v in metadata.items() if v is not None}
+            if compact_metadata:
+                set_doc["last_metadata"] = compact_metadata
+
+        await db.devices.update_one(
+            {"device_id": effective_device_id},
+            {
+                "$setOnInsert": {
+                    "device_id": effective_device_id,
+                    "created_at": now_iso,
+                },
+                "$set": set_doc,
+            },
+            upsert=True,
+        )
+
+        return {
+            "status": "success",
+            "device_id": effective_device_id,
+            "vehicle_id": vehicle_id,
         }
 
     @staticmethod

@@ -3,6 +3,7 @@ import { AppLayout } from './AppLayout';
 import { RequireAuth, RequireRole } from './RequireAuth';
 import {
   AlertsPage,
+  AutoPiSettingsPage,
   DashboardPage,
   DeviceDetailsPage,
   DeviceOverviewPage,
@@ -69,6 +70,14 @@ export const router = createBrowserRouter([
             element: (
               <RequireRole allowedRoles={['admin']}>
                 <GeofencesPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: 'settings/autopi',
+            element: (
+              <RequireRole allowedRoles={['admin']}>
+                <AutoPiSettingsPage />
               </RequireRole>
             ),
           },

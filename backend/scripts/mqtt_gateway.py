@@ -27,6 +27,7 @@ import argparse
 import importlib
 import json
 import math
+import time
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -76,7 +77,7 @@ _OBD_TELEMETRY_MAP = {
 }
 
 # @t prefixes that indicate a DTC fault code record
-_DTC_TYPE_PREFIXES = ("obd.dtc", "obd.fault", "obd.trouble")
+_DTC_TYPE_PREFIXES = ("obd.dtc", "obd.fault", "obd.trouble", "obd.get_dtc")
 
 # @t prefixes that indicate the payload contains raw DTC codes list
 _DTC_CODES_KEY = "codes"  # AutoPi may return {"codes": ["P0300", ...], "@t": "obd.dtc", ...}
@@ -89,6 +90,10 @@ class ApiClient:
         self._requests = requests
         self._email = email
         self._password = password
+        self._vehicles_cache: list[dict[str, Any]] = []
+        self._vehicles_cache_ts = 0.0
+        self._devices_cache: list[dict[str, Any]] = []
+        self._devices_cache_ts = 0.0
         self.session = requests.Session()
         self.session.headers.update(
             {
@@ -119,6 +124,107 @@ class ApiClient:
         response.raise_for_status()
         return response.json()
 
+    def _get_with_retry(self, path: str, params: dict | None = None):
+        url = f"{self.base_url}{path}"
+        response = self.session.get(url, params=params, timeout=10)
+
+        if response.status_code == 401 and self._refresh_token():
+            response = self.session.get(url, params=params, timeout=10)
+
+        response.raise_for_status()
+        return response.json()
+
+    def list_vehicles(self, force_refresh: bool = False, cache_ttl_sec: int = 20) -> list[dict[str, Any]]:
+        now = time.time()
+        if not force_refresh and self._vehicles_cache and (now - self._vehicles_cache_ts) < cache_ttl_sec:
+            return self._vehicles_cache
+
+        payload = self._get_with_retry("/api/v1/vehicles") or {}
+        self._vehicles_cache = payload.get("items") or []
+        self._vehicles_cache_ts = now
+        return self._vehicles_cache
+
+    def list_devices(self, force_refresh: bool = False, cache_ttl_sec: int = 20) -> list[dict[str, Any]]:
+        now = time.time()
+        if not force_refresh and self._devices_cache and (now - self._devices_cache_ts) < cache_ttl_sec:
+            return self._devices_cache
+
+        payload = self._get_with_retry("/api/v1/devices") or {}
+        self._devices_cache = payload.get("items") or []
+        self._devices_cache_ts = now
+        return self._devices_cache
+
+    def resolve_vehicle_id(self, candidates: list[str], fallback_vehicle_id: int | None = None) -> int | None:
+        """Resolve platform vehicle id by dongle/autopi aliases.
+
+        Matching checks vehicle fields: dongle_id, autopi_device_id, autopi_unit_id.
+        """
+        normalized = [str(item).strip() for item in candidates if str(item).strip()]
+        if not normalized:
+            return fallback_vehicle_id
+
+        candidate_set = {item.lower() for item in normalized}
+        vehicles = self.list_vehicles()
+
+        for vehicle in vehicles:
+            aliases = [
+                vehicle.get("dongle_id"),
+                vehicle.get("autopi_device_id"),
+                vehicle.get("autopi_unit_id"),
+            ]
+            for alias in aliases:
+                if alias and str(alias).strip().lower() in candidate_set:
+                    try:
+                        return int(vehicle.get("id"))
+                    except (TypeError, ValueError):
+                        continue
+
+        # Also resolve through Mongo devices mapping (platform linking from Devices page).
+        devices = self.list_devices()
+        for device in devices:
+            device_aliases = [
+                device.get("device_id"),
+                *(device.get("aliases") or []),
+            ]
+            vehicle_id = device.get("vehicle_id")
+            for alias in device_aliases:
+                if alias and str(alias).strip().lower() in candidate_set:
+                    try:
+                        return int(vehicle_id)
+                    except (TypeError, ValueError):
+                        continue
+
+        # Refresh cache once before giving up in case fleet mapping changed recently.
+        vehicles = self.list_vehicles(force_refresh=True)
+        for vehicle in vehicles:
+            aliases = [
+                vehicle.get("dongle_id"),
+                vehicle.get("autopi_device_id"),
+                vehicle.get("autopi_unit_id"),
+            ]
+            for alias in aliases:
+                if alias and str(alias).strip().lower() in candidate_set:
+                    try:
+                        return int(vehicle.get("id"))
+                    except (TypeError, ValueError):
+                        continue
+
+        devices = self.list_devices(force_refresh=True)
+        for device in devices:
+            device_aliases = [
+                device.get("device_id"),
+                *(device.get("aliases") or []),
+            ]
+            vehicle_id = device.get("vehicle_id")
+            for alias in device_aliases:
+                if alias and str(alias).strip().lower() in candidate_set:
+                    try:
+                        return int(vehicle_id)
+                    except (TypeError, ValueError):
+                        continue
+
+        return fallback_vehicle_id
+
     def post_telemetry(self, payload: dict):
         return self._post_with_retry("/api/v1/telemetry", payload)
 
@@ -143,6 +249,7 @@ class MqttGateway:
 
     # AutoPi native topic subscriptions
     AUTOPI_TOPICS = [
+        "#",
         "obd/#",
         "spm/bat",
         "track/pos",
@@ -154,7 +261,7 @@ class MqttGateway:
     def __init__(
         self,
         api_client: ApiClient,
-        vehicle_id: int,
+        vehicle_id: int | None,
         autopi_device_id: str,
         qos: int,
         verbose: bool,
@@ -214,12 +321,24 @@ class MqttGateway:
 
     @staticmethod
     def _extract_value(payload: dict, fallback_keys: list[str] | None = None):
+        def unwrap(value: Any):
+            if value is None:
+                return None
+            if isinstance(value, dict):
+                for key in ("value", "result", "data"):
+                    if key in value:
+                        nested = unwrap(value.get(key))
+                        if nested is not None:
+                            return nested
+                return None
+            return value
+
         if "value" in payload and payload.get("value") is not None:
-            return payload.get("value")
+            return unwrap(payload.get("value"))
         if fallback_keys:
             for key in fallback_keys:
                 if payload.get(key) is not None:
-                    return payload.get(key)
+                    return unwrap(payload.get(key))
         return None
 
     def _dispatch(self, topic: str, payload: dict):
@@ -227,6 +346,48 @@ class MqttGateway:
             self._dispatch_legacy(topic, payload)
         else:
             self._dispatch_autopi(topic, payload)
+
+    def _collect_device_candidates(self, topic: str, payload: dict) -> list[str]:
+        candidates = []
+
+        for key in ("device_id", "dongle_id", "autopi_device_id", "autopi_unit_id", "unit_id", "client_id"):
+            value = payload.get(key)
+            if value:
+                candidates.append(str(value))
+
+        if self.autopi_device_id:
+            candidates.append(str(self.autopi_device_id))
+
+        if not self.legacy_mode and "/" in topic:
+            first_segment = topic.split("/", 1)[0].strip()
+            if first_segment and first_segment.lower() not in {"obd", "spm", "track", "acc", "reactor", "rpi"}:
+                candidates.append(first_segment)
+
+        if self.legacy_mode and self.topic_prefix:
+            legacy_device = self._legacy_extract_device_id(topic)
+            if legacy_device and legacy_device != "unknown-device":
+                candidates.append(legacy_device)
+
+        # Keep order but drop duplicates
+        unique = []
+        seen = set()
+        for item in candidates:
+            key = item.strip().lower()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            unique.append(item.strip())
+        return unique
+
+    def _resolve_vehicle_context(self, topic: str, payload: dict) -> tuple[int | None, str | None]:
+        candidates = self._collect_device_candidates(topic, payload)
+        resolved_vehicle_id = self.api_client.resolve_vehicle_id(candidates, fallback_vehicle_id=self.vehicle_id)
+        resolved_device_id = candidates[0] if candidates else (self.autopi_device_id or None)
+
+        if resolved_vehicle_id is None and self.verbose:
+            print(f"[SKIP] No vehicle mapping found for device candidates={candidates!r} topic={topic}")
+
+        return resolved_vehicle_id, resolved_device_id
 
     @staticmethod
     def _normalize_autopi_type(raw_type: str) -> str:
@@ -290,15 +451,22 @@ class MqttGateway:
 
     def _dispatch_autopi(self, topic: str, payload: dict):
         """Route an AutoPi payload to the correct API endpoint."""
-        at = self._infer_type_from_topic_payload(topic, payload)
+        canonical_topic = self._canonical_autopi_topic(topic)
+        at = self._infer_type_from_topic_payload(canonical_topic, payload)
         ts = payload.get("@ts") or payload.get("_stamp") or datetime.now(timezone.utc).isoformat()
+        resolved_vehicle_id, resolved_device_id = self._resolve_vehicle_context(topic, payload)
+
+        if resolved_vehicle_id is None:
+            return
 
         # --- Battery / voltage ---
-        if at in ("obd.bat", "spm.battery", "obd.battery") or topic == "spm/bat":
+        if at in ("obd.bat", "spm.battery", "obd.battery") or canonical_topic == "spm/bat":
             self._forward_telemetry(
                 {"battery_voltage": self._extract_value(payload, ["voltage", "battery_voltage", "bat"])},
                 ts,
                 topic,
+                resolved_vehicle_id,
+                resolved_device_id,
             )
             return
 
@@ -317,7 +485,7 @@ class MqttGateway:
                 "battery_voltage": ["voltage", "battery_voltage", "bat"],
             }
             value = self._extract_value(payload, per_field_keys.get(field, [field]))
-            self._forward_telemetry({field: value}, ts, topic)
+            self._forward_telemetry({field: value}, ts, topic, resolved_vehicle_id, resolved_device_id)
             return
 
         # --- Generic obd.* PID: try to map by field name ---
@@ -332,7 +500,7 @@ class MqttGateway:
                         matched_field = field
                         break
                 if matched_field:
-                    self._forward_telemetry({matched_field: value}, ts, topic)
+                    self._forward_telemetry({matched_field: value}, ts, topic, resolved_vehicle_id, resolved_device_id)
                 else:
                     # Unknown PID — store as IoT log so data is not lost
                     self._forward_event(
@@ -342,17 +510,28 @@ class MqttGateway:
                         metadata=payload,
                         ts=ts,
                         topic=topic,
+                        vehicle_id=resolved_vehicle_id,
+                        device_id=resolved_device_id,
                     )
                 return
 
         # --- DTC fault codes ---
         if any(at.startswith(p) for p in _DTC_TYPE_PREFIXES):
-            self._handle_autopi_dtc(payload, ts, topic)
+            self._handle_autopi_dtc(payload, ts, topic, resolved_vehicle_id, resolved_device_id)
             return
 
         # --- GPS position ---
-        if at == "track.pos" or topic == "track/pos":
+        if at == "track.pos" or canonical_topic == "track/pos":
             loc = payload.get("loc", {})
+            sog_value = payload.get("sog")
+            if sog_value is not None:
+                self._forward_telemetry(
+                    {"speed": sog_value},
+                    ts,
+                    topic,
+                    resolved_vehicle_id,
+                    resolved_device_id,
+                )
             self._forward_event(
                 event_type="gps",
                 level="info",
@@ -360,11 +539,13 @@ class MqttGateway:
                 metadata=payload,
                 ts=ts,
                 topic=topic,
+                vehicle_id=resolved_vehicle_id,
+                device_id=resolved_device_id,
             )
             return
 
         # --- Accelerometer ---
-        if at == "acc.xyz" or topic == "acc/xyz":
+        if at == "acc.xyz" or canonical_topic == "acc/xyz":
             self._forward_event(
                 event_type="accelerometer",
                 level="info",
@@ -372,11 +553,13 @@ class MqttGateway:
                 metadata=payload,
                 ts=ts,
                 topic=topic,
+                vehicle_id=resolved_vehicle_id,
+                device_id=resolved_device_id,
             )
             return
 
         # --- Device events / reactor ---
-        if at.startswith("event.") or topic == "reactor":
+        if at.startswith("event.") or canonical_topic == "reactor":
             tag = payload.get("@tag", at)
             level = "warning" if "error" in tag or "fault" in tag else "info"
             self._forward_event(
@@ -386,11 +569,13 @@ class MqttGateway:
                 metadata=payload,
                 ts=ts,
                 topic=topic,
+                vehicle_id=resolved_vehicle_id,
+                device_id=resolved_device_id,
             )
             return
 
         # --- RPi temperature ---
-        if at == "rpi.temp" or topic == "rpi/temp":
+        if at == "rpi.temp" or canonical_topic == "rpi/temp":
             self._forward_event(
                 event_type="system",
                 level="info",
@@ -398,6 +583,8 @@ class MqttGateway:
                 metadata=payload,
                 ts=ts,
                 topic=topic,
+                vehicle_id=resolved_vehicle_id,
+                device_id=resolved_device_id,
             )
             return
 
@@ -405,37 +592,168 @@ class MqttGateway:
         if self.verbose:
             print(f"[MQTT] Unrecognised @t={at!r} topic={topic}  payload={str(payload)[:120]}")
 
-    def _handle_autopi_dtc(self, payload: dict, ts: str, topic: str):
+    @staticmethod
+    def _canonical_autopi_topic(topic: str) -> str:
+        """Normalize AutoPi topics that may include a device prefix.
+
+        Examples:
+        - obd/rpm -> obd/rpm
+        - c917fc1199ff/obd/rpm -> obd/rpm
+        - devices/c917fc1199ff/track/pos -> track/pos
+        """
+        cleaned = (topic or "").strip().strip("/")
+        if not cleaned:
+            return cleaned
+
+        if "obd/" in cleaned:
+            idx = cleaned.find("obd/")
+            return cleaned[idx:]
+
+        for static_topic in ("spm/bat", "track/pos", "acc/xyz", "reactor", "rpi/temp"):
+            if cleaned == static_topic or cleaned.endswith(f"/{static_topic}"):
+                return static_topic
+
+        return cleaned
+
+    def _handle_autopi_dtc(self, payload: dict, ts: str, topic: str, vehicle_id: int, device_id: str | None):
         """Forward AutoPi DTC data to POST /api/v1/dtc.
 
         AutoPi may send a single code or a list under the 'codes' key.
         """
-        codes = payload.get(_DTC_CODES_KEY)
-        if isinstance(codes, list):
-            for code in codes:
-                dtc = {
-                    "vehicle_id": self.vehicle_id,
-                    "code": str(code),
-                    "description": payload.get("description", ""),
-                    "first_detected": ts,
-                    "last_occurrence": ts,
+        extracted_codes = self._extract_dtc_entries(payload)
+
+        if not extracted_codes:
+            self.api_client.post_iot_log(
+                {
+                    "vehicle_id": vehicle_id,
+                    "device_id": device_id or self.autopi_device_id,
+                    "event_type": "dtc_unparsed",
+                    "level": "warning",
+                    "message": "Payload DTC AutoPi recu mais non parse",
+                    "metadata": payload,
+                    "event_at": ts,
                 }
-                result = self.api_client.post_dtc(dtc)
-                print(f"[FORWARD] dtc OK code={code} topic={topic} status={result.get('status', 'unknown')}")
-        else:
-            # Single code directly in payload
-            code = payload.get("code") or payload.get("@t", "unknown")
+            )
+            if self.verbose:
+                print(f"[DTC] Unparsed AutoPi DTC payload topic={topic} payload={str(payload)[:200]}")
+            return
+
+        for entry in extracted_codes:
+            code = entry.get("code")
+            if not code:
+                continue
             dtc = {
-                "vehicle_id": self.vehicle_id,
+                "vehicle_id": vehicle_id,
+                "device_id": device_id,
+                "dongle_id": device_id,
+                "autopi_device_id": device_id,
                 "code": str(code),
-                "description": payload.get("description", ""),
+                "description": entry.get("description") or payload.get("description", ""),
+                "severity": entry.get("severity") or payload.get("severity"),
+                "category": entry.get("category") or payload.get("category"),
+                "recommended_action": entry.get("recommended_action") or payload.get("recommended_action"),
                 "first_detected": ts,
                 "last_occurrence": ts,
+                "occurrence_count": entry.get("occurrence_count") or payload.get("occurrence_count"),
             }
             result = self.api_client.post_dtc(dtc)
             print(f"[FORWARD] dtc OK code={code} topic={topic} status={result.get('status', 'unknown')}")
 
-    def _forward_telemetry(self, fields: dict, ts: str, topic: str):
+    @staticmethod
+    def _extract_dtc_entries(payload: dict) -> list[dict[str, Any]]:
+        """Accept common AutoPi DTC payload variants and normalize them.
+
+        Examples seen in the field:
+        - {"codes": ["P0300", "P0420"]}
+        - {"value": ["P0300", "P0420"]}
+        - {"dtc_codes": ["P0300"]}
+        - {"codes": [{"code": "P0300", "description": "..."}]}
+        - {"stored": ["P0300"], "pending": ["P0171"]}
+        - {"value": {"stored": [...], "pending": [...]}}
+        - {"code": "P0300"}
+        """
+
+        def normalize_entry(item: Any, *, default_category: str | None = None) -> dict[str, Any] | None:
+            if item is None:
+                return None
+            if isinstance(item, str):
+                code = item.strip().upper()
+                return {"code": code, "category": default_category} if code else None
+            if isinstance(item, dict):
+                code = str(
+                    item.get("code")
+                    or item.get("dtc")
+                    or item.get("dtc_code")
+                    or item.get("value")
+                    or ""
+                ).strip().upper()
+                if not code:
+                    return None
+                return {
+                    "code": code,
+                    "description": item.get("description") or item.get("text") or item.get("message"),
+                    "severity": item.get("severity") or item.get("level"),
+                    "category": item.get("category") or item.get("status") or default_category,
+                    "recommended_action": item.get("recommended_action") or item.get("recommendation"),
+                    "occurrence_count": item.get("occurrence_count") or item.get("count"),
+                }
+            return None
+
+        def collect_from_value(value: Any, *, default_category: str | None = None) -> list[dict[str, Any]]:
+            collected: list[dict[str, Any]] = []
+            if value is None:
+                return collected
+            if isinstance(value, list):
+                for item in value:
+                    normalized = normalize_entry(item, default_category=default_category)
+                    if normalized:
+                        collected.append(normalized)
+                return collected
+            if isinstance(value, dict):
+                nested_keys = ("codes", "dtc_codes", "stored", "pending", "confirmed", "permanent", "current")
+                has_nested = False
+                for key in nested_keys:
+                    if key in value:
+                        has_nested = True
+                        collected.extend(collect_from_value(value.get(key), default_category=key))
+                if has_nested:
+                    return collected
+                normalized = normalize_entry(value, default_category=default_category)
+                if normalized:
+                    collected.append(normalized)
+                return collected
+            normalized = normalize_entry(value, default_category=default_category)
+            if normalized:
+                collected.append(normalized)
+            return collected
+
+        candidates: list[dict[str, Any]] = []
+        for key in ("codes", "dtc_codes", "value", "result", "data", "stored", "pending", "confirmed", "permanent", "current"):
+            if key in payload:
+                candidates.extend(collect_from_value(payload.get(key), default_category=key if key not in {"codes", "dtc_codes", "value", "result", "data"} else None))
+
+        if not candidates and any(payload.get(key) for key in ("code", "dtc", "dtc_code")):
+            normalized = normalize_entry(payload)
+            if normalized:
+                candidates.append(normalized)
+
+        deduped: list[dict[str, Any]] = []
+        seen: set[tuple[str, str | None]] = set()
+        for entry in candidates:
+            code = str(entry.get("code") or "").strip().upper()
+            category = str(entry.get("category") or "").strip().lower() or None
+            if not code:
+                continue
+            key = (code, category)
+            if key in seen:
+                continue
+            seen.add(key)
+            entry["code"] = code
+            deduped.append(entry)
+
+        return deduped
+
+    def _forward_telemetry(self, fields: dict, ts: str, topic: str, vehicle_id: int, device_id: str | None):
         """POST a partial telemetry record (merges vehicle_id and ts)."""
         # Drop invalid values and normalize for backend schema (rpm must be int).
         data = self._normalize_telemetry_fields(fields)
@@ -444,7 +762,14 @@ class MqttGateway:
                 print(f"[SKIP] telemetry: all fields None for topic={topic}")
             return
 
-        body = {"vehicle_id": self.vehicle_id, "ts": ts, **data}
+        body = {
+            "vehicle_id": vehicle_id,
+            "device_id": device_id,
+            "dongle_id": device_id,
+            "autopi_device_id": device_id,
+            "ts": ts,
+            **data,
+        }
         result = self.api_client.post_telemetry(body)
         field_names = ", ".join(data.keys())
         print(f"[FORWARD] telemetry OK [{field_names}] topic={topic} status={result.get('status', 'unknown')}")
@@ -463,11 +788,21 @@ class MqttGateway:
             print(f"  {green}✓ Received:{reset} {received_display}")
             print(f"  {yellow}✗ Missing:{reset} {missing_display}")
 
-    def _forward_event(self, event_type: str, level: str, message: str, metadata: dict, ts: str, topic: str):
+    def _forward_event(
+        self,
+        event_type: str,
+        level: str,
+        message: str,
+        metadata: dict,
+        ts: str,
+        topic: str,
+        vehicle_id: int,
+        device_id: str | None,
+    ):
         """POST an IoT log entry to /api/v1/dtc/iot/logs."""
         body = {
-            "vehicle_id": self.vehicle_id,
-            "device_id": self.autopi_device_id,
+            "vehicle_id": vehicle_id,
+            "device_id": device_id or self.autopi_device_id,
             "event_type": event_type,
             "level": level,
             "message": message,
@@ -560,8 +895,8 @@ def parse_args():
 
     # AutoPi device → platform mapping
     parser.add_argument(
-        "--vehicle-id", type=int, default=1,
-        help="Platform vehicle_id to associate AutoPi data with (default: 1)",
+        "--vehicle-id", type=int, default=None,
+        help="Fallback platform vehicle_id when device mapping is not found",
     )
     parser.add_argument(
         "--autopi-device-id", default="autopi-device",
@@ -619,7 +954,7 @@ def main():
 
     mode = "LEGACY" if args.topic_prefix else "AutoPi"
     print(f"[CONFIG] Mode         : {mode}")
-    print(f"[CONFIG] vehicle_id   : {args.vehicle_id}")
+    print(f"[CONFIG] vehicle_id   : {args.vehicle_id if args.vehicle_id is not None else 'auto-resolve'}")
     print(f"[CONFIG] device_id    : {args.autopi_device_id}")
     print(f"[CONFIG] broker       : {args.mqtt_host}:{args.mqtt_port}")
     print(f"[CONFIG] backend      : {args.base_url}")

@@ -55,6 +55,19 @@ export type AiInsightsResponse = {
   predicted_risks: AiPredictedRisk[];
 };
 
+export type AutoPiSettings = {
+  enabled: boolean;
+  email?: string | null;
+  device_id?: string | null;
+  mqtt_host: string;
+  mqtt_port: number;
+  qos: number;
+  mqtt_username?: string | null;
+  verbose: boolean;
+  has_password: boolean;
+  has_mqtt_password: boolean;
+};
+
 export async function login(payload: LoginPayload) {
   const { data } = await apiClient.post('/api/v1/auth/login', payload);
   return data as ApiResult<{ access_token?: string; role?: string; email?: string; user_id?: number }>;
@@ -339,9 +352,35 @@ export async function createDevice(payload: { device_id: string; vehicle_id?: nu
   return data;
 }
 
+export async function deleteDevice(id: string) {
+  const { data } = await apiClient.delete(`/api/v1/devices/${id}`);
+  return data as ApiResult<Record<string, never>>;
+}
+
 export async function getDevicesOverview() {
   const { data } = await apiClient.get('/api/v1/devices/overview');
   return data as ApiResult<{ total: number; online: number; offline: number; warning: number }>;
+}
+
+export async function getAutoPiSettings() {
+  const { data } = await apiClient.get('/api/v1/autopi/settings');
+  return data as AutoPiSettings;
+}
+
+export async function updateAutoPiSettings(payload: {
+  enabled: boolean;
+  email?: string;
+  password?: string;
+  device_id?: string;
+  mqtt_host: string;
+  mqtt_port: number;
+  qos: number;
+  mqtt_username?: string;
+  mqtt_password?: string;
+  verbose: boolean;
+}) {
+  const { data } = await apiClient.put('/api/v1/autopi/settings', payload);
+  return data as ApiResult<{ settings: AutoPiSettings }>;
 }
 
 export async function getAiRiskScore(vehicleId: number) {

@@ -69,6 +69,7 @@ async def ws_vehicle_realtime(
     await websocket.accept()
     # Restore last_seen_id from query param so reconnects don't re-send
     # the same document that was already shown before disconnection.
+    current_last_seen_id = last_seen_id
 
     try:
         while True:

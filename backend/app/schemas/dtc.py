@@ -5,6 +5,10 @@ from pydantic import BaseModel, Field
 
 class DtcEventCreate(BaseModel):
     vehicle_id: int
+    device_id: Optional[str] = None
+    dongle_id: Optional[str] = None
+    autopi_device_id: Optional[str] = None
+    autopi_unit_id: Optional[str] = None
     code: str = Field(..., min_length=2, max_length=20)
     description: Optional[str] = None
     category: Optional[str] = None

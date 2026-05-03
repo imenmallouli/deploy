@@ -7,6 +7,10 @@ from pydantic import BaseModel
 class DtcEventModel(BaseModel):
     id: str | None = None
     vehicle_id: int
+    device_id: str | None = None
+    dongle_id: str | None = None
+    autopi_device_id: str | None = None
+    autopi_unit_id: str | None = None
     code: str
     description: str | None = None
     category: str | None = None
