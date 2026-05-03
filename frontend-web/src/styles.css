@@ -378,6 +378,13 @@ h2 {
   margin-top: 12px;
 }
 
+.table-shell {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
 .toolbar-row {
   display: flex;
   flex-wrap: wrap;
@@ -3683,6 +3690,8 @@ h2 {
   border-radius: 16px;
   color: #111827;
   font-family: inherit;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .tl-muted {
@@ -3824,6 +3833,36 @@ h2 {
   flex-direction: column;
   gap: 2px;
   box-shadow: 0 4px 14px rgba(37, 99, 235, 0.12);
+}
+
+.tl-kpi-row-compact {
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.tl-kpi-card-compact {
+  padding: 14px 16px 10px;
+  border-radius: 12px;
+  gap: 0;
+}
+
+.tl-kpi-card-compact .tl-kpi-label {
+  font-size: 10px;
+  letter-spacing: .06em;
+}
+
+.tl-kpi-card-compact .tl-kpi-val {
+  font-size: 28px;
+  margin-top: 2px;
+}
+
+.tl-kpi-card-compact .tl-kpi-unit {
+  font-size: 11px;
+}
+
+.tl-kpi-card-compact .tl-kpi-trend {
+  margin-top: 4px;
+  font-size: 11px;
 }
 
 .tl-kpi-card.tl-kpi-warn  { border-color: #b8cfee; background: #f6f8fb; }
@@ -4131,7 +4170,8 @@ h2 {
 }
 
 .tl-table {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
   font-size: 13px;
 }

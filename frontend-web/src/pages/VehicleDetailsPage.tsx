@@ -34,6 +34,7 @@ function getRiskColor(severity?: string): string {
   }
 }
 
+
 export function VehicleDetailsPage() {
   const { vehicleId } = useParams();
   const queryClient = useQueryClient();
@@ -156,7 +157,6 @@ export function VehicleDetailsPage() {
         </div>
 
         <div className="vd-ai-cards">
-          {/* Risk Score */}
           <div className="vd-ai-metric">
             <p className="vd-metric-title">RISK SCORE</p>
             {aiRiskQuery.isLoading ? (
@@ -176,7 +176,6 @@ export function VehicleDetailsPage() {
             )}
           </div>
 
-          {/* Maintenance */}
           <div className="vd-ai-metric">
             <p className="vd-metric-title">MAINTENANCE</p>
             {aiRecommendationsQuery.isLoading ? (
@@ -197,7 +196,6 @@ export function VehicleDetailsPage() {
             )}
           </div>
 
-          {/* AI Insights */}
           <div className="vd-ai-metric">
             <p className="vd-metric-title">AI INSIGHTS</p>
             {aiInsightsQuery.isLoading ? (

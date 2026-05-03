@@ -74,14 +74,12 @@ export function VehiclesPage() {
   const [createMake, setCreateMake] = useState('');
   const [createModel, setCreateModel] = useState('');
   const [createYear, setCreateYear] = useState('');
-  const [createMileage, setCreateMileage] = useState('');
   const [createDongleId, setCreateDongleId] = useState('');
   const [updateVin, setUpdateVin] = useState('');
   const [updateLicensePlate, setUpdateLicensePlate] = useState('');
   const [updateMake, setUpdateMake] = useState('');
   const [updateModel, setUpdateModel] = useState('');
   const [updateYear, setUpdateYear] = useState('');
-  const [updateMileage, setUpdateMileage] = useState('');
   const [updateDongleId, setUpdateDongleId] = useState('');
   const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null);
   const [hasManualSelection, setHasManualSelection] = useState(false);
@@ -125,7 +123,6 @@ export function VehiclesPage() {
       setCreateMake('');
       setCreateModel('');
       setCreateYear('');
-      setCreateMileage('');
       setCreateDongleId('');
     },
   });
@@ -151,7 +148,6 @@ export function VehiclesPage() {
       setUpdateMake('');
       setUpdateModel('');
       setUpdateYear('');
-      setUpdateMileage('');
       setUpdateDongleId('');
     },
   });
@@ -274,7 +270,7 @@ export function VehiclesPage() {
       make: createMake,
       model: createModel,
       year: Number(createYear),
-      mileage: Number(createMileage),
+      mileage: 0,
       status: 'healthy',
       dongle_id: createDongleId.trim() === '' ? null : createDongleId,
     });
@@ -286,7 +282,6 @@ export function VehiclesPage() {
     setUpdateMake(vehicle.make);
     setUpdateModel(vehicle.model);
     setUpdateYear(String(vehicle.year));
-    setUpdateMileage(String(vehicle.mileage));
     setUpdateVin(vehicle.vin);
     setUpdateLicensePlate(vehicle.license_plate);
     setUpdateDongleId(vehicle.dongle_id || '');
@@ -300,7 +295,6 @@ export function VehiclesPage() {
     setUpdateMake(vehicle.make);
     setUpdateModel(vehicle.model);
     setUpdateYear(String(vehicle.year));
-    setUpdateMileage(String(vehicle.mileage));
     setUpdateVin(vehicle.vin);
     setUpdateLicensePlate(vehicle.license_plate);
     setUpdateDongleId(vehicle.dongle_id || '');
@@ -315,7 +309,7 @@ export function VehiclesPage() {
         make: updateMake,
         model: updateModel,
         year: Number(updateYear),
-        mileage: Number(updateMileage),
+        mileage: 0,
         vin: updateVin,
         license_plate: updateLicensePlate,
         dongle_id: updateDongleId.trim() === '' ? null : updateDongleId,
@@ -381,10 +375,6 @@ export function VehiclesPage() {
                 <input placeholder="TN 123 456" value={updateLicensePlate} onChange={(e) => setUpdateLicensePlate(e.target.value)} required />
               </label>
               <label className="vehicle-field">
-                <span>Mileage</span>
-                <input type="number" placeholder="45000" value={updateMileage} onChange={(e) => setUpdateMileage(e.target.value)} required />
-              </label>
-              <label className="vehicle-field">
                 <span>Dongle ID (optional)</span>
                 <input placeholder="dongle_001" value={updateDongleId} onChange={(e) => setUpdateDongleId(e.target.value)} />
               </label>
@@ -426,10 +416,6 @@ export function VehiclesPage() {
               <label className="vehicle-field vehicle-field-full">
                 <span>License plate</span>
                     <input placeholder="TN 123 456" value={createLicensePlate} onChange={(e) => setCreateLicensePlate(e.target.value)} required />
-              </label>
-              <label className="vehicle-field">
-                <span>Mileage</span>
-                    <input type="number" placeholder="45000" value={createMileage} onChange={(e) => setCreateMileage(e.target.value)} required />
               </label>
               <label className="vehicle-field">
                 <span>Dongle ID (optional)</span>

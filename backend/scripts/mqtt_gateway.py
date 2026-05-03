@@ -60,6 +60,8 @@ _OBD_TELEMETRY_MAP = {
     "obd.bat":          "battery_voltage",
     "obd.battery":      "battery_voltage",
     "spm.battery":      "battery_voltage",
+    "obd.battery_charge_level": "battery_charge_level",
+    "obd.nominal_voltage": "nominal_voltage",
     "obd.engine_load":  "engine_load",
     "obd.load":         "engine_load",
     "obd.ambient_air_temp": "ambient_air_temp",
@@ -341,6 +343,17 @@ class MqttGateway:
                     return unwrap(payload.get(key))
         return None
 
+    @staticmethod
+    def _extract_nested_value(payload: dict, container_key: str, fallback_keys: list[str]) -> Any:
+        container = payload.get(container_key)
+        if not isinstance(container, dict):
+            return None
+        for key in fallback_keys:
+            value = container.get(key)
+            if value is not None:
+                return value
+        return None
+
     def _dispatch(self, topic: str, payload: dict):
         if self.legacy_mode:
             self._dispatch_legacy(topic, payload)
@@ -462,7 +475,11 @@ class MqttGateway:
         # --- Battery / voltage ---
         if at in ("obd.bat", "spm.battery", "obd.battery") or canonical_topic == "spm/bat":
             self._forward_telemetry(
-                {"battery_voltage": self._extract_value(payload, ["voltage", "battery_voltage", "bat"])},
+                {
+                    "battery_voltage": self._extract_value(payload, ["voltage", "battery_voltage", "bat"]),
+                    "battery_charge_level": self._extract_value(payload, ["battery_charge_level", "charge_level", "soc", "level", "percent"]),
+                    "nominal_voltage": self._extract_value(payload, ["nominal_voltage", "nominal", "voltage_nominal", "system_voltage"]),
+                },
                 ts,
                 topic,
                 resolved_vehicle_id,
@@ -483,6 +500,8 @@ class MqttGateway:
                 "speed": ["speed"],
                 "rpm": ["rpm"],
                 "battery_voltage": ["voltage", "battery_voltage", "bat"],
+                "battery_charge_level": ["battery_charge_level", "charge_level", "soc", "level", "percent"],
+                "nominal_voltage": ["nominal_voltage", "nominal", "voltage_nominal", "system_voltage"],
             }
             value = self._extract_value(payload, per_field_keys.get(field, [field]))
             self._forward_telemetry({field: value}, ts, topic, resolved_vehicle_id, resolved_device_id)
@@ -524,14 +543,19 @@ class MqttGateway:
         if at == "track.pos" or canonical_topic == "track/pos":
             loc = payload.get("loc", {})
             sog_value = payload.get("sog")
-            if sog_value is not None:
-                self._forward_telemetry(
-                    {"speed": sog_value},
-                    ts,
-                    topic,
-                    resolved_vehicle_id,
-                    resolved_device_id,
-                )
+            self._forward_telemetry(
+                {
+                    "speed": sog_value,
+                    "track_altitude": self._extract_nested_value(payload, "loc", ["alt", "altitude"]),
+                    "course_over_ground": self._extract_value(payload, ["course_over_ground", "course", "cog", "heading"]),
+                    "satellites_used": self._extract_value(payload, ["satellites_used", "satellites", "sats", "nsat"]),
+                    "glonass_satellites_used": self._extract_value(payload, ["glonass_satellites_used", "glonass_satellites", "glonass"]),
+                },
+                ts,
+                topic,
+                resolved_vehicle_id,
+                resolved_device_id,
+            )
             self._forward_event(
                 event_type="gps",
                 level="info",
@@ -576,6 +600,17 @@ class MqttGateway:
 
         # --- RPi temperature ---
         if at == "rpi.temp" or canonical_topic == "rpi/temp":
+            self._forward_telemetry(
+                {
+                    "temp_cpu": self._extract_value(payload, ["temp_cpu", "cpu_temp", "value", "temperature"]),
+                    "cpu": self._extract_value(payload, ["cpu", "cpu_usage"]),
+                    "gpu": self._extract_value(payload, ["gpu", "gpu_usage", "gpu_temp"]),
+                },
+                ts,
+                topic,
+                resolved_vehicle_id,
+                resolved_device_id,
+            )
             self._forward_event(
                 event_type="system",
                 level="info",
@@ -775,7 +810,12 @@ class MqttGateway:
         print(f"[FORWARD] telemetry OK [{field_names}] topic={topic} status={result.get('status', 'unknown')}")
         
         # Display which metrics are received (green) vs missing (yellow)
-        expected_metrics = ["speed", "rpm", "fuel_level", "engine_temp", "battery_voltage", "engine_load", "ambient_air_temp", "intake_temp", "odometer"]
+        expected_metrics = [
+            "speed", "rpm", "fuel_level", "engine_temp", "battery_voltage", "battery_charge_level",
+            "nominal_voltage", "engine_load", "ambient_air_temp", "intake_temp", "odometer",
+            "track_altitude", "course_over_ground", "satellites_used", "glonass_satellites_used",
+            "temp_cpu", "cpu", "gpu",
+        ]
         received = set(data.keys())
         missing = set(expected_metrics) - received
         

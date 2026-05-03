@@ -262,6 +262,19 @@ export async function createTelemetry(payload: {
   fuel_level?: number;
   engine_temp?: number;
   battery_voltage?: number;
+  battery_charge_level?: number;
+  nominal_voltage?: number;
+  engine_load?: number;
+  ambient_air_temp?: number;
+  intake_temp?: number;
+  odometer?: number;
+  track_altitude?: number;
+  course_over_ground?: number;
+  satellites_used?: number;
+  glonass_satellites_used?: number;
+  temp_cpu?: number;
+  cpu?: number;
+  gpu?: number;
 }) {
   const { data } = await apiClient.post('/api/v1/telemetry', payload);
   return data;

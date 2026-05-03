@@ -34,6 +34,7 @@ type MergedTelemetryRow = {
 };
 
 const REALTIME_FRESHNESS_MS = 2 * 60 * 1000;
+const DIRECT_ONLY_METRICS = new Set(['temp_cpu', 'cpu', 'gpu']);
 
 function formatTelemetryValue(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -113,6 +114,11 @@ function carryForwardValues(rows: MergedTelemetryRow[], metrics: string[]): Merg
     const filled: Record<string, unknown> = {};
     metrics.forEach((metric) => {
       const v = row.values[metric];
+      // Keep direct metrics strict: show only exact values sent for the row timestamp.
+      if (DIRECT_ONLY_METRICS.has(metric)) {
+        filled[metric] = (v !== null && v !== undefined) ? v : null;
+        return;
+      }
       filled[metric] = (v !== null && v !== undefined) ? v : (lastKnown[metric] ?? null);
     });
     return { timestamp: row.timestamp, values: filled };
@@ -241,7 +247,42 @@ function TlHealthBar({ label, value, raw, color }: { label: string; value: numbe
 export function TelemetryPage() {
   const [vehicleId, setVehicleId] = useState<number | null>(null);
   const interval = '1m';
-  const metricsList = ['speed', 'rpm', 'fuel_level', 'engine_temp', 'battery_voltage', 'engine_load', 'ambient_air_temp', 'intake_temp', 'odometer'];
+  const metricsList = [
+    'speed',
+    'rpm',
+    'fuel_level',
+    'engine_temp',
+    'battery_voltage',
+    'battery_charge_level',
+    'nominal_voltage',
+    'engine_load',
+    'ambient_air_temp',
+    'intake_temp',
+    'odometer',
+    'track_altitude',
+    'course_over_ground',
+    'satellites_used',
+    'glonass_satellites_used',
+    'temp_cpu',
+    'cpu',
+    'gpu',
+  ];
+
+  // Metrics to show in tables (exclude ones already displayed in KPI cards + health bars)
+  const tableMetrics = [
+    'speed',
+    'rpm',
+    'fuel_level',
+    'engine_temp',
+    'battery_voltage',
+    'engine_load',
+    'ambient_air_temp',
+    'intake_temp',
+    'odometer',
+    'temp_cpu',
+    'cpu',
+    'gpu',
+  ];
 
   const [liveConnected, setLiveConnected] = useState(false);
   const [liveError, setLiveError] = useState('');
@@ -311,7 +352,7 @@ export function TelemetryPage() {
     () => mergeByTimestamp(telemetrySeries, metricsList),
     [telemetrySeries],
   );
-  const displayedRows = useMemo(() => carryForwardValues(dedupeRows(mergedRowsFromApi), metricsList), [mergedRowsFromApi, metricsList]);
+  const displayedRows = useMemo(() => carryForwardValues(dedupeRows(mergedRowsFromApi), metricsList), [mergedRowsFromApi]);
   const liveRows = useMemo(() => {
     if (liveEvents.length === 0) {
       return [];
@@ -436,7 +477,19 @@ export function TelemetryPage() {
   const currentEngineTemp  = extractNumeric(latestVals.engine_temp) ?? 0;
   const currentFuelLevel   = extractNumeric(latestVals.fuel_level) ?? 0;
   const currentBattery     = extractNumeric(latestVals.battery_voltage) ?? 0;
+  const currentBatteryChargeLevel = extractNumeric(latestVals.battery_charge_level);
+  const currentNominalVoltage = extractNumeric(latestVals.nominal_voltage);
   const currentEngineLoad  = extractNumeric(latestVals.engine_load) ?? 0;
+  const currentAmbientTemp = extractNumeric(latestVals.ambient_air_temp) ?? 0;
+  const currentIntakeTemp  = extractNumeric(latestVals.intake_temp) ?? 0;
+  const currentOdometer    = extractNumeric(latestVals.odometer) ?? 0;
+  const currentTrackAltitude = extractNumeric(latestVals.track_altitude);
+  const currentCourseOverGround = extractNumeric(latestVals.course_over_ground);
+  const currentSatellitesUsed = extractNumeric(latestVals.satellites_used);
+  const currentGlonassSatellitesUsed = extractNumeric(latestVals.glonass_satellites_used);
+  const currentTempCpu = extractNumeric(latestVals.temp_cpu);
+  const currentCpu = extractNumeric(latestVals.cpu);
+  const currentGpu = extractNumeric(latestVals.gpu);
 
   const batteryPct = currentBattery > 0
     ? Math.min(100, Math.max(0, ((currentBattery - 11) / 3.8) * 100))
@@ -549,37 +602,37 @@ export function TelemetryPage() {
           </div>
 
           {/* ── KPI CARDS ── */}
-          <div className="tl-kpi-row">
-            <div className="tl-kpi-card">
-              <span className="tl-kpi-label">Vitesse actuelle</span>
-              <span className="tl-kpi-val">{Math.round(currentSpeed)}</span>
-              <span className="tl-kpi-unit">km/h</span>
-              {avgSpeed > 0 && (
-                <span className="tl-kpi-trend tl-trend-up">
-                  ▲ +{Math.abs(Math.round(currentSpeed - avgSpeed))} km/h vs moy.
-                </span>
-              )}
-            </div>
-            <div className="tl-kpi-card">
-              <span className="tl-kpi-label">Régime moteur</span>
-              <span className="tl-kpi-val">{currentRpm.toLocaleString('fr-FR')}</span>
-              <span className="tl-kpi-unit">tr/min</span>
-              <span className="tl-kpi-trend tl-trend-up">▲ normal</span>
-            </div>
-            <div className={`tl-kpi-card${currentEngineTemp > 90 ? ' tl-kpi-warn' : ''}`}>
-              <span className="tl-kpi-label">Température moteur</span>
-              <span className="tl-kpi-val">{Math.round(currentEngineTemp)}</span>
-              <span className="tl-kpi-unit">°C</span>
-              <span className={`tl-kpi-trend ${currentEngineTemp > 90 ? 'tl-trend-warn' : 'tl-trend-up'}`}>
-                {currentEngineTemp > 90 ? '▲ élevée' : '▲ normale'}
+          <div className="tl-kpi-row tl-kpi-row-compact">
+            <div className="tl-kpi-card tl-kpi-card-compact">
+              <span className="tl-kpi-label">Niveau charge batterie</span>
+              <span className="tl-kpi-val">{currentBatteryChargeLevel != null ? Math.round(currentBatteryChargeLevel) : '-'}</span>
+              <span className="tl-kpi-unit">%</span>
+              <span className={`tl-kpi-trend ${currentBatteryChargeLevel != null && currentBatteryChargeLevel < 20 ? 'tl-trend-danger' : 'tl-trend-up'}`}>
+                {currentBatteryChargeLevel == null ? 'AutoPi en attente' : currentBatteryChargeLevel < 20 ? '▼ faible' : '▲ ok'}
               </span>
             </div>
-            <div className={`tl-kpi-card${currentFuelLevel > 0 && currentFuelLevel < 20 ? ' tl-kpi-danger' : ''}`}>
-              <span className="tl-kpi-label">Carburant restant</span>
-              <span className="tl-kpi-val">{Math.round(currentFuelLevel)}</span>
-              <span className="tl-kpi-unit">%</span>
-              <span className={`tl-kpi-trend ${currentFuelLevel > 0 && currentFuelLevel < 20 ? 'tl-trend-danger' : 'tl-trend-up'}`}>
-                {currentFuelLevel > 0 && currentFuelLevel < 20 ? '▼ faible' : '▲ ok'}
+            <div className="tl-kpi-card tl-kpi-card-compact">
+              <span className="tl-kpi-label">Tension nominale</span>
+              <span className="tl-kpi-val">{currentNominalVoltage != null ? currentNominalVoltage.toFixed(1) : '-'}</span>
+              <span className="tl-kpi-unit">V</span>
+              <span className={`tl-kpi-trend ${currentNominalVoltage != null && currentNominalVoltage < 12 ? 'tl-trend-warn' : 'tl-trend-up'}`}>
+                {currentNominalVoltage == null ? 'AutoPi en attente' : currentNominalVoltage < 12 ? '▲ basse' : '▲ stable'}
+              </span>
+            </div>
+            <div className="tl-kpi-card tl-kpi-card-compact">
+              <span className="tl-kpi-label">Altitude</span>
+              <span className="tl-kpi-val">{currentTrackAltitude != null ? Math.round(currentTrackAltitude) : '-'}</span>
+              <span className="tl-kpi-unit">m</span>
+              <span className="tl-kpi-trend tl-trend-up">
+                {currentTrackAltitude == null ? 'AutoPi en attente' : `▲ cap ${currentCourseOverGround != null ? Math.round(currentCourseOverGround) : '-'}°`}
+              </span>
+            </div>
+            <div className="tl-kpi-card tl-kpi-card-compact">
+              <span className="tl-kpi-label">Satellites utilisés</span>
+              <span className="tl-kpi-val">{currentSatellitesUsed != null ? Math.round(currentSatellitesUsed) : '-'}</span>
+              <span className="tl-kpi-unit">sat</span>
+              <span className={`tl-kpi-trend ${currentSatellitesUsed != null && currentSatellitesUsed < 4 ? 'tl-trend-warn' : 'tl-trend-up'}`}>
+                {currentSatellitesUsed == null ? 'AutoPi en attente' : currentGlonassSatellitesUsed != null ? `▲ GLONASS ${Math.round(currentGlonassSatellitesUsed)}` : currentSatellitesUsed < 4 ? '▲ signal faible' : '▲ signal ok'}
               </span>
             </div>
           </div>
@@ -618,10 +671,38 @@ export function TelemetryPage() {
                 <span className="tl-panel-sub">Indicateurs temps réel</span>
               </div>
               <div className="tl-hbars">
-                <TlHealthBar label="Batterie"       value={batteryPct}                                        unit="%" raw={`${currentBattery.toFixed(1)}V`}  color="green"  />
-                <TlHealthBar label="Carburant"       value={currentFuelLevel}                                  unit="%" raw={`${Math.round(currentFuelLevel)}%`} color={currentFuelLevel > 0 && currentFuelLevel < 20 ? 'red' : 'orange'} />
-                <TlHealthBar label="Temp. moteur"    value={Math.min(100, (currentEngineTemp / 120) * 100)}    unit="%" raw={`${Math.round(currentEngineTemp)}°C`}  color={currentEngineTemp > 100 ? 'red' : currentEngineTemp > 85 ? 'orange' : 'green'} />
-                <TlHealthBar label="Charge moteur"   value={currentEngineLoad}                                 unit="%" raw={`${Math.round(currentEngineLoad)}%`}  color="blue"   />
+                <TlHealthBar label="Vitesse"         value={Math.min(100, (currentSpeed / 180) * 100)}                  unit="km/h" raw={`${Math.round(currentSpeed)} km/h`}                    color="blue" />
+                <TlHealthBar label="Régime"          value={Math.min(100, (currentRpm / 7000) * 100)}                   unit="tr/min" raw={`${currentRpm.toLocaleString('fr-FR')} tr/min`}     color="blue" />
+                <TlHealthBar label="Carburant"       value={currentFuelLevel}                                            unit="%" raw={`${Math.round(currentFuelLevel)}%`}                      color={currentFuelLevel > 0 && currentFuelLevel < 20 ? 'red' : currentFuelLevel < 50 ? 'orange' : 'green'} />
+                <TlHealthBar label="Temp. moteur"    value={Math.min(100, (currentEngineTemp / 120) * 100)}             unit="°C" raw={`${Math.round(currentEngineTemp)}°C`}                  color={currentEngineTemp > 100 ? 'red' : currentEngineTemp > 85 ? 'orange' : 'green'} />
+                <TlHealthBar label="Batterie"        value={batteryPct}                                                  unit="V" raw={`${currentBattery.toFixed(1)}V`}                        color={currentBattery < 11.5 ? 'red' : currentBattery < 12.0 ? 'orange' : 'green'} />
+                <TlHealthBar label="Charge moteur"   value={currentEngineLoad}                                           unit="%" raw={`${Math.round(currentEngineLoad)}%`}                    color={currentEngineLoad > 85 ? 'orange' : 'green'} />
+                <TlHealthBar label="Temp. ambiante"  value={Math.min(100, ((currentAmbientTemp + 20) / 60) * 100)}      unit="°C" raw={`${Math.round(currentAmbientTemp)}°C`}                 color="blue" />
+                <TlHealthBar label="Temp. admission" value={Math.min(100, (currentIntakeTemp / 55) * 100)}              unit="°C" raw={`${Math.round(currentIntakeTemp)}°C`}                  color="blue" />
+                <TlHealthBar
+                  label="Temp. CPU"
+                  value={currentTempCpu != null ? Math.min(100, (currentTempCpu / 100) * 100) : 0}
+                  unit="°C"
+                  raw={currentTempCpu != null ? `${Math.round(currentTempCpu)}°C` : '-'}
+                  color={currentTempCpu != null && currentTempCpu > 85 ? 'orange' : 'blue'}
+                />
+                <TlHealthBar
+                  label="CPU"
+                  value={currentCpu ?? 0}
+                  unit="%"
+                  raw={currentCpu != null ? `${Math.round(currentCpu)}%` : '-'}
+                  color={currentCpu != null && currentCpu > 85 ? 'orange' : 'blue'}
+                />
+                <TlHealthBar
+                  label="GPU"
+                  value={currentGpu ?? 0}
+                  unit="%"
+                  raw={currentGpu != null ? `${Math.round(currentGpu)}%` : '-'}
+                  color={currentGpu != null && currentGpu > 85 ? 'orange' : 'blue'}
+                />
+              </div>
+              <div style={{ marginTop: 12, paddingTop: 8, borderTop: '1px solid #e5e7eb', fontSize: 12, color: '#666' }}>
+                <strong>Kilométrage total:</strong> {currentOdometer.toLocaleString('fr-FR')} km
               </div>
             </div>
           </div>
@@ -720,17 +801,17 @@ export function TelemetryPage() {
                   <thead>
                     <tr>
                       <th>Date</th>
-                      {displayMetrics.map((m) => <th key={m}>{m}</th>)}
+                      {tableMetrics.map((m) => <th key={m}>{m}</th>)}
                     </tr>
                   </thead>
                   <tbody>
                     {displayedRows.length === 0 && (
-                      <tr><td colSpan={displayMetrics.length + 1} className="empty-cell">No telemetry data.</td></tr>
+                      <tr><td colSpan={tableMetrics.length + 1} className="empty-cell">No telemetry data.</td></tr>
                     )}
                     {displayedRows.map((row) => (
                       <tr key={row.timestamp}>
                         <td>{formatTimestamp(row.timestamp)}</td>
-                        {displayMetrics.map((m) => (
+                        {tableMetrics.map((m) => (
                           <td key={`${row.timestamp}-${m}`}>{formatTelemetryValue(row.values[m])}</td>
                         ))}
                       </tr>
@@ -755,17 +836,17 @@ export function TelemetryPage() {
                 <thead>
                   <tr>
                     <th>Heure</th>
-                    {displayMetrics.map((m) => <th key={`rt-${m}`}>{m}</th>)}
+                    {tableMetrics.map((m) => <th key={`rt-${m}`}>{m}</th>)}
                   </tr>
                 </thead>
                 <tbody>
                   {liveRows.length === 0 && (
-                    <tr><td colSpan={displayMetrics.length + 1} className="empty-cell">Aucune donnée temps réel.</td></tr>
+                    <tr><td colSpan={tableMetrics.length + 1} className="empty-cell">Aucune donnée temps réel.</td></tr>
                   )}
                   {liveRows.map((row, idx) => (
                     <tr key={`${row.timestamp}-${idx}`}>
                       <td>{formatTimestamp(row.timestamp)}</td>
-                      {displayMetrics.map((m) => (
+                      {tableMetrics.map((m) => (
                         <td key={`${row.timestamp}-${idx}-${m}`}>{formatRealtimeValue(row.values[m])}</td>
                       ))}
                     </tr>
