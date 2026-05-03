@@ -11,16 +11,26 @@ from app.services.user_service import UserService
 
 class RealtimeService:
     FRESHNESS_WINDOW = timedelta(minutes=2)
+    DIRECT_ONLY_FIELDS = {"temp_cpu", "cpu", "gpu"}
     METRIC_FIELDS = [
         "speed",
         "rpm",
         "fuel_level",
         "engine_temp",
         "battery_voltage",
+        "battery_charge_level",
+        "nominal_voltage",
         "engine_load",
         "ambient_air_temp",
         "intake_temp",
         "odometer",
+        "track_altitude",
+        "course_over_ground",
+        "satellites_used",
+        "glonass_satellites_used",
+        "temp_cpu",
+        "cpu",
+        "gpu",
     ]
 
     @staticmethod
@@ -84,10 +94,15 @@ class RealtimeService:
 
         snapshot = {"ts": latest_ts or latest_doc.get("ts")}
         for field in RealtimeService.METRIC_FIELDS:
-            snapshot[field] = None
+            if field in RealtimeService.DIRECT_ONLY_FIELDS:
+                snapshot[field] = latest_doc.get(field)
+            else:
+                snapshot[field] = None
 
         for doc in docs:
             for field in RealtimeService.METRIC_FIELDS:
+                if field in RealtimeService.DIRECT_ONLY_FIELDS:
+                    continue
                 if snapshot[field] is None and doc.get(field) is not None:
                     snapshot[field] = doc.get(field)
 
@@ -117,10 +132,19 @@ class RealtimeService:
             fuel_level=RealtimeService._to_float(doc.get("fuel_level")),
             engine_temp=RealtimeService._to_float(doc.get("engine_temp")),
             battery_voltage=RealtimeService._to_float(doc.get("battery_voltage")),
+            battery_charge_level=RealtimeService._to_float(doc.get("battery_charge_level")),
+            nominal_voltage=RealtimeService._to_float(doc.get("nominal_voltage")),
             engine_load=RealtimeService._to_float(doc.get("engine_load")),
             ambient_air_temp=RealtimeService._to_float(doc.get("ambient_air_temp")),
             intake_temp=RealtimeService._to_float(doc.get("intake_temp")),
             odometer=RealtimeService._to_float(doc.get("odometer")),
+            track_altitude=RealtimeService._to_float(doc.get("track_altitude")),
+            course_over_ground=RealtimeService._to_float(doc.get("course_over_ground")),
+            satellites_used=RealtimeService._to_float(doc.get("satellites_used")),
+            glonass_satellites_used=RealtimeService._to_float(doc.get("glonass_satellites_used")),
+            temp_cpu=RealtimeService._to_float(doc.get("temp_cpu")),
+            cpu=RealtimeService._to_float(doc.get("cpu")),
+            gpu=RealtimeService._to_float(doc.get("gpu")),
         )
 
         return RealtimeTelemetryEventModel(
