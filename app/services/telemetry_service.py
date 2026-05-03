@@ -4,6 +4,8 @@ from app.db.mongodb import get_mongo_db
 from app.db.session import SessionLocal
 from app.models.vehicle import Vehicle
 from app.models.telemetry import TelemetryMongoModel
+from app.services.ingestion_guard import assert_vehicle_dongle_linked
+from app.services.ops_service import OpsService
 from app.services.ia.inference_engine import AIInferenceService
 from app.services.ia.recommendation_engine import RecommendationEngine
 
@@ -44,7 +46,33 @@ class TelemetryService:
         doc = payload.to_mongo()
         doc["created_by"] = user_id
 
+        sql_db = SessionLocal()
+        try:
+            matched_alias = assert_vehicle_dongle_linked(
+                sql_db,
+                vehicle_id=int(doc.get("vehicle_id")),
+                candidates=[
+                    doc.get("device_id"),
+                    doc.get("dongle_id"),
+                    doc.get("autopi_device_id"),
+                    doc.get("autopi_unit_id"),
+                ],
+            )
+            doc["device_id"] = doc.get("device_id") or matched_alias
+        finally:
+            sql_db.close()
+
         result = await db.telemetry_data.insert_one(doc)
+        
+        await OpsService.upsert_device_activity(
+            device_id=doc.get("device_id") or doc.get("dongle_id") or doc.get("autopi_device_id") or doc.get("autopi_unit_id"),
+            vehicle_id=doc.get("vehicle_id"),
+            status="online",
+            metadata={
+                "event_type": "telemetry",
+                "ts": doc.get("ts"),
+            },
+        )
 
         ai_sync = await TelemetryService._sync_vehicle_status_with_ai(doc)
         return {

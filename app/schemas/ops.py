@@ -101,3 +101,29 @@ class DeviceUpdate(BaseModel):
     vehicle_id: int | None = None
     vin: str | None = None
     status: str | None = None
+
+
+class AutoPiSettingsUpdate(BaseModel):
+    enabled: bool = True
+    email: str | None = None
+    password: str | None = None
+    device_id: str | None = None
+    mqtt_host: str = "broker.emqx.io"
+    mqtt_port: int = 1883
+    qos: int = 1
+    mqtt_username: str | None = None
+    mqtt_password: str | None = None
+    verbose: bool = False
+
+
+class AutoPiSettingsResponse(BaseModel):
+    enabled: bool
+    email: str | None = None
+    device_id: str | None = None
+    mqtt_host: str
+    mqtt_port: int
+    qos: int
+    mqtt_username: str | None = None
+    verbose: bool
+    has_password: bool = False
+    has_mqtt_password: bool = False

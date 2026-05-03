@@ -6,7 +6,7 @@ class UserRegister(BaseModel):
     first_name: str
     last_name: str
     email: EmailStr
-    role: str = "driver"
+    role: str = "admin"
     phone: str
     password: str
 

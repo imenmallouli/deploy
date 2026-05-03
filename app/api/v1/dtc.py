@@ -52,6 +52,11 @@ async def create_dtc_event(
     try:
         event = DtcEventModel(**payload.model_dump())
         return await DtcService.create_dtc_event(event, user_id=context["user_id"])
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -179,6 +184,11 @@ async def create_iot_log(
     try:
         doc = IotDeviceLogModel(**payload.model_dump())
         return await DtcService.create_iot_device_log(doc, user_id=context["user_id"])
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

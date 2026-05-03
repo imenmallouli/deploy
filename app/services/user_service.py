@@ -17,7 +17,7 @@ class UserService:
 
     @staticmethod
     def create_access_token(email: str, user_id: int, role: str) -> str:
-        normalized_role = (role or "driver").strip().lower()
+        normalized_role = (role or "admin").strip().lower()
         now = datetime.now(timezone.utc)
         payload = {
             "sub": email,
@@ -51,9 +51,9 @@ class UserService:
     @staticmethod
     def register_user(db: Session, first_name: str, last_name: str, 
                      email: str, role: str, phone: str, password: str):
-        normalized_role = (role or "driver").strip().lower()
-        if normalized_role not in {"admin", "manager", "driver"}:
-            return {"status": "error", "message": "Rôle invalide"}
+        normalized_role = (role or "admin").strip().lower()
+        if normalized_role != "admin":
+            return {"status": "error", "message": "Seul le role admin est autorise"}
 
       
         existing_user = db.query(User).filter(User.email == email).first()
@@ -98,13 +98,16 @@ class UserService:
        
         if not UserService.verify_password(password, user.password_hash):
             return {"status": "error", "message": "Mot de passe incorrect"}
+
+        if (user.role or "").strip().lower() != "admin":
+            return {"status": "error", "message": "Acces reserve a l'admin"}
         
         return {
             "status": "success",
             "message": "Connexion réussie",
             "user_id": user.id,
             "email": user.email,
-            "role": (user.role or "driver").strip().lower(),
+            "role": (user.role or "admin").strip().lower(),
             "first_name": user.first_name,
             "access_token": UserService.create_access_token(user.email, user.id, user.role),
             "token_type": "bearer",

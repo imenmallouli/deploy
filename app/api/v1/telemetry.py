@@ -54,6 +54,11 @@ async def create_telemetry(
     try:
         doc = TelemetryMongoModel(**payload.model_dump())
         return await TelemetryService.create_telemetry_point(doc, user_id=context["user_id"])
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

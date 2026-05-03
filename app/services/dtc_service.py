@@ -3,7 +3,9 @@ from datetime import datetime
 from bson import ObjectId
 
 from app.db.mongodb import get_mongo_db
+from app.db.session import SessionLocal
 from app.models.dtc import DtcEventModel, IotDeviceLogModel, ObdRawPayloadModel
+from app.services.ingestion_guard import assert_vehicle_dongle_linked
 from app.services.ops_service import OpsService
 
 
@@ -42,6 +44,22 @@ class DtcService:
 
         doc = payload.to_mongo()
         doc["created_by"] = user_id
+
+        sql_db = SessionLocal()
+        try:
+            matched_alias = assert_vehicle_dongle_linked(
+                sql_db,
+                vehicle_id=int(doc.get("vehicle_id")),
+                candidates=[
+                    doc.get("device_id"),
+                    doc.get("dongle_id"),
+                    doc.get("autopi_device_id"),
+                    doc.get("autopi_unit_id"),
+                ],
+            )
+            doc["device_id"] = doc.get("device_id") or matched_alias
+        finally:
+            sql_db.close()
 
         result = await db.dtc_events.insert_one(doc)
         return {
@@ -221,7 +239,29 @@ class DtcService:
         doc = payload.to_mongo()
         doc["created_by"] = user_id
 
+        if payload.vehicle_id is not None:
+            sql_db = SessionLocal()
+            try:
+                assert_vehicle_dongle_linked(
+                    sql_db,
+                    vehicle_id=int(payload.vehicle_id),
+                    candidates=[payload.device_id],
+                )
+            finally:
+                sql_db.close()
+
         result = await db.iot_device_logs.insert_one(doc)
+
+        await OpsService.upsert_device_activity(
+            device_id=payload.device_id,
+            vehicle_id=payload.vehicle_id,
+            status="online",
+            metadata={
+                "event_type": payload.event_type,
+                "level": payload.level,
+                "event_at": payload.event_at,
+            },
+        )
 
         # Geofence logic stays in backend (Mongo + services), bridge just forwards data.
         if payload.vehicle_id is not None:

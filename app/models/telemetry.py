@@ -27,6 +27,10 @@ class TelemetryData(Base):
 class TelemetryMongoModel(BaseModel):
     id: str | None = None
     vehicle_id: int
+    device_id: str | None = None
+    dongle_id: str | None = None
+    autopi_device_id: str | None = None
+    autopi_unit_id: str | None = None
     ts: datetime | None = None
     speed: float | None = None
     rpm: int | None = None
