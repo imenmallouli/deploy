@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { createDevice, deleteDevice, getDevicesOverview, listDevices, listVehicles } from '../lib/api/endpoints';
+import { useI18n } from '../lib/i18n';
 
 function formatDate(value?: string | null) {
   if (!value) return '-';
@@ -22,6 +23,80 @@ function getStatusTone(status?: string): 'ok' | 'warn' | 'danger' {
 }
 
 export function DevicesPage() {
+  const { locale } = useI18n();
+  const text = locale === 'fr'
+    ? {
+        createFailed: 'Echec de creation du device',
+        createSuccess: 'Appareil ajoute avec succes.',
+        deleteFailed: 'Echec de suppression du device',
+        deleteSuccess: 'Appareil supprime avec succes.',
+        deleteConfirm: "Supprimer l'appareil",
+        deleteIrreversible: 'Cette action est irreversible.',
+        title: 'Gestion des appareils',
+        subtitle: 'Configuration et supervision des dongles OBD',
+        refreshing: 'Actualisation...',
+        refresh: 'Actualiser',
+        registered: 'Appareils enregistres',
+        totalDongles: 'Nombre total de dongles',
+        online: 'En ligne',
+        connectedNow: 'Connectes en ce moment',
+        offline: 'Hors ligne',
+        unavailable: 'Non disponibles',
+        warning: 'Avertissements',
+        needsAttention: 'Necessitant attention',
+        addDevice: 'Ajouter un appareil',
+        deviceIdPlaceholder: 'ID du dongle exact (ex: dongle_001)',
+        assignLater: 'Associer plus tard (optionnel)',
+        plateNA: 'Plaque N/A',
+        vinOptional: 'VIN optionnel (17 caracteres)',
+        creating: 'Creation...',
+        addDeviceButton: 'Ajouter appareil',
+        listDevices: 'Liste des appareils',
+        total: 'Total',
+        searchByIdOrVin: 'Rechercher par ID ou VIN...',
+        search: 'Chercher',
+        noDeviceFound: 'Aucun appareil trouve',
+        vehicle: 'Vehicule',
+        unassigned: 'Non associe',
+        deleting: 'Suppression...',
+        delete: 'Supprimer',
+      }
+    : {
+        createFailed: 'Device creation failed',
+        createSuccess: 'Device added successfully.',
+        deleteFailed: 'Device deletion failed',
+        deleteSuccess: 'Device deleted successfully.',
+        deleteConfirm: 'Delete device',
+        deleteIrreversible: 'This action is irreversible.',
+        title: 'Device Management',
+        subtitle: 'Configuration and supervision of OBD dongles',
+        refreshing: 'Refreshing...',
+        refresh: 'Refresh',
+        registered: 'Registered devices',
+        totalDongles: 'Total number of dongles',
+        online: 'Online',
+        connectedNow: 'Connected now',
+        offline: 'Offline',
+        unavailable: 'Unavailable',
+        warning: 'Warnings',
+        needsAttention: 'Needs attention',
+        addDevice: 'Add device',
+        deviceIdPlaceholder: 'Exact dongle ID (e.g. dongle_001)',
+        assignLater: 'Associate later (optional)',
+        plateNA: 'No plate',
+        vinOptional: 'Optional VIN (17 characters)',
+        creating: 'Creating...',
+        addDeviceButton: 'Add device',
+        listDevices: 'Devices list',
+        total: 'Total',
+        searchByIdOrVin: 'Search by ID or VIN...',
+        search: 'Search',
+        noDeviceFound: 'No device found',
+        vehicle: 'Vehicle',
+        unassigned: 'Unassigned',
+        deleting: 'Deleting...',
+        delete: 'Delete',
+      };
   const queryClient = useQueryClient();
   const [deviceId, setDeviceId] = useState('');
   const [vehicleId, setVehicleId] = useState('');
@@ -43,7 +118,7 @@ export function DevicesPage() {
       });
 
       if (response.status !== 'success') {
-        throw new Error(response.message || 'Échec de création du device');
+        throw new Error(response.message || text.createFailed);
       }
 
       return response;
@@ -54,10 +129,10 @@ export function DevicesPage() {
       setDeviceId('');
       setVehicleId('');
       setVin('');
-      setActionMessage('Appareil ajouté avec succès.');
+      setActionMessage(text.createSuccess);
     },
     onError: (error: unknown) => {
-      const message = error instanceof Error ? error.message : 'Échec de création du device';
+      const message = error instanceof Error ? error.message : text.createFailed;
       setActionMessage(message);
     },
   });
@@ -66,17 +141,17 @@ export function DevicesPage() {
     mutationFn: async (id: string) => {
       const response = await deleteDevice(id);
       if (response.status !== 'success') {
-        throw new Error(response.message || 'Échec de suppression du device');
+        throw new Error(response.message || text.deleteFailed);
       }
       return response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['devices'] });
       queryClient.invalidateQueries({ queryKey: ['devices-overview'] });
-      setActionMessage('Appareil supprimé avec succès.');
+      setActionMessage(text.deleteSuccess);
     },
     onError: (error: unknown) => {
-      const message = error instanceof Error ? error.message : 'Échec de suppression du device';
+      const message = error instanceof Error ? error.message : text.deleteFailed;
       setActionMessage(message);
     },
   });
@@ -115,7 +190,7 @@ export function DevicesPage() {
   };
 
   const handleDeleteDevice = (id: string, label: string) => {
-    const confirmed = window.confirm(`Supprimer l'appareil ${label} ? Cette action est irreversible.`);
+    const confirmed = window.confirm(`${text.deleteConfirm} ${label} ? ${text.deleteIrreversible}`);
     if (!confirmed) {
       return;
     }
@@ -127,8 +202,8 @@ export function DevicesPage() {
     <section className="devices-page">
       <div className="devices-topbar">
         <div className="devices-header">
-          <h2 className="devices-title">Gestion des appareils</h2>
-          <p className="devices-subtitle">Configuration et supervision des dongles OBD</p>
+          <h2 className="devices-title">{text.title}</h2>
+          <p className="devices-subtitle">{text.subtitle}</p>
         </div>
         <div className="devices-top-actions">
           <button
@@ -137,37 +212,37 @@ export function DevicesPage() {
             onClick={() => devicesQuery.refetch()}
             disabled={devicesQuery.isFetching}
           >
-            {devicesQuery.isFetching ? 'Actualisation...' : 'Actualiser'}
+            {devicesQuery.isFetching ? text.refreshing : text.refresh}
           </button>
         </div>
       </div>
 
       <div className="devices-kpi-grid">
         <article className="devices-kpi-card">
-          <p className="devices-kpi-label">Appareils enregistrés</p>
+          <p className="devices-kpi-label">{text.registered}</p>
           <p className="devices-kpi-value">{stats.total}</p>
-          <p className="devices-kpi-note">Nombre total de dongles</p>
+          <p className="devices-kpi-note">{text.totalDongles}</p>
         </article>
         <article className="devices-kpi-card">
-          <p className="devices-kpi-label">En ligne</p>
+          <p className="devices-kpi-label">{text.online}</p>
           <p className="devices-kpi-value">{stats.online}</p>
-          <p className="devices-kpi-note">Connectés en ce moment</p>
+          <p className="devices-kpi-note">{text.connectedNow}</p>
         </article>
         <article className="devices-kpi-card">
-          <p className="devices-kpi-label">Hors ligne</p>
+          <p className="devices-kpi-label">{text.offline}</p>
           <p className="devices-kpi-value">{stats.offline}</p>
-          <p className="devices-kpi-note">Non disponibles</p>
+          <p className="devices-kpi-note">{text.unavailable}</p>
         </article>
         <article className="devices-kpi-card">
-          <p className="devices-kpi-label">Avertissements</p>
+          <p className="devices-kpi-label">{text.warning}</p>
           <p className="devices-kpi-value">{stats.warning}</p>
-          <p className="devices-kpi-note">Nécessitant attention</p>
+          <p className="devices-kpi-note">{text.needsAttention}</p>
         </article>
       </div>
 
       <div className="devices-main-grid">
         <div className="devices-create-panel">
-          <h3 className="devices-panel-title">Ajouter un appareil</h3>
+          <h3 className="devices-panel-title">{text.addDevice}</h3>
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -177,7 +252,7 @@ export function DevicesPage() {
           >
             <input
               className="devices-input"
-              placeholder="ID du dongle exact (ex: dongle_001)"
+              placeholder={text.deviceIdPlaceholder}
               value={deviceId}
               onChange={(e) => setDeviceId(e.target.value)}
               required
@@ -187,21 +262,21 @@ export function DevicesPage() {
               value={vehicleId}
               onChange={(e) => setVehicleId(e.target.value)}
             >
-              <option value="">Associer plus tard (optionnel)</option>
+              <option value="">{text.assignLater}</option>
               {vehicleOptions.map((vehicle) => (
                 <option key={vehicle.id} value={String(vehicle.id)}>
-                  #{vehicle.id} · {vehicle.license_plate || 'Plaque N/A'} · {vehicle.make} {vehicle.model}
+                  #{vehicle.id} · {vehicle.license_plate || text.plateNA} · {vehicle.make} {vehicle.model}
                 </option>
               ))}
             </select>
             <input
               className="devices-input"
-              placeholder="VIN optionnel (17 caractères)"
+              placeholder={text.vinOptional}
               value={vin}
               onChange={(e) => setVin(e.target.value)}
             />
             <button className="devices-btn-primary" type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? 'Création...' : 'Ajouter appareil'}
+              {createMutation.isPending ? text.creating : text.addDeviceButton}
             </button>
             {actionMessage && <p className="devices-message">{actionMessage}</p>}
           </form>
@@ -209,26 +284,26 @@ export function DevicesPage() {
 
         <div className="devices-feed-panel">
           <div className="devices-feed-head">
-            <h3 className="devices-panel-title">Liste des appareils</h3>
-            <p className="devices-panel-sub">Total: {devices.length}</p>
+            <h3 className="devices-panel-title">{text.listDevices}</h3>
+            <p className="devices-panel-sub">{text.total}: {devices.length}</p>
           </div>
 
           <div className="devices-search-row">
             <input
               className="devices-search-input"
-              placeholder="Rechercher par ID ou VIN..."
+              placeholder={text.searchByIdOrVin}
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
               onKeyDown={handleSearchKeyDown}
             />
             <button type="button" className="devices-search-btn" onClick={handleSearch}>
-              Chercher
+              {text.search}
             </button>
           </div>
 
           {devices.length === 0 && (
             <div className="devices-empty">
-              <p className="devices-empty-text">Aucun appareil trouvé</p>
+              <p className="devices-empty-text">{text.noDeviceFound}</p>
             </div>
           )}
 
@@ -247,7 +322,7 @@ export function DevicesPage() {
                       <div className="devices-item-info">
                         <h4 className="devices-item-name">{device.device_id}</h4>
                         <p className="devices-item-meta">
-                          {device.vehicle_id ? `Véhicule #${device.vehicle_id}` : 'Non associé'}
+                          {device.vehicle_id ? `${text.vehicle} #${device.vehicle_id}` : text.unassigned}
                           {device.vin ? ` · VIN: ${device.vin}` : ''}
                         </p>
                       </div>
@@ -267,7 +342,7 @@ export function DevicesPage() {
                     onClick={() => handleDeleteDevice(String(device.id), device.device_id)}
                     disabled={deleteMutation.isPending}
                   >
-                    {deleteMutation.isPending ? 'Suppression...' : 'Supprimer'}
+                    {deleteMutation.isPending ? text.deleting : text.delete}
                   </button>
                 </div>
               </div>

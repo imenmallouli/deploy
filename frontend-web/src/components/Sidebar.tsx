@@ -1,9 +1,11 @@
 import { NavLink } from 'react-router-dom';
 import { getRole } from '../lib/auth/session';
+import { useI18n } from '../lib/i18n';
 
 export function Sidebar() {
   const role = getRole();
   const canManageFleet = role === 'admin';
+  const { t } = useI18n();
 
   return (
     <aside className="sidebar">
@@ -15,7 +17,7 @@ export function Sidebar() {
         <div className="nav-section">
           <div className="nav-list">
             <NavLink to="/get-started" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-              Get started
+              {t('sidebar.getStarted')}
             </NavLink>
           </div>
         </div>
@@ -23,47 +25,47 @@ export function Sidebar() {
         <div className="nav-section">
           <div className="nav-list">
             <NavLink to="/overview" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-              Overview
+              {t('sidebar.overview')}
             </NavLink>
             {canManageFleet && (
               <NavLink to="/vehicles/list" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-                Vehicles
+                {t('sidebar.vehicles')}
               </NavLink>
             )}
             <NavLink to="/telemetry" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-              Telemetry
+              {t('sidebar.telemetry')}
             </NavLink>
             {canManageFleet && (
               <NavLink to="/locations" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-                Locations
+                {t('sidebar.locations')}
               </NavLink>
             )}
             {canManageFleet && (
               <NavLink to="/geofences" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-                Geofences
+                {t('sidebar.geofences')}
               </NavLink>
             )}
             <NavLink to="/diagnostics" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-              Diagnostics
+              {t('sidebar.diagnostics')}
             </NavLink>
             <NavLink to="/alerts" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-              Alerts
+              {t('sidebar.alerts')}
             </NavLink>
           </div>
         </div>
 
         <div className="nav-section">
-          <p className="nav-section-title">Device Management</p>
+          <p className="nav-section-title">{t('sidebar.deviceManagement')}</p>
           <div className="nav-list">
             <NavLink to="/devices/overview" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-              Overview
+              {t('sidebar.overview')}
             </NavLink>
             <NavLink to="/devices/list" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-              Devices
+              {t('sidebar.devices')}
             </NavLink>
             {canManageFleet && (
               <NavLink to="/settings/autopi" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-                AutoPi Settings
+                {t('sidebar.autopiSettings')}
               </NavLink>
             )}
           </div>

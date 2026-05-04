@@ -4,9 +4,11 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { login } from '../lib/api/endpoints';
 import { saveSession } from '../lib/auth/session';
+import { useI18n } from '../lib/i18n';
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -15,7 +17,7 @@ export function LoginPage() {
     mutationFn: login,
     onSuccess: (result) => {
       if (result.status !== 'success' || !result.access_token) {
-        setError(result.message ?? 'Login failed');
+        setError(result.message ?? t('auth.login.failed'));
         return;
       }
 
@@ -30,10 +32,10 @@ export function LoginPage() {
     onError: (error: unknown) => {
       if (error instanceof AxiosError) {
         const apiData = error.response?.data as { detail?: string; message?: string } | undefined;
-        setError(apiData?.detail ?? apiData?.message ?? error.message ?? 'Unable to login.');
+        setError(apiData?.detail ?? apiData?.message ?? error.message ?? t('auth.login.unable'));
         return;
       }
-      setError('Unable to login. Check backend and credentials.');
+      setError(t('auth.login.checkBackend'));
     },
   });
 
@@ -46,21 +48,21 @@ export function LoginPage() {
   return (
     <div className="auth-screen">
       <section className="auth-page auth-shared-card">
-        <h2>Login</h2>
-        <p className="subtitle">Authenticate to access the operations dashboard.</p>
+        <h2>{t('auth.login.title')}</h2>
+        <p className="subtitle">{t('auth.login.subtitle')}</p>
         <form className="auth-form" onSubmit={handleSubmit}>
           <label>
-            Email
-            <input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+            {t('auth.email')}
+            <input type="email" placeholder={t('auth.emailPlaceholder')} value={email} onChange={(e) => setEmail(e.target.value)} />
           </label>
           <label>
-            Password
+            {t('auth.password')}
             <input type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
           </label>
           {error ? <p className="form-error">{error}</p> : null}
-          <button type="submit" disabled={mutation.isPending}>{mutation.isPending ? 'Signing in...' : 'Sign In'}</button>
+          <button type="submit" disabled={mutation.isPending}>{mutation.isPending ? t('auth.login.signingIn') : t('auth.login.signIn')}</button>
           <p className="auth-switch">
-            No account? <Link to="/register">Create one</Link>
+            {t('auth.login.noAccount')} <Link to="/register">{t('auth.login.createOne')}</Link>
           </p>
         </form>
       </section>

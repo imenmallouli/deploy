@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from sqlalchemy import BigInteger, Column, DateTime, Float, Integer
 
 from app.db.base import Base
@@ -52,6 +52,34 @@ class TelemetryMongoModel(BaseModel):
     gpu: float | None = None
     created_at: datetime | None = None
     created_by: int | None = None
+
+    @model_validator(mode="after")
+    def ensure_at_least_one_metric(self):
+        metric_fields = [
+            "speed",
+            "rpm",
+            "fuel_level",
+            "engine_temp",
+            "battery_voltage",
+            "battery_charge_level",
+            "nominal_voltage",
+            "engine_load",
+            "ambient_air_temp",
+            "intake_temp",
+            "odometer",
+            "track_altitude",
+            "course_over_ground",
+            "satellites_used",
+            "glonass_satellites_used",
+            "temp_cpu",
+            "cpu",
+            "gpu",
+        ]
+
+        if not any(getattr(self, field) is not None for field in metric_fields):
+            raise ValueError("Aucun champ de telemetrie valide dans le payload")
+
+        return self
 
     @classmethod
     def from_mongo(cls, doc: dict[str, Any]) -> "TelemetryMongoModel":

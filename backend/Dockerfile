@@ -28,6 +28,7 @@ RUN pip install --no-cache-dir \
 
 COPY ./app ./app
 COPY ./scripts ./scripts
+COPY ./data ./data
 
 EXPOSE 8000
 

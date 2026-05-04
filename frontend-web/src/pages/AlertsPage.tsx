@@ -1,6 +1,7 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { ackAlert, getAiRiskScore, listAlerts } from '../lib/api/endpoints';
+import { useI18n } from '../lib/i18n';
 
 function getErrorMessage(error: unknown) {
   const data = (error as { response?: { data?: { message?: string; detail?: string } } })?.response?.data;
@@ -21,28 +22,29 @@ function normalizeSeverity(value?: string | null): 'critical' | 'warning' | 'inf
   return 'info';
 }
 
-function severityBadge(value?: string | null) {
+function severityBadge(value: string | null | undefined, t: (key: string) => string) {
   const tone = normalizeSeverity(value);
-  if (tone === 'critical') return 'Critique';
-  if (tone === 'warning') return 'Avertiss.';
-  return 'Info';
+  if (tone === 'critical') return t('severity.critical');
+  if (tone === 'warning') return t('severity.warning');
+  return t('severity.info');
 }
 
-function formatRelative(value?: string | null) {
+function formatRelative(value: string | null | undefined, t: (key: string) => string) {
   if (!value) return '0';
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
   const diff = Date.now() - parsed.getTime();
   const minutes = Math.floor(diff / 60000);
-  if (minutes < 60) return `il y a ${Math.max(1, minutes)} min`;
+  if (minutes < 60) return t('time.minutesAgo').replace('{value}', String(Math.max(1, minutes)));
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `il y a ${hours} h`;
+  if (hours < 24) return t('time.hoursAgo').replace('{value}', String(hours));
   const days = Math.floor(hours / 24);
-  return `il y a ${days} j`;
+  return t('time.daysAgo').replace('{value}', String(days));
 }
 
 export function AlertsPage() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'critical' | 'warning' | 'resolved'>('all');
@@ -60,7 +62,7 @@ export function AlertsPage() {
     mutationFn: ackAlert,
     onSuccess: () => {
       setActionError('');
-      setActionMessage('Alert acknowledged.');
+      setActionMessage(t('alerts.message.acknowledged'));
       queryClient.invalidateQueries({ queryKey: ['alerts'] });
     },
     onError: (error) => {
@@ -123,6 +125,7 @@ export function AlertsPage() {
     total: allAlerts.length,
     critical: allAlerts.filter((item) => normalizeSeverity(item.severity) === 'critical').length,
     warning: allAlerts.filter((item) => normalizeSeverity(item.severity) === 'warning').length,
+    info: allAlerts.filter((item) => normalizeSeverity(item.severity) === 'info').length,
     resolved: allAlerts.filter((item) => (item.status ?? '').toLowerCase() === 'resolved').length,
     resolved7d,
   };
@@ -162,7 +165,7 @@ export function AlertsPage() {
       .slice(0, 2)
       .map((item) => ({
         tone: 'critical' as const,
-        title: `${item.title || 'Alerte critique'} · V${item.vehicle_id}`,
+        title: `${item.title || t('alerts.kpi.critical')} · V${item.vehicle_id}`,
         message: item.message || 'Intervention rapide recommandee.',
       }));
 
@@ -171,18 +174,18 @@ export function AlertsPage() {
       .slice(0, 1)
       .map((item) => ({
         tone: 'warning' as const,
-        title: `${item.title || 'Avertissement'} · V${item.vehicle_id}`,
+        title: `${item.title || t('alerts.kpi.warning')} · V${item.vehicle_id}`,
         message: item.message || 'Surveillance conseillee.',
       }));
 
     const stableInsight = {
       tone: 'ok' as const,
-      title: 'Flotte globalement stable',
-      message: criticalVisible === 0 ? 'Aucun risque critique detecte actuellement.' : 'Des alertes critiques restent ouvertes.',
+      title: t('fleet.stable'),
+      message: criticalVisible === 0 ? t('fleet.noCritical') : t('fleet.criticalOpen'),
     };
 
     return [...criticalList, ...warningList, stableInsight].slice(0, 4);
-  }, [alerts, criticalVisible]);
+  }, [alerts, criticalVisible, t]);
 
   const chartData = useMemo(() => {
     const days = Array.from({ length: 7 }, (_, index) => {
@@ -221,10 +224,10 @@ export function AlertsPage() {
 
   const handleRefreshAi = () => {
     setActionError('');
-    setActionMessage('Rafraichissement IA...');
+    setActionMessage(t('alerts.message.refreshing'));
     alertsQuery.refetch().then(async () => {
       await Promise.all(aiRiskQueries.map((query) => query.refetch()));
-      setActionMessage('Analyse IA rafraichie.');
+      setActionMessage(t('alerts.message.refreshed'));
     }).catch((error) => {
       setActionMessage('');
       setActionError(getErrorMessage(error));
@@ -248,7 +251,7 @@ export function AlertsPage() {
     setActionMessage('');
     try {
       await Promise.all(ids.map((id) => ackAlert({ alert_id: id })));
-      setActionMessage(`${ids.length} alerte(s) marquee(s) comme lue(s).`);
+      setActionMessage(`${ids.length} ${t('alerts.message.markedRead')}`);
       queryClient.invalidateQueries({ queryKey: ['alerts'] });
     } catch (error) {
       setActionError(getErrorMessage(error));
@@ -269,12 +272,12 @@ export function AlertsPage() {
     <section className="ai-alerts-page overview-page">
       <div className="ai-alerts-header-row">
         <div>
-          <h2 className="ai-alerts-title">Alertes intelligentes</h2>
-          <p className="ai-alerts-subtitle">Surveillance IA de la flotte · Moteur de detection v2.1</p>
+          <h2 className="ai-alerts-title">{t('alerts.title')}</h2>
+          <p className="ai-alerts-subtitle">{t('alerts.subtitle')}</p>
         </div>
         <div className="ai-alerts-header-actions">
-          <span className="ai-alerts-status-pill">Surveillance active</span>
-          <button type="button" className="ai-alerts-btn" onClick={acknowledgeVisible} disabled={ackMutation.isPending}>Tout marquer lu</button>
+          <span className="ai-alerts-status-pill">{t('alerts.activeMonitoring')}</span>
+          <button type="button" className="ai-alerts-btn" onClick={acknowledgeVisible} disabled={ackMutation.isPending}>{t('alerts.markAllRead')}</button>
           <button
             type="button"
             className="ai-alerts-btn"
@@ -283,47 +286,52 @@ export function AlertsPage() {
               if (node) node.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }}
           >
-            Configurer les regles
+            {t('alerts.configureRules')}
           </button>
         </div>
       </div>
 
       <div className="ai-alerts-kpi-grid">
         <article className="ai-alerts-kpi-card critical">
-          <p className="ai-alerts-kpi-label">Alertes critiques</p>
+          <p className="ai-alerts-kpi-label">{t('alerts.kpi.critical')}</p>
           <p className="ai-alerts-kpi-value">{stats.critical}</p>
-          <p className="ai-alerts-kpi-note">Intervention requise</p>
+          <p className="ai-alerts-kpi-note">{t('alerts.kpi.noteCritical')}</p>
         </article>
         <article className="ai-alerts-kpi-card warning">
-          <p className="ai-alerts-kpi-label">Avertissements</p>
+          <p className="ai-alerts-kpi-label">{t('alerts.kpi.warning')}</p>
           <p className="ai-alerts-kpi-value">{stats.warning}</p>
-          <p className="ai-alerts-kpi-note">A surveiller</p>
+          <p className="ai-alerts-kpi-note">{t('alerts.kpi.noteWarning')}</p>
+        </article>
+        <article className="ai-alerts-kpi-card info">
+          <p className="ai-alerts-kpi-label">{t('alerts.kpi.info')}</p>
+          <p className="ai-alerts-kpi-value">{stats.info}</p>
+          <p className="ai-alerts-kpi-note">{t('alerts.kpi.noteInfo')}</p>
         </article>
         <article className="ai-alerts-kpi-card ok">
-          <p className="ai-alerts-kpi-label">Resolues (7 jours)</p>
+          <p className="ai-alerts-kpi-label">{t('alerts.kpi.resolved7d')}</p>
           <p className="ai-alerts-kpi-value">{stats.resolved7d}</p>
-          <p className="ai-alerts-kpi-note">Taux resolution {stats.total ? Math.round((stats.resolved / Math.max(1, stats.total)) * 100) : 0}%</p>
+          <p className="ai-alerts-kpi-note">{t('alerts.kpi.noteResolvedRate')} {stats.total ? Math.round((stats.resolved / Math.max(1, stats.total)) * 100) : 0}%</p>
         </article>
         <article className="ai-alerts-kpi-card fleet">
-          <p className="ai-alerts-kpi-label">Score IA flotte</p>
+          <p className="ai-alerts-kpi-label">{t('alerts.kpi.fleetScore')}</p>
           <p className="ai-alerts-kpi-value">{avgFleetAiScore}<span>/100</span></p>
-          <p className="ai-alerts-kpi-note">Attention recommandee</p>
+          <p className="ai-alerts-kpi-note">{t('alerts.kpi.noteFleet')}</p>
         </article>
       </div>
 
       <div className="ai-alerts-filter-row">
-        <button type="button" className={`ai-tab-btn ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>Toutes ({alerts.length})</button>
-        <button type="button" className={`ai-tab-btn ${activeTab === 'critical' ? 'active' : ''}`} onClick={() => setActiveTab('critical')}>Critiques ({criticalVisible})</button>
-        <button type="button" className={`ai-tab-btn ${activeTab === 'warning' ? 'active' : ''}`} onClick={() => setActiveTab('warning')}>Avertissements ({warningVisible})</button>
-        <button type="button" className={`ai-tab-btn ${activeTab === 'resolved' ? 'active' : ''}`} onClick={() => setActiveTab('resolved')}>Resolues ({resolvedVisible})</button>
+        <button type="button" className={`ai-tab-btn ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>{t('alerts.tabs.all')} ({alerts.length})</button>
+        <button type="button" className={`ai-tab-btn ${activeTab === 'critical' ? 'active' : ''}`} onClick={() => setActiveTab('critical')}>{t('alerts.tabs.critical')} ({criticalVisible})</button>
+        <button type="button" className={`ai-tab-btn ${activeTab === 'warning' ? 'active' : ''}`} onClick={() => setActiveTab('warning')}>{t('alerts.tabs.warning')} ({warningVisible})</button>
+        <button type="button" className={`ai-tab-btn ${activeTab === 'resolved' ? 'active' : ''}`} onClick={() => setActiveTab('resolved')}>{t('alerts.tabs.resolved')} ({resolvedVisible})</button>
         <input
           className="ai-alerts-search"
-          placeholder="Chercher une alerte..."
+          placeholder={t('alerts.searchPlaceholder')}
           value={searchInput}
           onChange={(event) => setSearchInput(event.target.value)}
           onKeyDown={handleSearchKeyDown}
         />
-        <button type="button" className="ai-search-btn" onClick={handleSearch}>Chercher</button>
+        <button type="button" className="ai-search-btn" onClick={handleSearch}>{t('alerts.searchButton')}</button>
       </div>
 
       {actionError && <p className="form-error">{actionError}</p>}
@@ -333,15 +341,15 @@ export function AlertsPage() {
         <section className="panel ai-alerts-feed-panel">
           <div className="ai-panel-header">
             <div>
-              <h3>Fil des alertes</h3>
-              <p>Triees par severite IA · {alerts.length} alertes</p>
+              <h3>{t('alerts.feed.title')}</h3>
+              <p>{t('alerts.feed.sortedBy')} · {alerts.length} {t('alerts.feed.count')}</p>
             </div>
-            <button type="button" className="ai-alerts-btn">Exporter</button>
+            <button type="button" className="ai-alerts-btn">{t('alerts.feed.export')}</button>
           </div>
 
           <div className="ai-alerts-feed-list">
-            {alertsQuery.isLoading ? <p className="muted-note">Chargement des alertes...</p> : null}
-            {!alertsQuery.isLoading && alerts.length === 0 ? <p className="muted-note">Aucune alerte a afficher.</p> : null}
+            {alertsQuery.isLoading ? <p className="muted-note">{t('alerts.loading')}</p> : null}
+            {!alertsQuery.isLoading && alerts.length === 0 ? <p className="muted-note">{t('alerts.empty')}</p> : null}
 
             {alerts.map((alert) => {
               const tone = normalizeSeverity(alert.severity);
@@ -352,18 +360,18 @@ export function AlertsPage() {
                 <article key={alert.id} className={`ai-alert-row ${tone}`}>
                   <div className="ai-alert-row-main">
                     <div className="ai-alert-title-row">
-                      <h4>{alert.title || alert.type || 'Alerte'}</h4>
-                      <span className={`ai-severity-pill ${tone}`}>{severityBadge(alert.severity)}</span>
+                      <h4>{alert.title || alert.type || t('alerts.item.defaultTitle')}</h4>
+                      <span className={`ai-severity-pill ${tone}`}>{severityBadge(alert.severity, t)}</span>
                     </div>
-                    <p className="ai-alert-message">{alert.message || 'Detail indisponible'}</p>
+                    <p className="ai-alert-message">{alert.message || t('alerts.item.noDetail')}</p>
                     <div className="ai-alert-meta">
-                      <span>{formatRelative(alert.created_at)}</span>
-                      <span className="ai-vehicle-chip">Vehicule {alert.vehicle_id}</span>
+                      <span>{formatRelative(alert.created_at, t)}</span>
+                      <span className="ai-vehicle-chip">{t('alerts.item.vehicle')} {alert.vehicle_id}</span>
                     </div>
                   </div>
                   <div className="ai-alert-side">
-                    <span>Score IA: {score}/10</span>
-                    <button type="button" className="inline-link-btn" onClick={() => rowAck(alert.id)}>Marquer lu</button>
+                    <span>{t('alerts.item.aiScore')}: {score}/100</span>
+                    <button type="button" className="inline-link-btn" onClick={() => rowAck(alert.id)}>{t('alerts.item.markRead')}</button>
                   </div>
                 </article>
               );
@@ -375,10 +383,10 @@ export function AlertsPage() {
           <section className="panel ai-insights-panel">
             <div className="ai-panel-header">
               <div>
-                <h3>Analyse IA de la flotte</h3>
-                <p>Insights generes automatiquement</p>
+                <h3>{t('alerts.insights.title')}</h3>
+                <p>{t('alerts.insights.subtitle')}</p>
               </div>
-              <button type="button" className="ai-alerts-btn" onClick={handleRefreshAi}>Rafraichir</button>
+              <button type="button" className="ai-alerts-btn" onClick={handleRefreshAi}>{t('alerts.refreshAi')}</button>
             </div>
 
             <div className="ai-insights-list">
@@ -392,37 +400,37 @@ export function AlertsPage() {
                 </article>
               ))}
             </div>
-            <button type="button" className="ai-insight-link">Analyse approfondie avec l'IA</button>
+            <button type="button" className="ai-insight-link">{t('alerts.insights.deepAnalysis')}</button>
           </section>
 
           <section className="panel ai-rules-panel" id="ai-rules-panel">
-            <h3>Regles de notification</h3>
+            <h3>{t('alerts.rules.title')}</h3>
             <div className="ai-rules-list">
               <label className="ai-rule-item">
                 <div>
                   <strong>Temperature moteur {'>'} 90C</strong>
-                  <p>SMS + Push immediat</p>
+                  <p>{t('alerts.rules.engineTempDesc')}</p>
                 </div>
                 <input type="checkbox" checked={rules.engineTemp} onChange={() => toggleRule('engineTemp')} />
               </label>
               <label className="ai-rule-item">
                 <div>
                   <strong>Code DTC detecte</strong>
-                  <p>Email + Push</p>
+                  <p>{t('alerts.rules.dtcDesc')}</p>
                 </div>
                 <input type="checkbox" checked={rules.dtcDetected} onChange={() => toggleRule('dtcDetected')} />
               </label>
               <label className="ai-rule-item">
                 <div>
                   <strong>Carburant {'<'} 25%</strong>
-                  <p>Push uniquement</p>
+                  <p>{t('alerts.rules.fuelDesc')}</p>
                 </div>
                 <input type="checkbox" checked={rules.lowFuel} onChange={() => toggleRule('lowFuel')} />
               </label>
               <label className="ai-rule-item">
                 <div>
                   <strong>Rappel revision annuelle</strong>
-                  <p>Email 30j avant</p>
+                  <p>{t('alerts.rules.revisionDesc')}</p>
                 </div>
                 <input type="checkbox" checked={rules.revisionReminder} onChange={() => toggleRule('revisionReminder')} />
               </label>
@@ -430,7 +438,7 @@ export function AlertsPage() {
           </section>
 
           <section className="panel ai-chart-panel">
-            <h3>Statistiques alertes (7 jours)</h3>
+            <h3>{t('alerts.chart.title')}</h3>
             <div className="ai-bars">
               {chartData.map((entry) => {
                 const stackTotal = entry.critical + entry.warning + entry.info;

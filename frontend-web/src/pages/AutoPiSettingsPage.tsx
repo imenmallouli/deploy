@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getAutoPiSettings, updateAutoPiSettings } from '../lib/api/endpoints';
+import { useI18n } from '../lib/i18n';
 
 type FormState = {
   enabled: boolean;
@@ -29,6 +30,68 @@ const defaultForm: FormState = {
 };
 
 export function AutoPiSettingsPage() {
+  const { locale } = useI18n();
+  const text = locale === 'fr'
+    ? {
+        saveFailed: 'Echec de sauvegarde AutoPi',
+        saveSuccess: 'Configuration AutoPi sauvegardee. Le bridge a ete relance automatiquement.',
+        title: 'Parametres AutoPi',
+        subtitle: 'Configurez une seule fois la connexion cloud. Les utilisateurs n\'ont rien a saisir ensuite.',
+        bridgeActive: 'Bridge actif',
+        bridgeInactive: 'Bridge inactif',
+        cloudConnection: 'Connexion Cloud',
+        refreshing: 'Actualisation...',
+        refresh: 'Actualiser',
+        enableReading: 'Activer la lecture automatique AutoPi au demarrage backend',
+        autopiEmail: 'Email AutoPi',
+        autopiPassword: 'Mot de passe AutoPi',
+        keepPassword: 'Laisser vide pour garder le mot de passe actuel',
+        password: 'Mot de passe',
+        dongleId: 'ID reel du dongle',
+        mqttUser: 'MQTT username',
+        optional: 'Optionnel',
+        keepMqttPassword: 'Laisser vide pour garder le mot de passe MQTT actuel',
+        verboseLogs: 'Activer les logs detailles du bridge',
+        saving: 'Sauvegarde...',
+        saveRestart: 'Sauvegarder et relancer',
+        howItWorks: 'Comment ca marche',
+        step1: 'L\'admin remplit ce formulaire une seule fois.',
+        step2: 'Le backend sauvegarde la configuration cote serveur.',
+        step3: 'Le bridge MQTT est relance automatiquement apres sauvegarde.',
+        step4: 'L\'utilisateur normal branche le dongle et consulte les donnees sans toucher au code.',
+        important: 'Important',
+        note: 'Le vehicule doit rester lie au bon dongle dans les pages Vehicles ou Devices pour que l\'ingestion soit acceptee.',
+      }
+    : {
+        saveFailed: 'AutoPi save failed',
+        saveSuccess: 'AutoPi configuration saved. Bridge was restarted automatically.',
+        title: 'AutoPi Settings',
+        subtitle: 'Configure cloud connection once. Users will not need to type anything after that.',
+        bridgeActive: 'Bridge active',
+        bridgeInactive: 'Bridge inactive',
+        cloudConnection: 'Cloud Connection',
+        refreshing: 'Refreshing...',
+        refresh: 'Refresh',
+        enableReading: 'Enable AutoPi automatic reading at backend startup',
+        autopiEmail: 'AutoPi Email',
+        autopiPassword: 'AutoPi Password',
+        keepPassword: 'Leave empty to keep current password',
+        password: 'Password',
+        dongleId: 'Real dongle ID',
+        mqttUser: 'MQTT username',
+        optional: 'Optional',
+        keepMqttPassword: 'Leave empty to keep current MQTT password',
+        verboseLogs: 'Enable verbose bridge logs',
+        saving: 'Saving...',
+        saveRestart: 'Save and restart',
+        howItWorks: 'How it works',
+        step1: 'Admin fills this form one time only.',
+        step2: 'Backend stores the server-side configuration.',
+        step3: 'MQTT bridge is automatically restarted after save.',
+        step4: 'Standard user plugs in the dongle and reads data without touching code.',
+        important: 'Important',
+        note: 'Vehicle must stay linked to the correct dongle in Vehicles or Devices pages so ingestion is accepted.',
+      };
   const queryClient = useQueryClient();
   const [form, setForm] = useState<FormState>(defaultForm);
   const [message, setMessage] = useState('');
@@ -72,18 +135,18 @@ export function AutoPiSettingsPage() {
       });
 
       if (response.status !== 'success') {
-        throw new Error(response.message || 'Echec de sauvegarde AutoPi');
+        throw new Error(response.message || text.saveFailed);
       }
 
       return response;
     },
     onSuccess: async () => {
-      setMessage('Configuration AutoPi sauvegardee. Le bridge a ete relance automatiquement.');
+      setMessage(text.saveSuccess);
       setForm((current) => ({ ...current, password: '', mqtt_password: '' }));
       await queryClient.invalidateQueries({ queryKey: ['autopi-settings'] });
     },
     onError: (error: unknown) => {
-      setMessage(error instanceof Error ? error.message : 'Echec de sauvegarde AutoPi');
+      setMessage(error instanceof Error ? error.message : text.saveFailed);
     },
   });
 
@@ -91,25 +154,25 @@ export function AutoPiSettingsPage() {
     <section className="autopi-page">
       <div className="autopi-header">
         <div>
-          <h2 className="autopi-title">AutoPi Settings</h2>
-          <p className="autopi-subtitle">Configure une seule fois la connexion cloud. Les utilisateurs n’ont rien a saisir ensuite.</p>
+          <h2 className="autopi-title">{text.title}</h2>
+          <p className="autopi-subtitle">{text.subtitle}</p>
         </div>
         <div className={`autopi-status ${form.enabled ? 'is-enabled' : 'is-disabled'}`}>
-          {form.enabled ? 'Bridge active' : 'Bridge inactive'}
+          {form.enabled ? text.bridgeActive : text.bridgeInactive}
         </div>
       </div>
 
       <div className="autopi-grid">
         <article className="autopi-card">
           <div className="panel-title-row">
-            <h3>Connexion Cloud</h3>
+            <h3>{text.cloudConnection}</h3>
             <button
               type="button"
               className="autopi-refresh-btn"
               onClick={() => settingsQuery.refetch()}
               disabled={settingsQuery.isFetching}
             >
-              {settingsQuery.isFetching ? 'Actualisation...' : 'Actualiser'}
+              {settingsQuery.isFetching ? text.refreshing : text.refresh}
             </button>
           </div>
 
@@ -127,12 +190,12 @@ export function AutoPiSettingsPage() {
                 checked={form.enabled}
                 onChange={(event) => setForm((current) => ({ ...current, enabled: event.target.checked }))}
               />
-              <span>Activer la lecture automatique AutoPi au demarrage backend</span>
+              <span>{text.enableReading}</span>
             </label>
 
             <div className="autopi-field-grid">
               <label className="autopi-field">
-                <span>Email AutoPi</span>
+                <span>{text.autopiEmail}</span>
                 <input
                   value={form.email}
                   onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
@@ -141,17 +204,17 @@ export function AutoPiSettingsPage() {
               </label>
 
               <label className="autopi-field">
-                <span>Mot de passe AutoPi</span>
+                <span>{text.autopiPassword}</span>
                 <input
                   type="password"
                   value={form.password}
                   onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-                  placeholder={settingsQuery.data?.has_password ? 'Laisser vide pour garder le mot de passe actuel' : 'Mot de passe'}
+                  placeholder={settingsQuery.data?.has_password ? text.keepPassword : text.password}
                 />
               </label>
 
               <label className="autopi-field">
-                <span>ID reel du dongle</span>
+                <span>{text.dongleId}</span>
                 <input
                   value={form.device_id}
                   onChange={(event) => setForm((current) => ({ ...current, device_id: event.target.value }))}
@@ -191,11 +254,11 @@ export function AutoPiSettingsPage() {
               </label>
 
               <label className="autopi-field">
-                <span>MQTT username</span>
+                <span>{text.mqttUser}</span>
                 <input
                   value={form.mqtt_username}
                   onChange={(event) => setForm((current) => ({ ...current, mqtt_username: event.target.value }))}
-                  placeholder="Optionnel"
+                  placeholder={text.optional}
                 />
               </label>
 
@@ -205,7 +268,7 @@ export function AutoPiSettingsPage() {
                   type="password"
                   value={form.mqtt_password}
                   onChange={(event) => setForm((current) => ({ ...current, mqtt_password: event.target.value }))}
-                  placeholder={settingsQuery.data?.has_mqtt_password ? 'Laisser vide pour garder le mot de passe MQTT actuel' : 'Optionnel'}
+                  placeholder={settingsQuery.data?.has_mqtt_password ? text.keepMqttPassword : text.optional}
                 />
               </label>
             </div>
@@ -216,12 +279,12 @@ export function AutoPiSettingsPage() {
                 checked={form.verbose}
                 onChange={(event) => setForm((current) => ({ ...current, verbose: event.target.checked }))}
               />
-              <span>Activer les logs detailles du bridge</span>
+              <span>{text.verboseLogs}</span>
             </label>
 
             <div className="autopi-actions">
               <button type="submit" className="autopi-save-btn" disabled={saveMutation.isPending}>
-                {saveMutation.isPending ? 'Sauvegarde...' : 'Sauvegarder et relancer'}
+                {saveMutation.isPending ? text.saving : text.saveRestart}
               </button>
             </div>
           </form>
@@ -230,17 +293,17 @@ export function AutoPiSettingsPage() {
         </article>
 
         <article className="autopi-card autopi-help-card">
-          <h3>Comment ca marche</h3>
+          <h3>{text.howItWorks}</h3>
           <ul className="autopi-help-list">
-            <li>L’admin remplit ce formulaire une seule fois.</li>
-            <li>Le backend sauvegarde la configuration cote serveur.</li>
-            <li>Le bridge MQTT est relance automatiquement apres sauvegarde.</li>
-            <li>L’utilisateur normal branche le dongle et consulte les donnees sans toucher au code.</li>
+            <li>{text.step1}</li>
+            <li>{text.step2}</li>
+            <li>{text.step3}</li>
+            <li>{text.step4}</li>
           </ul>
 
           <div className="autopi-note-box">
-            <strong>Important</strong>
-            <p>Le vehicule doit rester lie au bon dongle dans les pages Vehicles ou Devices pour que l’ingestion soit acceptee.</p>
+            <strong>{text.important}</strong>
+            <p>{text.note}</p>
           </div>
         </article>
       </div>

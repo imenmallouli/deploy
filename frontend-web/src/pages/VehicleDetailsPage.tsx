@@ -11,7 +11,11 @@ import {
 function getErrorMessage(error: unknown): string {
   const maybeAxiosError = error as { response?: { data?: { message?: string; detail?: string } }; message?: string };
   const rawMessage = maybeAxiosError.response?.data?.message ?? maybeAxiosError.response?.data?.detail ?? maybeAxiosError.message ?? 'Request failed.';
-  if (rawMessage.includes('Model file not found') || rawMessage.includes('Modele IA introuvable')) {
+  if (
+    rawMessage.includes('Model file not found')
+    || rawMessage.includes('AI model not found')
+    || rawMessage.includes('Modele IA introuvable')
+  ) {
     return 'AI model is not available yet. Run backend/scripts/train_alert_model.py and then click Refresh AI.';
   }
   return rawMessage;
@@ -80,6 +84,10 @@ export function VehicleDetailsPage() {
   const riskSeverity = aiRiskQuery.data?.predicted_severity;
   const riskScore = aiRiskQuery.data?.predicted_risk_score;
   const riskColor = getRiskColor(riskSeverity);
+  const nextAction = aiInsightsQuery.data?.insights?.next_action?.trim();
+  const hasPredictedRisks = (aiInsightsQuery.data?.predicted_risks?.length ?? 0) > 0;
+  const shouldShowNextAction = Boolean(nextAction)
+    && !(nextAction === 'Continuer la maintenance préventive normale.' && !hasPredictedRisks);
 
   return (
     <section className="vd-page">
@@ -166,8 +174,8 @@ export function VehicleDetailsPage() {
             ) : (
               <>
                 <div className="vd-score-circle" style={{ borderColor: riskColor, color: riskColor }}>
-                  {riskScore != null ? riskScore.toFixed(1) : '-'}
-                  <span className="vd-score-denom">/10</span>
+                  <span className="vd-score-value">{riskScore != null ? riskScore.toFixed(1) : '-'}</span>
+                  <span className="vd-score-denom">/100</span>
                 </div>
                 <p className="vd-metric-sub" style={{ color: riskColor }}>
                   {riskSeverity ?? '-'}
@@ -207,9 +215,9 @@ export function VehicleDetailsPage() {
                 <p className="vd-insight-line">
                   {aiInsightsQuery.data?.insights?.summary ?? 'No anomalies detected'}
                 </p>
-                {aiInsightsQuery.data?.insights?.next_action && (
+                {shouldShowNextAction && (
                   <p className="vd-insight-action">
-                    Next: {aiInsightsQuery.data.insights.next_action}
+                    Next: {nextAction}
                   </p>
                 )}
                 {aiInsightsQuery.data?.predicted_risks?.length ? (

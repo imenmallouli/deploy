@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { listAlerts, listDtc, listVehicles } from '../lib/api/endpoints';
+import { useI18n } from '../lib/i18n';
 
 export function GetStartedPage() {
+  const { t } = useI18n();
   const [showWelcome, setShowWelcome] = useState(true);
   const vehiclesQuery = useQuery({ queryKey: ['vehicles'], queryFn: listVehicles });
   const alertsQuery = useQuery({ queryKey: ['alerts'], queryFn: listAlerts });
@@ -17,10 +19,10 @@ export function GetStartedPage() {
   return (
     <section className="overview-page panel get-started-shell">
       <div className="panel-title-row">
-        <h2>Get started</h2>
+        <h2>{t('getStarted.title')}</h2>
         {showWelcome && (
           <button className="btn-link" type="button" onClick={() => setShowWelcome(false)}>
-            Close
+            {t('common.close')}
           </button>
         )}
       </div>
@@ -29,69 +31,69 @@ export function GetStartedPage() {
         <article className="get-started-hero">
           <div className="get-started-hero-main">
             <p className="get-started-hero-kicker">Cloud Fleet Platform</p>
-            <h3 className="get-started-hero-title">Discover, shop, learn and thrive with MALLOULIAUTO Cloud</h3>
+            <h3 className="get-started-hero-title">{t('getStarted.heroTitle')}</h3>
             <div className="get-started-hero-stats" aria-label="Fleet summary metrics">
               <div className="get-started-hero-stat">
                 <strong>{totalVehicles}</strong>
-                <span>Vehicles</span>
+                <span>{t('getStarted.vehicles')}</span>
               </div>
               <div className="get-started-hero-stat">
                 <strong>{pendingAlerts}</strong>
-                <span>Open alerts</span>
+                <span>{t('getStarted.openAlerts')}</span>
               </div>
               <div className="get-started-hero-stat">
                 <strong>{dtcQuery.data?.count ?? 0}</strong>
-                <span>Active DTC</span>
+                <span>{t('getStarted.activeDtc')}</span>
               </div>
             </div>
-            <button className="get-started-hero-cta" type="button">Get expert guidance ↗</button>
+            <button className="get-started-hero-cta" type="button">{t('getStarted.guidance')} ↗</button>
           </div>
           <div className="get-started-hero-side">
-            <p className="get-started-hero-kicker">Active connector</p>
+            <p className="get-started-hero-kicker">{t('getStarted.activeConnector')}</p>
             <p className="get-started-hero-side-title">OBD-II</p>
-            <p className="get-started-hero-side-sub">Real-time diagnostics via connected dongle</p>
+            <p className="get-started-hero-side-sub">{t('getStarted.realtimeDiagnostics')}</p>
           </div>
         </article>
       )}
 
-      <h3 className="get-started-section-title">Shortcuts</h3>
+      <h3 className="get-started-section-title">{t('getStarted.shortcuts')}</h3>
       <div className="get-started-shortcuts">
         <a className="get-started-tile" href={documentationUrl} target="_blank" rel="noreferrer">
           <span>📘</span>
-          <p>Documentation</p>
+          <p>{t('getStarted.documentation')}</p>
         </a>
         <a className="get-started-tile" href={swaggerUrl} target="_blank" rel="noreferrer">
           <span>💻</span>
-          <p>API Reference</p>
+          <p>{t('getStarted.apiReference')}</p>
         </a>
       </div>
 
-      <h3 className="get-started-section-title">Telematics</h3>
-      <h3 className="get-started-subtitle">Real-Time Vehicle Intelligence</h3>
+      <h3 className="get-started-section-title">{t('getStarted.telematics')}</h3>
+      <h3 className="get-started-subtitle">{t('getStarted.realtimeVehicleIntel')}</h3>
       <article className="get-started-banner">
-        <div className="get-started-banner-image" aria-hidden="true">Device</div>
+        <div className="get-started-banner-image" aria-hidden="true">{t('getStarted.device')}</div>
         <div>
-          <h3>Struggling with accessing real-time vehicle data?</h3>
-          <p>Explore our telematics and diagnostics modules to elevate your data insights.</p>
+          <h3>{t('getStarted.strugglingTitle')}</h3>
+          <p>{t('getStarted.strugglingBody')}</p>
           
         </div>
       </article>
 
-      <h3 className="get-started-section-title">Business</h3>
-      <h3 className="get-started-subtitle">Auto Diagnostic IoT solutions</h3>
+      <h3 className="get-started-section-title">{t('getStarted.business')}</h3>
+      <h3 className="get-started-subtitle">{t('getStarted.iotSolutions')}</h3>
       <div className="get-started-business-grid">
-        <article className="get-started-business-card">Data Management</article>
-        <article className="get-started-business-card">Device Management</article>
-        <article className="get-started-business-card">Real-time Data Streaming</article>
-        <article className="get-started-business-card">Vehicle Telematics</article>
+        <article className="get-started-business-card">{t('getStarted.dataManagement')}</article>
+        <article className="get-started-business-card">{t('getStarted.deviceManagement')}</article>
+        <article className="get-started-business-card">{t('getStarted.streaming')}</article>
+        <article className="get-started-business-card">{t('getStarted.vehicleTelematics')}</article>
       </div>
 
-      <h3 className="get-started-section-title">Blog</h3>
-      <h3 className="get-started-subtitle">Latest fleet and diagnostics posts</h3>
+      <h3 className="get-started-section-title">{t('getStarted.blog')}</h3>
+      <h3 className="get-started-subtitle">{t('getStarted.latestPosts')}</h3>
       <div className="get-started-blog-grid">
-        <article className="get-started-blog-card"><h4>CAN BUS Protocol</h4><p>Ultimate CAN BUS Guide 2023: A detailed look at the protocol.</p></article>
-        <article className="get-started-blog-card"><h4>Raspberry Pi Car Computer</h4><p>How to build a Raspberry Pi car computer in easy steps.</p></article>
-        <article className="get-started-blog-card"><h4>OBD-II</h4><p>Ultimate OBD2 Guide: Understanding vehicle diagnostics.</p></article>
+        <article className="get-started-blog-card"><h4>{t('getStarted.blogCanTitle')}</h4><p>{t('getStarted.blogCanBody')}</p></article>
+        <article className="get-started-blog-card"><h4>{t('getStarted.blogPiTitle')}</h4><p>{t('getStarted.blogPiBody')}</p></article>
+        <article className="get-started-blog-card"><h4>{t('getStarted.blogObdTitle')}</h4><p>{t('getStarted.blogObdBody')}</p></article>
       </div>
     </section>
   );

@@ -100,26 +100,12 @@ function mergeByTimestamp(
   );
 }
 
-// Fill empty metric cells with the last known value.
-// AutoPi sends each PID at its own frequency (rpm every 2s, fuel_level every few minutes).
 function carryForwardValues(rows: MergedTelemetryRow[], metrics: string[]): MergedTelemetryRow[] {
-  const lastKnown: Record<string, unknown> = {};
   return rows.map((row) => {
-    metrics.forEach((metric) => {
-      const v = row.values[metric];
-      if (v !== null && v !== undefined) {
-        lastKnown[metric] = v;
-      }
-    });
     const filled: Record<string, unknown> = {};
     metrics.forEach((metric) => {
       const v = row.values[metric];
-      // Keep direct metrics strict: show only exact values sent for the row timestamp.
-      if (DIRECT_ONLY_METRICS.has(metric)) {
-        filled[metric] = (v !== null && v !== undefined) ? v : null;
-        return;
-      }
-      filled[metric] = (v !== null && v !== undefined) ? v : (lastKnown[metric] ?? null);
+      filled[metric] = (v !== null && v !== undefined) ? v : null;
     });
     return { timestamp: row.timestamp, values: filled };
   });
@@ -246,7 +232,7 @@ function TlHealthBar({ label, value, raw, color }: { label: string; value: numbe
 
 export function TelemetryPage() {
   const [vehicleId, setVehicleId] = useState<number | null>(null);
-  const interval = '1m';
+  const interval = '5m';
   const metricsList = [
     'speed',
     'rpm',
@@ -322,7 +308,7 @@ export function TelemetryPage() {
       ? base.replace('https://', 'wss://')
       : base.replace('http://', 'ws://');
     const params = new URLSearchParams();
-    params.set('poll_ms', '60000');
+    params.set('poll_ms', '120000');
     if (token) {
       params.set('token', token);
     }
@@ -364,13 +350,14 @@ export function TelemetryPage() {
       return [];
     }
 
-    // Realtime stream: keep minute-by-minute events, but show only values
-    // that actually arrive from MQTT (no history seed, no carry-forward).
+    // Realtime stream: minute-by-minute events as received from backend.
     return liveEvents.map((event) => ({
       timestamp: event.timestamp ?? new Date().toISOString(),
       values: event.metrics ?? {},
     }));
   }, [liveEvents, freshnessTick]);
+
+  const liveTableRows = liveRows;
 
   useEffect(() => {
     return () => {
@@ -468,28 +455,34 @@ export function TelemetryPage() {
   const currentVehicle = vehicles.find((v) => v.id === vehicleId);
 
   const latestLiveRow = liveRows[0];
-  const latestHistRow = displayedRows[displayedRows.length - 1];
-  const latestRow = latestLiveRow ?? latestHistRow;
-  const latestVals = latestRow?.values ?? {};
 
-  const currentSpeed       = extractNumeric(latestVals.speed) ?? 0;
-  const currentRpm         = extractNumeric(latestVals.rpm) ?? 0;
-  const currentEngineTemp  = extractNumeric(latestVals.engine_temp) ?? 0;
-  const currentFuelLevel   = extractNumeric(latestVals.fuel_level) ?? 0;
-  const currentBattery     = extractNumeric(latestVals.battery_voltage) ?? 0;
-  const currentBatteryChargeLevel = extractNumeric(latestVals.battery_charge_level);
-  const currentNominalVoltage = extractNumeric(latestVals.nominal_voltage);
-  const currentEngineLoad  = extractNumeric(latestVals.engine_load) ?? 0;
-  const currentAmbientTemp = extractNumeric(latestVals.ambient_air_temp) ?? 0;
-  const currentIntakeTemp  = extractNumeric(latestVals.intake_temp) ?? 0;
-  const currentOdometer    = extractNumeric(latestVals.odometer) ?? 0;
-  const currentTrackAltitude = extractNumeric(latestVals.track_altitude);
-  const currentCourseOverGround = extractNumeric(latestVals.course_over_ground);
-  const currentSatellitesUsed = extractNumeric(latestVals.satellites_used);
-  const currentGlonassSatellitesUsed = extractNumeric(latestVals.glonass_satellites_used);
-  const currentTempCpu = extractNumeric(latestVals.temp_cpu);
-  const currentCpu = extractNumeric(latestVals.cpu);
-  const currentGpu = extractNumeric(latestVals.gpu);
+  const latestMetricValue = (metric: string): number | null => {
+    for (const row of liveRows) {
+      const value = extractNumeric(row.values[metric]);
+      if (value !== null) return value;
+    }
+
+    return null;
+  };
+
+  const currentSpeed       = latestMetricValue('speed') ?? 0;
+  const currentRpm         = latestMetricValue('rpm') ?? 0;
+  const currentEngineTemp  = latestMetricValue('engine_temp') ?? 0;
+  const currentFuelLevel   = latestMetricValue('fuel_level') ?? 0;
+  const currentBattery     = latestMetricValue('battery_voltage') ?? 0;
+  const currentBatteryChargeLevel = latestMetricValue('battery_charge_level');
+  const currentNominalVoltage = latestMetricValue('nominal_voltage');
+  const currentEngineLoad  = latestMetricValue('engine_load') ?? 0;
+  const currentAmbientTemp = latestMetricValue('ambient_air_temp') ?? 0;
+  const currentIntakeTemp  = latestMetricValue('intake_temp') ?? 0;
+  const currentOdometer    = latestMetricValue('odometer') ?? 0;
+  const currentTrackAltitude = latestMetricValue('track_altitude');
+  const currentCourseOverGround = latestMetricValue('course_over_ground');
+  const currentSatellitesUsed = latestMetricValue('satellites_used');
+  const currentGlonassSatellitesUsed = latestMetricValue('glonass_satellites_used');
+  const currentTempCpu = latestMetricValue('temp_cpu');
+  const currentCpu = latestMetricValue('cpu');
+  const currentGpu = latestMetricValue('gpu');
 
   const batteryPct = currentBattery > 0
     ? Math.min(100, Math.max(0, ((currentBattery - 11) / 3.8) * 100))
@@ -528,14 +521,14 @@ export function TelemetryPage() {
   const fuelConsumed = (distance / 100) * 7;
   const co2Estimate  = fuelConsumed * 2.31;
 
-  const lastSyncLabel = latestRow
+  const lastSyncLabel = latestLiveRow
     ? (() => {
-        const delta = Math.round((Date.now() - new Date(latestRow.timestamp).getTime()) / 1000);
+        const delta = Math.round((Date.now() - new Date(latestLiveRow.timestamp).getTime()) / 1000);
         if (delta < 60)   return `Dernière sync il y a ${delta} s`;
         if (delta < 3600) return `Dernière sync il y a ${Math.round(delta / 60)} min`;
         return `Dernière sync il y a ${Math.round(delta / 3600)} h`;
       })()
-    : 'Aucune donnée';
+    : (liveConnected ? 'Connecté cloud, en attente de données...' : 'Aucune donnée temps réel');
 
   const driveScore = maxSpeedVal > 0
     ? Math.max(50, Math.round(100 - allAlerts.length * 5 - (maxSpeedVal > 120 ? 15 : 0)))
@@ -605,35 +598,43 @@ export function TelemetryPage() {
           <div className="tl-kpi-row tl-kpi-row-compact">
             <div className="tl-kpi-card tl-kpi-card-compact">
               <span className="tl-kpi-label">Niveau charge batterie</span>
-              <span className="tl-kpi-val">{currentBatteryChargeLevel != null ? Math.round(currentBatteryChargeLevel) : '-'}</span>
+              <span className="tl-kpi-val">{currentBatteryChargeLevel != null ? Math.round(currentBatteryChargeLevel) : 0}</span>
               <span className="tl-kpi-unit">%</span>
-              <span className={`tl-kpi-trend ${currentBatteryChargeLevel != null && currentBatteryChargeLevel < 20 ? 'tl-trend-danger' : 'tl-trend-up'}`}>
-                {currentBatteryChargeLevel == null ? 'AutoPi en attente' : currentBatteryChargeLevel < 20 ? '▼ faible' : '▲ ok'}
-              </span>
+              {currentBatteryChargeLevel != null && (
+                <span className={`tl-kpi-trend ${currentBatteryChargeLevel < 20 ? 'tl-trend-danger' : 'tl-trend-up'}`}>
+                  {currentBatteryChargeLevel < 20 ? '▼ faible' : '▲ ok'}
+                </span>
+              )}
             </div>
             <div className="tl-kpi-card tl-kpi-card-compact">
               <span className="tl-kpi-label">Tension nominale</span>
-              <span className="tl-kpi-val">{currentNominalVoltage != null ? currentNominalVoltage.toFixed(1) : '-'}</span>
+              <span className="tl-kpi-val">{currentNominalVoltage != null ? currentNominalVoltage.toFixed(1) : '0'}</span>
               <span className="tl-kpi-unit">V</span>
-              <span className={`tl-kpi-trend ${currentNominalVoltage != null && currentNominalVoltage < 12 ? 'tl-trend-warn' : 'tl-trend-up'}`}>
-                {currentNominalVoltage == null ? 'AutoPi en attente' : currentNominalVoltage < 12 ? '▲ basse' : '▲ stable'}
-              </span>
+              {currentNominalVoltage != null && (
+                <span className={`tl-kpi-trend ${currentNominalVoltage < 12 ? 'tl-trend-warn' : 'tl-trend-up'}`}>
+                  {currentNominalVoltage < 12 ? '▲ basse' : '▲ stable'}
+                </span>
+              )}
             </div>
             <div className="tl-kpi-card tl-kpi-card-compact">
               <span className="tl-kpi-label">Altitude</span>
-              <span className="tl-kpi-val">{currentTrackAltitude != null ? Math.round(currentTrackAltitude) : '-'}</span>
+              <span className="tl-kpi-val">{currentTrackAltitude != null ? Math.round(currentTrackAltitude) : '—'}</span>
               <span className="tl-kpi-unit">m</span>
-              <span className="tl-kpi-trend tl-trend-up">
-                {currentTrackAltitude == null ? 'AutoPi en attente' : `▲ cap ${currentCourseOverGround != null ? Math.round(currentCourseOverGround) : '-'}°`}
-              </span>
+              {currentTrackAltitude != null && (
+                <span className="tl-kpi-trend tl-trend-up">
+                  {`▲ cap ${currentCourseOverGround != null ? Math.round(currentCourseOverGround) : 0}°`}
+                </span>
+              )}
             </div>
             <div className="tl-kpi-card tl-kpi-card-compact">
               <span className="tl-kpi-label">Satellites utilisés</span>
-              <span className="tl-kpi-val">{currentSatellitesUsed != null ? Math.round(currentSatellitesUsed) : '-'}</span>
+              <span className="tl-kpi-val">{currentSatellitesUsed != null ? Math.round(currentSatellitesUsed) : '—'}</span>
               <span className="tl-kpi-unit">sat</span>
-              <span className={`tl-kpi-trend ${currentSatellitesUsed != null && currentSatellitesUsed < 4 ? 'tl-trend-warn' : 'tl-trend-up'}`}>
-                {currentSatellitesUsed == null ? 'AutoPi en attente' : currentGlonassSatellitesUsed != null ? `▲ GLONASS ${Math.round(currentGlonassSatellitesUsed)}` : currentSatellitesUsed < 4 ? '▲ signal faible' : '▲ signal ok'}
-              </span>
+              {currentSatellitesUsed != null && (
+                <span className={`tl-kpi-trend ${currentSatellitesUsed < 4 ? 'tl-trend-warn' : 'tl-trend-up'}`}>
+                  {currentGlonassSatellitesUsed != null ? `▲ GLONASS ${Math.round(currentGlonassSatellitesUsed)}` : currentSatellitesUsed < 4 ? '▲ signal faible' : '▲ signal ok'}
+                </span>
+              )}
             </div>
           </div>
 
@@ -683,21 +684,21 @@ export function TelemetryPage() {
                   label="Temp. CPU"
                   value={currentTempCpu != null ? Math.min(100, (currentTempCpu / 100) * 100) : 0}
                   unit="°C"
-                  raw={currentTempCpu != null ? `${Math.round(currentTempCpu)}°C` : '-'}
+                  raw={currentTempCpu != null ? `${Math.round(currentTempCpu)}°C` : '—'}
                   color={currentTempCpu != null && currentTempCpu > 85 ? 'orange' : 'blue'}
                 />
                 <TlHealthBar
                   label="CPU"
                   value={currentCpu ?? 0}
                   unit="%"
-                  raw={currentCpu != null ? `${Math.round(currentCpu)}%` : '-'}
+                  raw={currentCpu != null ? `${Math.round(currentCpu)}%` : '0%'}
                   color={currentCpu != null && currentCpu > 85 ? 'orange' : 'blue'}
                 />
                 <TlHealthBar
                   label="GPU"
                   value={currentGpu ?? 0}
                   unit="%"
-                  raw={currentGpu != null ? `${Math.round(currentGpu)}%` : '-'}
+                  raw={currentGpu != null ? `${Math.round(currentGpu)}%` : '0%'}
                   color={currentGpu != null && currentGpu > 85 ? 'orange' : 'blue'}
                 />
               </div>
@@ -840,10 +841,10 @@ export function TelemetryPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {liveRows.length === 0 && (
+                  {liveTableRows.length === 0 && (
                     <tr><td colSpan={tableMetrics.length + 1} className="empty-cell">Aucune donnée temps réel.</td></tr>
                   )}
-                  {liveRows.map((row, idx) => (
+                  {liveTableRows.map((row, idx) => (
                     <tr key={`${row.timestamp}-${idx}`}>
                       <td>{formatTimestamp(row.timestamp)}</td>
                       {tableMetrics.map((m) => (

@@ -1,8 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { listAlerts, listDtc, listVehicles } from '../lib/api/endpoints';
+import { useI18n } from '../lib/i18n';
 
 export function DashboardPage() {
+  const { t } = useI18n();
   const vehiclesQuery = useQuery({ queryKey: ['vehicles'], queryFn: listVehicles });
   const alertsQuery = useQuery({ queryKey: ['alerts'], queryFn: listAlerts });
   const dtcQuery = useQuery({ queryKey: ['dtc'], queryFn: () => listDtc(20) });
@@ -45,56 +47,56 @@ export function DashboardPage() {
 
   return (
     <section className="overview-page">
-      <h2>Fleet Overview</h2>
+      <h2>{t('dashboard.title')}</h2>
 
       <div className="overview-layout">
         <div>
           <article className="panel getting-started-panel">
             <div className="getting-started-title-row">
-              <h3>Getting started</h3>
+              <h3>{t('dashboard.gettingStarted')}</h3>
               <span className="getting-started-info" aria-hidden="true">ⓘ</span>
             </div>
             <ol>
-              <li><Link className="getting-started-link" to="/vehicles/list">Create / Import vehicles and start managing them</Link></li>
-              <li><Link className="getting-started-link" to="/alerts">Review alerts detected across your fleet</Link></li>
+              <li><Link className="getting-started-link" to="/vehicles/list">{t('dashboard.step1')}</Link></li>
+              <li><Link className="getting-started-link" to="/alerts">{t('dashboard.step2')}</Link></li>
               <li>
-                Create and assign <Link className="getting-started-link" to="/locations">locations</Link> to vehicles
+                {t('dashboard.step3a')} <Link className="getting-started-link" to="/locations">{t('dashboard.step3b')}</Link> {t('dashboard.step3c')}
               </li>
             </ol>
           </article>
 
           <article className="panel fleet-overview-panel">
             <div className="panel-title-row">
-              <h3>Fleet Overview</h3>
+              <h3>{t('dashboard.title')}</h3>
             </div>
 
             <div className="overview-cards-grid">
               <div className="overview-stat-card">
-                <p className="overview-stat-title">Driving now</p>
-                <p className="overview-stat-value">{drivingNow} of {totalVehicles}</p>
+                <p className="overview-stat-title">{t('dashboard.drivingNow')}</p>
+                <p className="overview-stat-value">{drivingNow} {t('dashboard.of')} {totalVehicles}</p>
               </div>
               <div className="overview-stat-card is-highlight">
-                <p className="overview-stat-title">Driven today</p>
-                <p className="overview-stat-value">{drivenToday} of {totalVehicles}</p>
+                <p className="overview-stat-title">{t('dashboard.drivenToday')}</p>
+                <p className="overview-stat-value">{drivenToday} {t('dashboard.of')} {totalVehicles}</p>
               </div>
               <div className="overview-stat-card">
-                <p className="overview-stat-title">Driven last 30 days</p>
-                <p className="overview-stat-value">{drivenLast30Days} of {totalVehicles}</p>
+                <p className="overview-stat-title">{t('dashboard.driven30')}</p>
+                <p className="overview-stat-value">{drivenLast30Days} {t('dashboard.of')} {totalVehicles}</p>
               </div>
               <div className="overview-stat-card">
-                <p className="overview-stat-title">Not driven last 30 days</p>
-                <p className="overview-stat-value">{notDrivenLast30Days} of {totalVehicles}</p>
+                <p className="overview-stat-title">{t('dashboard.notDriven30')}</p>
+                <p className="overview-stat-value">{notDrivenLast30Days} {t('dashboard.of')} {totalVehicles}</p>
               </div>
             </div>
           </article>
 
           <article className="panel open-alerts-panel">
             <div className="panel-title-row">
-              <h3>Open Alerts</h3>
-              <span className="muted-note">vehicles · pending {pendingAlerts}</span>
+              <h3>{t('dashboard.openAlerts')}</h3>
+              <span className="muted-note">{t('dashboard.pending')} {pendingAlerts}</span>
             </div>
             <ul>
-              {latestAlerts.length === 0 && <li>No open alerts</li>}
+              {latestAlerts.length === 0 && <li>{t('dashboard.noOpenAlerts')}</li>}
               {latestAlerts.map((alert) => (
                 <li key={alert.id}>#{alert.vehicle_id} {alert.title} ({alert.severity})</li>
               ))}
@@ -104,7 +106,7 @@ export function DashboardPage() {
 
         <aside className="panel fleet-tracking-panel">
           <div className="panel-title-row">
-            <h3>Fleet Tracking</h3>
+            <h3>{t('dashboard.fleetTracking')}</h3>
             <span className="muted-note">DTC: {dtcQuery.data?.count ?? 0}</span>
           </div>
           <iframe

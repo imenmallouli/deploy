@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { createVehicle, deleteVehicle, listAlertsByVehicle, listIotLogs, listVehicles, updateVehicle } from '../lib/api/endpoints';
+import { useI18n } from '../lib/i18n';
 
 type IotLogItem = {
   event_type?: string;
@@ -42,16 +43,19 @@ function formatMileage(value: number) {
   return new Intl.NumberFormat('fr-FR').format(value);
 }
 
-function getVehicleStatusMeta(status: string) {
+function getVehicleStatusMeta(status: string, locale: 'fr' | 'en') {
+  const labels = locale === 'fr'
+    ? { active: 'Actif', maintenance: 'Maintenance', critical: 'Critique', pending: 'En attente' }
+    : { active: 'Active', maintenance: 'Maintenance', critical: 'Critical', pending: 'Pending' };
   switch (status) {
     case 'healthy':
-      return { label: 'Active', className: 'fleet-status active' };
+      return { label: labels.active, className: 'fleet-status active' };
     case 'warning':
-      return { label: 'Maintenance', className: 'fleet-status maintenance' };
+      return { label: labels.maintenance, className: 'fleet-status maintenance' };
     case 'critical':
-      return { label: 'Critical', className: 'fleet-status critical' };
+      return { label: labels.critical, className: 'fleet-status critical' };
     default:
-      return { label: 'Pending', className: 'fleet-status pending' };
+      return { label: labels.pending, className: 'fleet-status pending' };
   }
 }
 
@@ -63,6 +67,80 @@ function getVehicleEmoji(make: string, model: string) {
 }
 
 export function VehiclesPage() {
+  const { locale } = useI18n();
+  const text = locale === 'fr'
+    ? {
+        failedCreate: 'Echec de creation du vehicule',
+        failedUpdate: 'Echec de mise a jour du vehicule',
+        title: 'Gestion des vehicules',
+        registeredSuffix: 'vehicule(s) enregistre(s)',
+        addVehicle: 'Ajouter vehicule',
+        updateVehicle: 'Mettre a jour vehicule',
+        selectVehicle: 'Selectionner vehicule',
+        make: 'Marque',
+        model: 'Modele',
+        year: 'Annee',
+        vin: 'VIN',
+        plate: 'Plaque',
+        dongleOptional: 'Dongle ID (optionnel)',
+        cancel: 'Annuler',
+        updating: 'Mise a jour...',
+        update: 'Mettre a jour',
+        newVehicle: 'Nouveau vehicule',
+        saving: 'Sauvegarde...',
+        save: 'Sauvegarder',
+        currentFleet: 'FLOTTE ACTUELLE',
+        deleting: 'Suppression...',
+        delete: 'Supprimer',
+        deleteConfirm: 'Supprimer ce vehicule?',
+        loadingVehicles: 'Chargement des vehicules...',
+        noVehicles: 'Aucun vehicule disponible.',
+        viewDetails: 'Voir details',
+        mileage: 'Kilometrage',
+        noVehicleSelected: 'Aucun vehicule selectionne',
+        activeAlerts: 'Alertes actives',
+        noActiveAlert: 'Aucune alerte active',
+        fleetTracking: 'Suivi flotte',
+        routeWithPoints: 'Route tracee avec',
+        gpsPoints: 'points GPS du dongle.',
+        routeAwaiting: 'Les trajets apparaitront ici des que des points GPS seront disponibles depuis le dongle.',
+      }
+    : {
+        failedCreate: 'Failed to create vehicle',
+        failedUpdate: 'Failed to update vehicle',
+        title: 'Vehicle Management',
+        registeredSuffix: 'vehicle(s) registered',
+        addVehicle: 'Add vehicle',
+        updateVehicle: 'Update vehicle',
+        selectVehicle: 'Select vehicle',
+        make: 'Make',
+        model: 'Model',
+        year: 'Year',
+        vin: 'VIN',
+        plate: 'License plate',
+        dongleOptional: 'Dongle ID (optional)',
+        cancel: 'Cancel',
+        updating: 'Updating...',
+        update: 'Update',
+        newVehicle: 'New vehicle',
+        saving: 'Saving...',
+        save: 'Save',
+        currentFleet: 'CURRENT FLEET',
+        deleting: 'Deleting...',
+        delete: 'Delete',
+        deleteConfirm: 'Delete this vehicle?',
+        loadingVehicles: 'Loading vehicles...',
+        noVehicles: 'No vehicles available.',
+        viewDetails: 'View details',
+        mileage: 'Mileage',
+        noVehicleSelected: 'No vehicle selected',
+        activeAlerts: 'Active alerts',
+        noActiveAlert: 'No active alert',
+        fleetTracking: 'Fleet Tracking',
+        routeWithPoints: 'Route plotted with',
+        gpsPoints: 'GPS points from dongle.',
+        routeAwaiting: 'Trip routes will appear here once GPS points are available from the dongle.',
+      };
   const queryClient = useQueryClient();
   const routeMapRef = useRef<L.Map | null>(null);
   const routeLayerRef = useRef<L.LayerGroup | null>(null);
@@ -111,7 +189,7 @@ export function VehiclesPage() {
     mutationFn: async (payload: Parameters<typeof createVehicle>[0]) => {
       const response = await createVehicle(payload);
       if (response.status !== 'success') {
-        throw new Error(response.message || 'Failed to create vehicle');
+        throw new Error(response.message || text.failedCreate);
       }
       return response;
     },
@@ -136,7 +214,7 @@ export function VehiclesPage() {
     mutationFn: async (payload: { vehicleId: number; data: Parameters<typeof updateVehicle>[1] }) => {
       const response = await updateVehicle(payload.vehicleId, payload.data);
       if (response.status !== 'success') {
-        throw new Error(response.message || 'Failed to update vehicle');
+        throw new Error(response.message || text.failedUpdate);
       }
       return response;
     },
@@ -321,23 +399,23 @@ export function VehiclesPage() {
     <section className="vehicles-page-shell">
       <div className="vehicles-header-row">
         <div>
-          <h2 className="vehicles-title">Vehicle Management</h2>
+          <h2 className="vehicles-title">{text.title}</h2>
           <p className="vehicles-subtitle">
-            {vehicles.length} vehicle{vehicles.length > 1 ? 's' : ''} registered
+            {vehicles.length} {text.registeredSuffix}
           </p>
         </div>
         <button className="vehicle-add-trigger" type="button" onClick={() => setIsCreateModalOpen(true)}>
-          + Add vehicle
+          + {text.addVehicle}
         </button>
       </div>
 
       {isUpdateModalOpen ? (
-        <div className="vehicle-create-overlay" role="dialog" aria-modal="true" aria-label="Update vehicle">
+        <div className="vehicle-create-overlay" role="dialog" aria-modal="true" aria-label={text.updateVehicle}>
           <form className="vehicle-create-modal" onSubmit={onUpdate}>
-            <h3>Update vehicle</h3>
+            <h3>{text.updateVehicle}</h3>
             <div className="vehicle-create-grid">
               <label className="vehicle-field vehicle-field-full">
-                <span>Select vehicle</span>
+                <span>{text.selectVehicle}</span>
                 <select
                   value={selectedVehicleId ?? ''}
                   onChange={(e) => {
@@ -355,37 +433,37 @@ export function VehiclesPage() {
                 </select>
               </label>
               <label className="vehicle-field">
-                <span>Make</span>
+                <span>{text.make}</span>
                 <input placeholder="Toyota" value={updateMake} onChange={(e) => setUpdateMake(e.target.value)} required />
               </label>
               <label className="vehicle-field">
-                <span>Model</span>
+                <span>{text.model}</span>
                 <input placeholder="Corolla" value={updateModel} onChange={(e) => setUpdateModel(e.target.value)} required />
               </label>
               <label className="vehicle-field">
-                <span>Year</span>
+                <span>{text.year}</span>
                 <input type="number" placeholder="2022" value={updateYear} onChange={(e) => setUpdateYear(e.target.value)} required />
               </label>
               <label className="vehicle-field">
-                <span>VIN</span>
+                <span>{text.vin}</span>
                 <input placeholder="VF1AAAAA123456789" value={updateVin} onChange={(e) => setUpdateVin(e.target.value)} required />
               </label>
               <label className="vehicle-field vehicle-field-full">
-                <span>License plate</span>
+                <span>{text.plate}</span>
                 <input placeholder="TN 123 456" value={updateLicensePlate} onChange={(e) => setUpdateLicensePlate(e.target.value)} required />
               </label>
               <label className="vehicle-field">
-                <span>Dongle ID (optional)</span>
+                <span>{text.dongleOptional}</span>
                 <input placeholder="dongle_001" value={updateDongleId} onChange={(e) => setUpdateDongleId(e.target.value)} />
               </label>
             </div>
             {updateMutation.isError ? <p className="error-text">{(updateMutation.error as Error).message}</p> : null}
             <div className="vehicle-modal-actions">
               <button className="btn-secondary" type="button" onClick={() => setIsUpdateModalOpen(false)}>
-                Cancel
+                {text.cancel}
               </button>
               <button className="btn-primary" type="submit" disabled={updateMutation.isPending}>
-                {updateMutation.isPending ? 'Updating...' : 'Update'}
+                {updateMutation.isPending ? text.updating : text.update}
               </button>
             </div>
           </form>
@@ -393,42 +471,42 @@ export function VehiclesPage() {
       ) : null}
 
       {isCreateModalOpen ? (
-        <div className="vehicle-create-overlay" role="dialog" aria-modal="true" aria-label="Add vehicle">
+        <div className="vehicle-create-overlay" role="dialog" aria-modal="true" aria-label={text.addVehicle}>
           <form className="vehicle-create-modal" onSubmit={onCreate}>
-            <h3>New vehicle</h3>
+            <h3>{text.newVehicle}</h3>
             <div className="vehicle-create-grid">
               <label className="vehicle-field">
-                <span>Make</span>
+                <span>{text.make}</span>
                     <input placeholder="Toyota" value={createMake} onChange={(e) => setCreateMake(e.target.value)} required />
               </label>
               <label className="vehicle-field">
-                <span>Model</span>
+                <span>{text.model}</span>
                     <input placeholder="Corolla" value={createModel} onChange={(e) => setCreateModel(e.target.value)} required />
               </label>
               <label className="vehicle-field">
-                <span>Year</span>
+                <span>{text.year}</span>
                     <input type="number" placeholder="2022" value={createYear} onChange={(e) => setCreateYear(e.target.value)} required />
               </label>
               <label className="vehicle-field">
-                <span>VIN</span>
+                <span>{text.vin}</span>
                     <input placeholder="VF1AAAAA123456789" value={createVin} onChange={(e) => setCreateVin(e.target.value)} required />
               </label>
               <label className="vehicle-field vehicle-field-full">
-                <span>License plate</span>
+                <span>{text.plate}</span>
                     <input placeholder="TN 123 456" value={createLicensePlate} onChange={(e) => setCreateLicensePlate(e.target.value)} required />
               </label>
               <label className="vehicle-field">
-                <span>Dongle ID (optional)</span>
+                <span>{text.dongleOptional}</span>
                     <input placeholder="dongle_001" value={createDongleId} onChange={(e) => setCreateDongleId(e.target.value)} />
               </label>
             </div>
             {createMutation.isError ? <p className="error-text">{(createMutation.error as Error).message}</p> : null}
             <div className="vehicle-modal-actions">
               <button className="btn-secondary" type="button" onClick={() => setIsCreateModalOpen(false)}>
-                Cancel
+                {text.cancel}
               </button>
               <button className="btn-primary" type="submit" disabled={createMutation.isPending}>
-                {createMutation.isPending ? 'Saving...' : 'Save'}
+                {createMutation.isPending ? text.saving : text.save}
               </button>
             </div>
           </form>
@@ -438,7 +516,7 @@ export function VehiclesPage() {
       <div className="vehicles-content-layout">
         <div className="panel fleet-list-shell">
           <div className="fleet-list-header">
-            <div className="fleet-list-heading">CURRENT FLEET</div>
+            <div className="fleet-list-heading">{text.currentFleet}</div>
             <div className="fleet-top-actions">
               <select
                 className="toolbar-input"
@@ -461,7 +539,7 @@ export function VehiclesPage() {
                 disabled={!selectedVehicleId || updateMutation.isPending}
                 onClick={onOpenUpdateModal}
               >
-                {updateMutation.isPending ? 'Updating...' : 'Update'}
+                {updateMutation.isPending ? text.updating : text.update}
               </button>
               <button
                 className="btn-danger"
@@ -469,19 +547,19 @@ export function VehiclesPage() {
                 disabled={!selectedVehicleId || !hasManualSelection || deleteMutation.isPending}
                 onClick={() => {
                   if (!selectedVehicleId) return;
-                  if (!window.confirm('Delete this vehicle?')) return;
+                  if (!window.confirm(text.deleteConfirm)) return;
                   deleteMutation.mutate(selectedVehicleId);
                 }}
               >
-                {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+                {deleteMutation.isPending ? text.deleting : text.delete}
               </button>
             </div>
           </div>
-          {vehiclesQuery.isLoading ? <p>Loading vehicles...</p> : null}
-          {!vehiclesQuery.isLoading && vehicles.length === 0 ? <p className="empty-cell">No vehicles available.</p> : null}
+          {vehiclesQuery.isLoading ? <p>{text.loadingVehicles}</p> : null}
+          {!vehiclesQuery.isLoading && vehicles.length === 0 ? <p className="empty-cell">{text.noVehicles}</p> : null}
           <div className="fleet-cards">
             {vehicles.map((vehicle) => {
-              const statusMeta = getVehicleStatusMeta(vehicle.status);
+              const statusMeta = getVehicleStatusMeta(vehicle.status, locale);
               return (
                 <article key={vehicle.id} className="fleet-vehicle-card">
                   <div className="fleet-vehicle-icon">{getVehicleEmoji(vehicle.make, vehicle.model)}</div>
@@ -498,7 +576,7 @@ export function VehiclesPage() {
                     <span className={statusMeta.className}>{statusMeta.label}</span>
                     <span className="fleet-vehicle-mileage">{formatMileage(vehicle.mileage)} km</span>
                     <Link to={`/vehicles/${vehicle.id}`} className="fleet-view-details-btn">
-                      View Details
+                      {text.viewDetails}
                     </Link>
                   </div>
                 </article>
@@ -507,21 +585,21 @@ export function VehiclesPage() {
           </div>
           <div className="vehicles-tracking-stats">
             <article className="vehicles-tracking-stat-card">
-              <p className="vehicles-tracking-stat-label">Kilometrage</p>
+              <p className="vehicles-tracking-stat-label">{text.mileage}</p>
               <p className="vehicles-tracking-stat-value">
                 {selectedVehicle ? formatMileage(selectedVehicle.mileage) : '0'}
               </p>
               <p className="vehicles-tracking-stat-note">
                 {selectedVehicle
                   ? `${selectedVehicle.make} ${selectedVehicle.model}${selectedVehicle.dongle_id ? ` · Dongle ${selectedVehicle.dongle_id}` : ''}`
-                  : 'No vehicle selected'}
+                  : text.noVehicleSelected}
               </p>
             </article>
             <article className="vehicles-tracking-stat-card">
-              <p className="vehicles-tracking-stat-label">Alertes actives</p>
+              <p className="vehicles-tracking-stat-label">{text.activeAlerts}</p>
               <p className="vehicles-tracking-stat-value">{activeAlertCount}</p>
               <p className="vehicles-tracking-stat-note">
-                {latestVehicleAlert ? latestVehicleAlert.title : 'Aucune alerte active'}
+                {latestVehicleAlert ? latestVehicleAlert.title : text.noActiveAlert}
               </p>
             </article>
           </div>
@@ -529,14 +607,14 @@ export function VehiclesPage() {
 
         <aside className="panel fleet-tracking-panel vehicles-tracking-panel">
           <div className="panel-title-row">
-            <h3>Fleet Tracking</h3>
-            <span className="muted-note">{selectedVehicle ? selectedVehicle.license_plate : 'No vehicle selected'}</span>
+            <h3>{text.fleetTracking}</h3>
+            <span className="muted-note">{selectedVehicle ? selectedVehicle.license_plate : text.noVehicleSelected}</span>
           </div>
           <div ref={routeMapContainerRef} className="fleet-map" aria-label="Vehicle trip map" />
           <p className="vehicles-map-note">
             {gpsRoutePoints.length > 1
-              ? `Route tracee avec ${gpsRoutePoints.length} points GPS du dongle.`
-              : 'Trip routes will appear here once GPS points are available from the dongle.'}
+              ? `${text.routeWithPoints} ${gpsRoutePoints.length} ${text.gpsPoints}`
+              : text.routeAwaiting}
           </p>
         </aside>
       </div>
