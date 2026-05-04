@@ -155,6 +155,31 @@ async def get_insights(
 
 
 @router.get(
+    "/summary",
+    response_model=AIInsightsResponse,
+    summary="Alias des insights IA",
+    description="Alias technique de /api/v1/ai/insights pour contourner certains bloqueurs navigateur.",
+)
+async def get_summary(
+    vehicle_id: int = Query(..., ge=1, description="Identifiant du véhicule à analyser."),
+    context: dict = Depends(get_current_context),
+):
+    try:
+        prediction = await AIInferenceService.predict_latest_for_vehicle(vehicle_id)
+        enriched = RecommendationEngine.enrich_prediction(prediction)
+        return {
+            "status": "success",
+            "vehicle_id": vehicle_id,
+            "predicted_severity": enriched["predicted_severity"],
+            "predicted_risk_score": enriched["predicted_risk_score"],
+            "insights": enriched["ai_insights"],
+            "predicted_risks": enriched["predicted_risks"],
+        }
+    except Exception as exc:
+        _handle_prediction_error(exc)
+
+
+@router.get(
     "/risk-score/{vehicle_id}",
     response_model=AIRiskScoreResponse,
     summary="Consulter le score de risque prédit",

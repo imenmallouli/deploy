@@ -51,7 +51,7 @@ async def ws_vehicle_realtime(
     websocket: WebSocket,
     vehicle_id: int,
     token: str | None = Query(default=None),
-    poll_ms: int = Query(default=60000, ge=1000, le=60000),
+    poll_ms: int = Query(default=120000, ge=1000, le=300000),
     last_seen_id: str | None = Query(default=None),
 ):
     try:
