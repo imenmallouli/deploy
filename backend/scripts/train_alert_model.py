@@ -380,6 +380,52 @@ def build_dtc_code_features(labels: pd.DataFrame, dtc_records: pd.DataFrame) -> 
     return dtc_features
 
 
+def _coalesce_numeric(df: pd.DataFrame, columns: list[str], default: float | int | None = None) -> pd.Series:
+    out = pd.Series(index=df.index, dtype="float64")
+    for col in columns:
+        if col in df.columns:
+            cand = pd.to_numeric(df[col], errors="coerce")
+            out = cand if out.isna().all() else out.fillna(cand)
+    if default is not None:
+        out = out.fillna(float(default))
+    return out
+
+
+def add_maintenance_features(df: pd.DataFrame) -> pd.DataFrame:
+    enriched = df.copy()
+
+    odometer = _coalesce_numeric(enriched, ["odometer"], default=0.0)
+    oil_last = _coalesce_numeric(enriched, ["last_oil_change_odometer"])
+    oil_interval = _coalesce_numeric(enriched, ["oil_change_interval_km", "maintenance_interval_km"])
+
+    service_last = _coalesce_numeric(enriched, ["last_service_odometer", "last_maintenance_odometer"])
+    service_interval = _coalesce_numeric(enriched, ["service_interval_km", "maintenance_interval_km"])
+
+    parts_last = _coalesce_numeric(enriched, ["last_parts_change_odometer", "last_major_parts_change_odometer"])
+    parts_interval = _coalesce_numeric(enriched, ["parts_interval_km", "major_parts_interval_km"])
+
+    enriched["oil_km_since_last"] = (odometer - oil_last).clip(lower=0)
+    enriched["service_km_since_last"] = (odometer - service_last).clip(lower=0)
+    enriched["parts_km_since_last"] = (odometer - parts_last).clip(lower=0)
+
+    oil_den = oil_interval.where(oil_interval > 0)
+    service_den = service_interval.where(service_interval > 0)
+    parts_den = parts_interval.where(parts_interval > 0)
+
+    enriched["oil_due_ratio"] = enriched["oil_km_since_last"] / oil_den
+    enriched["service_due_ratio"] = enriched["service_km_since_last"] / service_den
+    enriched["parts_due_ratio"] = enriched["parts_km_since_last"] / parts_den
+
+    if "maintenance_records_count" in enriched.columns:
+        enriched["maintenance_records_count"] = pd.to_numeric(
+            enriched["maintenance_records_count"], errors="coerce"
+        ).fillna(0)
+    else:
+        enriched["maintenance_records_count"] = 0.0
+
+    return enriched
+
+
 def load_training_dataset() -> pd.DataFrame:
     dataset_path = resolve_dataset_path()
     print(f"Using dataset: {dataset_path}")
@@ -417,6 +463,9 @@ def load_training_dataset() -> pd.DataFrame:
     if not dtc_code_features.empty:
         merged = pd.concat([merged, dtc_code_features], axis=1)
 
+    # Add maintenance-derived features so the model learns service-context patterns.
+    merged = add_maintenance_features(merged)
+
     return merged.sort_values(["vehicle_id", "ts"]).reset_index(drop=True)
 
 
@@ -445,6 +494,7 @@ def prepare_xy(df: pd.DataFrame):
         X["weekday_cos"] = (weekdays * (2 * math.pi / 7)).map(math.cos)
 
     X = X.apply(pd.to_numeric, errors="coerce")
+    X = X.replace([float("inf"), float("-inf")], pd.NA)
     X = X.fillna(X.median(numeric_only=True)).fillna(0)
 
     y_class = df["severity"].astype(str)

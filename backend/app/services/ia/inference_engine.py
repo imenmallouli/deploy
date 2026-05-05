@@ -96,7 +96,69 @@ class AIInferenceService:
         "maintenance_interval_km",
         "last_major_parts_change_odometer",
         "major_parts_interval_km",
+        "last_service_odometer",
+        "service_interval_km",
+        "last_parts_change_odometer",
+        "parts_interval_km",
     ]
+
+    @staticmethod
+    def _coalesce_numeric(payload: dict[str, Any], keys: list[str]) -> float | None:
+        for key in keys:
+            value = payload.get(key)
+            if value is None:
+                continue
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                continue
+        return None
+
+    @staticmethod
+    def _safe_ratio(numerator: float | None, denominator: float | None) -> float:
+        if numerator is None or denominator is None or denominator <= 0:
+            return 0.0
+        return float(max(0.0, numerator / denominator))
+
+    @classmethod
+    def _maintenance_ml_features(cls, payload: dict[str, Any]) -> dict[str, float]:
+        odometer = cls._coalesce_numeric(payload, ["odometer"])
+
+        oil_last = cls._coalesce_numeric(payload, ["last_oil_change_odometer"])
+        oil_interval = cls._coalesce_numeric(payload, ["oil_change_interval_km", "maintenance_interval_km"])
+
+        service_last = cls._coalesce_numeric(payload, ["last_service_odometer", "last_maintenance_odometer"])
+        service_interval = cls._coalesce_numeric(payload, ["service_interval_km", "maintenance_interval_km"])
+
+        parts_last = cls._coalesce_numeric(payload, ["last_parts_change_odometer", "last_major_parts_change_odometer"])
+        parts_interval = cls._coalesce_numeric(payload, ["parts_interval_km", "major_parts_interval_km"])
+
+        oil_km_since = max(0.0, (odometer - oil_last)) if odometer is not None and oil_last is not None else 0.0
+        service_km_since = max(0.0, (odometer - service_last)) if odometer is not None and service_last is not None else 0.0
+        parts_km_since = max(0.0, (odometer - parts_last)) if odometer is not None and parts_last is not None else 0.0
+
+        maintenance_records = payload.get("maintenance_records")
+        if isinstance(maintenance_records, list):
+            records_count = float(len(maintenance_records))
+        else:
+            records_count = 0.0
+
+        return {
+            "oil_km_since_last": float(oil_km_since),
+            "oil_due_ratio": cls._safe_ratio(oil_km_since, oil_interval),
+            "service_km_since_last": float(service_km_since),
+            "service_due_ratio": cls._safe_ratio(service_km_since, service_interval),
+            "parts_km_since_last": float(parts_km_since),
+            "parts_due_ratio": cls._safe_ratio(parts_km_since, parts_interval),
+            "maintenance_records_count": records_count,
+        }
+
+    @classmethod
+    def _inject_maintenance_ml_features(cls, X: pd.DataFrame, payload: dict[str, Any]) -> None:
+        features = cls._maintenance_ml_features(payload)
+        for col, value in features.items():
+            if col in X.columns:
+                X[col] = float(value)
 
     @staticmethod
     def _normalize_maintenance_records(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -297,6 +359,8 @@ class AIInferenceService:
         X = X.apply(pd.to_numeric, errors="coerce")
         X = X.fillna(X.median(numeric_only=True)).fillna(0.0)
 
+        AIInferenceService._inject_maintenance_ml_features(X, normalized)
+
         # Inject active DTC code features if caller provides them in payload.
         active_codes = payload.get("active_dtc_codes") or []
         if active_codes:
@@ -346,6 +410,7 @@ class AIInferenceService:
         X = featured_last[feature_names].copy() if feature_names else featured_last.select_dtypes(include=["number"]).copy()
         X = X.apply(pd.to_numeric, errors="coerce")
         X = X.fillna(X.median(numeric_only=True)).fillna(0.0)
+        AIInferenceService._inject_maintenance_ml_features(X, last_normalized)
         return last_normalized, X
 
     @staticmethod
