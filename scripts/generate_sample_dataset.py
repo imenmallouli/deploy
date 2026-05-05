@@ -722,6 +722,107 @@ def _attach_dtc_labels(ai_subset: pd.DataFrame, dtc_records: pd.DataFrame) -> pd
     return enriched
 
 
+def _enrich_dtc_normal_telemetry_cases(ai_subset: pd.DataFrame) -> pd.DataFrame:
+    """Boost labels for rows where telemetry is normal but DTCs are active.
+
+    This teaches the model that active fault codes can carry risk even when
+    sensor values look nominal at that instant.
+    """
+    enriched = ai_subset.copy()
+    enriched["risk_score"] = pd.to_numeric(enriched.get("risk_score"), errors="coerce").fillna(0.0).astype(float)
+
+    speed = pd.to_numeric(enriched.get("speed"), errors="coerce")
+    rpm = pd.to_numeric(enriched.get("rpm"), errors="coerce")
+    fuel = pd.to_numeric(enriched.get("fuel_level"), errors="coerce")
+    temp = pd.to_numeric(enriched.get("engine_temp"), errors="coerce")
+    battery = pd.to_numeric(enriched.get("battery_voltage"), errors="coerce")
+    load = pd.to_numeric(enriched.get("engine_load"), errors="coerce")
+    has_dtc = pd.to_numeric(enriched.get("has_active_dtc"), errors="coerce").fillna(0) >= 1
+
+    normal_mask = (
+        speed.between(0, 120, inclusive="both")
+        & rpm.between(650, 3000, inclusive="both")
+        & fuel.between(20, 90, inclusive="both")
+        & temp.between(78, 96, inclusive="both")
+        & battery.between(12.2, 14.6, inclusive="both")
+        & load.between(8, 65, inclusive="both")
+    )
+
+    candidates = enriched[has_dtc & normal_mask]
+    if candidates.empty:
+        return enriched
+
+    target_rows = min(len(candidates), max(500, int(len(enriched) * 0.18)))
+    selected = candidates.sample(n=target_rows, replace=False, random_state=RANDOM_SEED + 77).index
+
+    max_dtc = pd.to_numeric(enriched.loc[selected, "max_dtc_severity"], errors="coerce").fillna(1).astype(int)
+    active_count = pd.to_numeric(enriched.loc[selected, "active_dtc_count"], errors="coerce").fillna(1)
+
+    crit_idx = max_dtc[max_dtc >= 2].index
+    warn_idx = max_dtc[max_dtc == 1].index
+    info_idx = max_dtc[max_dtc <= 0].index
+
+    if len(crit_idx) > 0:
+        crit_base = pd.Series([random.uniform(72, 86) for _ in range(len(crit_idx))], index=crit_idx)
+        crit_bonus = active_count.loc[crit_idx].clip(lower=1, upper=5) - 1
+        enriched.loc[crit_idx, "risk_score"] = (crit_base + crit_bonus).clip(lower=70, upper=90)
+
+    if len(warn_idx) > 0:
+        warn_base = pd.Series([random.uniform(42, 58) for _ in range(len(warn_idx))], index=warn_idx)
+        warn_bonus = (active_count.loc[warn_idx].clip(lower=1, upper=4) - 1) * 0.8
+        enriched.loc[warn_idx, "risk_score"] = (warn_base + warn_bonus).clip(lower=40, upper=62)
+
+    if len(info_idx) > 0:
+        info_base = pd.Series([random.uniform(24, 34) for _ in range(len(info_idx))], index=info_idx)
+        info_bonus = (active_count.loc[info_idx].clip(lower=1, upper=3) - 1) * 0.5
+        enriched.loc[info_idx, "risk_score"] = (info_base + info_bonus).clip(lower=22, upper=36)
+
+    dtc_only_selected = enriched.loc[selected]
+    rule_suffix = dtc_only_selected.apply(
+        lambda row: f"DTC_ACTIVE_NORMAL_TELEMETRY_S{int(pd.to_numeric(row.get('max_dtc_severity'), errors='coerce') or 0)}",
+        axis=1,
+    )
+    enriched.loc[selected, "rule_triggered"] = (
+        enriched.loc[selected, "rule_triggered"].astype(str)
+        + ", "
+        + rule_suffix.astype(str)
+    )
+
+    return enriched
+
+
+def _attach_maintenance_labels(ai_subset: pd.DataFrame) -> pd.DataFrame:
+    enriched = ai_subset.copy()
+
+    oil_interval = 10_000.0
+    service_interval = 20_000.0
+    parts_interval = 35_000.0
+
+    enriched["maintenance_interval_km"] = oil_interval
+    enriched["service_interval_km"] = service_interval
+    enriched["parts_interval_km"] = parts_interval
+
+    # Use modulo-based synthetic cycles to emulate maintenance operations over time.
+    odo = pd.to_numeric(enriched["odometer"], errors="coerce")
+    offsets = {}
+    for vehicle_id in enriched["vehicle_id"].dropna().unique().tolist():
+        offsets[int(vehicle_id)] = {
+            "oil": random.randint(500, 3_500),
+            "service": random.randint(2_000, 7_000),
+            "parts": random.randint(4_000, 12_000),
+        }
+
+    oil_offset = enriched["vehicle_id"].map(lambda v: offsets.get(int(v), {}).get("oil", 1_500) if pd.notna(v) else 1_500)
+    service_offset = enriched["vehicle_id"].map(lambda v: offsets.get(int(v), {}).get("service", 4_500) if pd.notna(v) else 4_500)
+    parts_offset = enriched["vehicle_id"].map(lambda v: offsets.get(int(v), {}).get("parts", 8_000) if pd.notna(v) else 8_000)
+
+    enriched["last_oil_change_odometer"] = odo - ((odo + pd.to_numeric(oil_offset, errors="coerce")) % oil_interval)
+    enriched["last_service_odometer"] = odo - ((odo + pd.to_numeric(service_offset, errors="coerce")) % service_interval)
+    enriched["last_parts_change_odometer"] = odo - ((odo + pd.to_numeric(parts_offset, errors="coerce")) % parts_interval)
+
+    return enriched
+
+
 def gen_ai_labels(df_telem: pd.DataFrame, df_dtc: pd.DataFrame) -> pd.DataFrame:
     """Échantillonne un volume fixe puis applique les règles métier."""
     if len(df_telem) >= AI_LABELS_TARGET_ROWS:
@@ -739,14 +840,18 @@ def gen_ai_labels(df_telem: pd.DataFrame, df_dtc: pd.DataFrame) -> pd.DataFrame:
         axis=1,
     )
     subset = pd.concat([subset, results], axis=1)
-    subset = rebalance_ai_labels_by_score(subset)
     subset = _attach_dtc_labels(subset, df_dtc)
+    subset = _enrich_dtc_normal_telemetry_cases(subset)
+    subset = rebalance_ai_labels_by_score(subset)
+    subset = _attach_maintenance_labels(subset)
 
     return subset[[
         "vehicle_id", "plate", "ts",
         "speed", "rpm", "engine_temp", "battery_voltage",
         "fuel_level", "engine_load",
         "ambient_air_temp", "intake_temp", "odometer",
+        "last_oil_change_odometer", "last_service_odometer", "last_parts_change_odometer",
+        "maintenance_interval_km", "service_interval_km", "parts_interval_km",
         "temp_cpu", "cpu", "gpu",
         "has_active_dtc", "active_dtc_count", "max_dtc_severity",
         "rule_triggered", "severity", "risk_score",

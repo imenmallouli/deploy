@@ -293,30 +293,8 @@ class RecommendationEngine:
         elif risk_score >= 35 and severity == "info":
             severity = "warning"
 
-        # Build override metadata so callers can see exactly what changed
-        _score_changed    = round(risk_score, 2) != round(ml_risk_score, 2)
-        _severity_changed = severity != ml_severity
+        # Build override metadata after suppression-aware post-processing.
         rule_override: dict | None = None
-        if _score_changed or _severity_changed:
-            triggered = []
-            if _critical_count >= 2:
-                triggered.append("double_critical_floor_85")
-            elif _has_critical_rule:
-                triggered.append("critical_floor_70")
-            elif _has_warning_rule:
-                triggered.append("warning_floor_36")
-            if _severity_changed:
-                triggered.append(f"severity_promoted_{ml_severity}_to_{severity}")
-            rule_override = {
-                "applied": True,
-                "triggered_rules": triggered,
-                "ml_severity": ml_severity,
-                "ml_risk_score": round(ml_risk_score, 2),
-                "adjusted_severity": severity,
-                "adjusted_risk_score": round(risk_score, 2),
-            }
-        else:
-            rule_override = {"applied": False, "ml_severity": ml_severity, "ml_risk_score": round(ml_risk_score, 2)}
 
         if not maintenance_suggestions:
             add_suggestion("low", "Etat normal", "Aucune anomalie detectee actuellement.")
@@ -387,9 +365,43 @@ class RecommendationEngine:
 
             next_action = f"Anomalies prioritaires: {' | '.join(key_messages)}" if key_messages else ""
         else:
+            # If every alert has been suppressed because it was already treated,
+            # never expose a CRITICAL/70+ result with no visible risk.
+            if suppressed_alerts:
+                severity = "info"
+                risk_score = min(risk_score, 30.0)
             priority = "low"
             summary = "Aucune anomalie détectée."
             next_action = ""
+
+        _score_changed = round(risk_score, 2) != round(ml_risk_score, 2)
+        _severity_changed = severity != ml_severity
+        if _score_changed or _severity_changed:
+            triggered = []
+            if _critical_count >= 2:
+                triggered.append("double_critical_floor_85")
+            elif _has_critical_rule:
+                triggered.append("critical_floor_70")
+            elif _has_warning_rule:
+                triggered.append("warning_floor_36")
+            if suppressed_alerts and not predicted_risks:
+                triggered.append("all_alerts_suppressed_force_info")
+            if _severity_changed:
+                triggered.append(f"severity_promoted_{ml_severity}_to_{severity}")
+            rule_override = {
+                "applied": True,
+                "triggered_rules": triggered,
+                "ml_severity": ml_severity,
+                "ml_risk_score": round(ml_risk_score, 2),
+                "adjusted_severity": severity,
+                "adjusted_risk_score": round(risk_score, 2),
+            }
+        else:
+            rule_override = {
+                "applied": False,
+                "ml_severity": ml_severity,
+                "ml_risk_score": round(ml_risk_score, 2),
+            }
 
         maintenance_required = any(r["severity"] in {"warning", "critical"} for r in predicted_risks)
         preventive_only = (not maintenance_required) and any(r["severity"] == "info" for r in predicted_risks)
