@@ -648,8 +648,12 @@ def main():
 
         print(f"\n  Insight IA :")
         print(f"    Résumé       : {insight.get('summary')}")
-        print(f"    Priorité     : {insight.get('priority')}")
-        print(f"    Prochaine action : {insight.get('next_action')}")
+        insight_priority = str(insight.get("priority") or "").strip()
+        if insight_priority:
+            print(f"    Priorité     : {insight_priority}")
+        next_action = str(insight.get("next_action") or "").strip()
+        if next_action:
+            print(f"    Prochaine action : {next_action}")
 
         expected = payload.get("expected") if isinstance(payload, dict) else None
         if isinstance(expected, dict):

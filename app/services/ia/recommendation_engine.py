@@ -322,6 +322,27 @@ class RecommendationEngine:
             add_suggestion("low", "Etat normal", "Aucune anomalie detectee actuellement.")
 
         if predicted_risks:
+            severity_rank = {"critical": 3, "warning": 2, "info": 1}
+            suggestion_priority_rank = {"high": 3, "medium": 2, "low": 1}
+
+            # Keep all active alerts but order them by severity so the UI can
+            # display urgent anomalies first without dropping any item.
+            predicted_risks.sort(
+                key=lambda r: (
+                    -severity_rank.get(str(r.get("severity", "info")).lower(), 1),
+                    str(r.get("type", "")),
+                    str(r.get("message", "")),
+                )
+            )
+
+            # Same idea for recommendations: high priority first.
+            maintenance_suggestions.sort(
+                key=lambda s: (
+                    -suggestion_priority_rank.get(str(s.get("priority", "low")).lower(), 1),
+                    str(s.get("title", "")),
+                )
+            )
+
             risk_labels = {
                 "battery": "batterie",
                 "cooling": "refroidissement",
@@ -356,7 +377,15 @@ class RecommendationEngine:
             else:
                 summary = f"Alertes détectées: {', '.join(alert_domains)}."
 
-            next_action = f"Alerte principale: {predicted_risks[0]['message']}"
+            # Show all active anomalies (after suppression of already-resolved ones)
+            # and keep priority order for quick operational reading.
+            key_messages: list[str] = []
+            for risk in predicted_risks:
+                msg = str(risk.get("message") or "").strip()
+                if msg and msg not in key_messages:
+                    key_messages.append(msg)
+
+            next_action = f"Anomalies prioritaires: {' | '.join(key_messages)}" if key_messages else ""
         else:
             priority = "low"
             summary = "Aucune anomalie détectée."
