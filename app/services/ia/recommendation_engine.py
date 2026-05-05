@@ -241,7 +241,45 @@ class RecommendationEngine:
             summary = "Aucune anomalie détectée."
             next_action = ""
 
+        maintenance_required = any(r["severity"] in {"warning", "critical"} for r in predicted_risks)
+        preventive_only = (not maintenance_required) and any(r["severity"] == "info" for r in predicted_risks)
+        maintenance_reasons = [str(r["message"]) for r in predicted_risks[:5]]
+
+        if any(r["severity"] == "critical" for r in predicted_risks):
+            maintenance_status = {
+                "maintenance_required": True,
+                "maintenance_type": "urgent",
+                "priority": "high",
+                "summary": "Maintenance urgente requise.",
+                "reasons": maintenance_reasons,
+            }
+        elif maintenance_required:
+            maintenance_status = {
+                "maintenance_required": True,
+                "maintenance_type": "planned",
+                "priority": "medium",
+                "summary": "Maintenance recommandee prochainement.",
+                "reasons": maintenance_reasons,
+            }
+        elif preventive_only:
+            maintenance_status = {
+                "maintenance_required": False,
+                "maintenance_type": "preventive",
+                "priority": "low",
+                "summary": "Entretien preventif conseille.",
+                "reasons": maintenance_reasons,
+            }
+        else:
+            maintenance_status = {
+                "maintenance_required": False,
+                "maintenance_type": "none",
+                "priority": "low",
+                "summary": "Aucune maintenance necessaire actuellement.",
+                "reasons": [],
+            }
+
         prediction["predicted_risks"] = predicted_risks
+        prediction["maintenance_status"] = maintenance_status
         prediction["maintenance_suggestions"] = maintenance_suggestions
         prediction["predicted_risk_score"] = round(risk_score, 2)
         prediction["predicted_severity"]   = severity
