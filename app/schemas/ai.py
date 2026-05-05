@@ -18,6 +18,12 @@ class AIPredictRequest(BaseModel):
     ambient_air_temp: float | None = Field(default=None, description="Température de l'air ambiant en degrés Celsius.", examples=[28.0])
     intake_temp: float | None = Field(default=None, description="Température de l'air d'admission en degrés Celsius.", examples=[33.0])
     odometer: float | None = Field(default=None, description="Kilométrage total du véhicule.", examples=[120345.6])
+    last_oil_change_odometer: float | None = Field(default=None, description="Kilometrage enregistre lors de la derniere vidange.", examples=[112000])
+    oil_change_interval_km: float | None = Field(default=None, description="Intervalle de vidange configure en km.", examples=[10000])
+    last_maintenance_odometer: float | None = Field(default=None, description="Kilometrage enregistre lors du dernier entretien general.", examples=[110000])
+    maintenance_interval_km: float | None = Field(default=None, description="Intervalle d'entretien general configure en km.", examples=[20000])
+    last_major_parts_change_odometer: float | None = Field(default=None, description="Kilometrage au dernier remplacement de pieces majeures.", examples=[118500])
+    major_parts_interval_km: float | None = Field(default=None, description="Intervalle de controle/remplacement des pieces majeures en km.", examples=[60000])
     temp_cpu: float | None = Field(default=None, description="Température CPU du boîtier en degrés Celsius.", examples=[62.5])
     cpu: float | None = Field(default=None, description="Charge CPU du boîtier en pourcentage.", examples=[44.0])
     gpu: float | None = Field(default=None, description="Charge GPU du boîtier en pourcentage.", examples=[28.0])
@@ -25,6 +31,21 @@ class AIPredictRequest(BaseModel):
         default_factory=list,
         description="Liste des codes DTC actifs à injecter dans l'inférence IA (ex: P0300, P0171).",
         examples=[["P0300", "P0171"]],
+    )
+    maintenance_records: list[dict] = Field(
+        default_factory=list,
+        description=(
+            "Historique de maintenance par composant. Chaque element peut contenir: "
+            "component, serviced_at_odometer, valid_for_km, resolved_dtc_codes[]."
+        ),
+        examples=[[
+            {
+                "component": "battery_system",
+                "serviced_at_odometer": 148500,
+                "valid_for_km": 5000,
+                "resolved_dtc_codes": ["P0562"],
+            }
+        ]],
     )
 
 

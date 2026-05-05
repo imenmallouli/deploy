@@ -21,11 +21,67 @@ class RecommendationEngine:
         cpu = snapshot.get("cpu")
         gpu = snapshot.get("gpu")
         active_dtc_events = prediction.get("active_dtc_events") or []
+        maintenance_context = prediction.get("maintenance_context") or {}
+        maintenance_records = prediction.get("maintenance_records") or []
 
         predicted_risks: list[dict] = []
         maintenance_suggestions: list[dict] = []
+        suppressed_alerts: list[dict] = []
 
-        def add_risk(risk_type: str, risk_severity: str, message: str, value=None):
+        def _is_recently_serviced(component: str | None = None, dtc_code: str | None = None) -> tuple[bool, str | None]:
+            if not maintenance_records:
+                return False, None
+            if odometer is None:
+                return False, None
+
+            target_component = (component or "").strip().lower()
+            target_code = (dtc_code or "").strip().upper()
+
+            for record in maintenance_records:
+                if not isinstance(record, dict):
+                    continue
+
+                record_component = str(record.get("component") or "").strip().lower()
+                serviced_at = record.get("serviced_at_odometer")
+                valid_for_km = record.get("valid_for_km")
+                resolved_codes = [str(c).strip().upper() for c in (record.get("resolved_dtc_codes") or []) if str(c).strip()]
+
+                try:
+                    serviced_at_val = float(serviced_at) if serviced_at is not None else None
+                    valid_for_km_val = float(valid_for_km) if valid_for_km is not None else 0.0
+                except (TypeError, ValueError):
+                    continue
+
+                if serviced_at_val is None or valid_for_km_val <= 0:
+                    continue
+
+                delta = float(odometer) - serviced_at_val
+                if delta < 0 or delta > valid_for_km_val:
+                    continue
+
+                component_match = bool(target_component) and record_component in {target_component, "all"}
+                code_match = bool(target_code) and target_code in resolved_codes
+
+                if component_match or code_match:
+                    reason = f"recent_service:{record_component or 'unknown'} ({int(delta)}km/{int(valid_for_km_val)}km)"
+                    return True, reason
+
+            return False, None
+
+        def add_risk(risk_type: str, risk_severity: str, message: str, value=None, component: str | None = None, dtc_code: str | None = None):
+            suppressed, reason = _is_recently_serviced(component=component, dtc_code=dtc_code)
+            if suppressed:
+                suppressed_alerts.append(
+                    {
+                        "risk_type": risk_type,
+                        "message": message,
+                        "component": component,
+                        "dtc_code": dtc_code,
+                        "reason": reason,
+                    }
+                )
+                return False
+
             predicted_risks.append(
                 {
                     "type": risk_type,
@@ -34,6 +90,7 @@ class RecommendationEngine:
                     "value": value,
                 }
             )
+            return True
 
         def add_suggestion(priority: str, title: str, message: str):
             maintenance_suggestions.append(
@@ -46,11 +103,11 @@ class RecommendationEngine:
 
         # ── Batterie ──────────────────────────────────────────────────────────
         if battery is not None and battery < 11.5:
-            add_risk("battery", "critical", "Batterie critique détectée", battery)
-            add_suggestion("high", "Batterie / alternateur", "Contrôler immédiatement la batterie et le circuit de charge.")
+            if add_risk("battery", "critical", "Batterie critique détectée", battery, component="battery_system"):
+                add_suggestion("high", "Batterie / alternateur", "Contrôler immédiatement la batterie et le circuit de charge.")
         elif battery is not None and battery < 12.0:
-            add_risk("battery", "warning", "Batterie en baisse détectée", battery)
-            add_suggestion("medium", "Contrôle batterie", "Planifier une vérification batterie dans les prochaines 48h.")
+            if add_risk("battery", "warning", "Batterie en baisse détectée", battery, component="battery_system"):
+                add_suggestion("medium", "Contrôle batterie", "Planifier une vérification batterie dans les prochaines 48h.")
         elif battery is not None and 12.0 <= battery < 12.5 and rpm is not None and rpm > 500:
             # Moteur allumé mais tension trop basse → alternateur défaillant
             add_risk("battery", "warning", "Tension basse moteur allumé — alternateur suspect", battery)
@@ -64,16 +121,16 @@ class RecommendationEngine:
 
         # ── Température moteur (aligné avec seuils dataset) ───────────────────
         if temp is not None and temp > 106:
-            add_risk("cooling", "critical", "Surchauffe moteur détectée", temp)
-            add_suggestion("high", "Système de refroidissement", "Vérifier liquide de refroidissement, ventilateur et radiateur.")
+            if add_risk("cooling", "critical", "Surchauffe moteur détectée", temp, component="cooling_system"):
+                add_suggestion("high", "Système de refroidissement", "Vérifier liquide de refroidissement, ventilateur et radiateur.")
         elif temp is not None and temp >= 99:
-            add_risk("cooling", "warning", "Température moteur élevée", temp)
-            add_suggestion("medium", "Inspection moteur", "Prévoir une inspection du système de refroidissement.")
+            if add_risk("cooling", "warning", "Température moteur élevée", temp, component="cooling_system"):
+                add_suggestion("medium", "Inspection moteur", "Prévoir une inspection du système de refroidissement.")
 
         # ── Carburant ─────────────────────────────────────────────────────────
         if fuel is not None and fuel < 5:
-            add_risk("fuel", "critical", "Niveau de carburant critique", fuel)
-            add_suggestion("high", "Ravitaillement urgent", "Ravitailler immédiatement — risque d'arrêt moteur.")
+            if add_risk("fuel", "critical", "Niveau de carburant critique", fuel, component="fuel_system"):
+                add_suggestion("high", "Ravitaillement urgent", "Ravitailler immédiatement — risque d'arrêt moteur.")
         elif fuel is not None and fuel < 12:
             add_risk("fuel", "warning", "Niveau de carburant faible", fuel)
             add_suggestion("medium", "Ravitaillement", "Prévoir un ravitaillement rapidement pour éviter l'arrêt du véhicule.")
@@ -91,13 +148,13 @@ class RecommendationEngine:
             add_suggestion("medium", "Style de conduite", "Analyser le style de conduite et éviter les sur-régimes prolongés.")
 
         if load is not None and load >= 85:
-            add_risk("engine_load", "warning", "Charge moteur élevée", load)
-            add_suggestion("medium", "Charge moteur", "Réduire la charge ou vérifier les conditions de roulage et le système moteur.")
+            if add_risk("engine_load", "warning", "Charge moteur élevée", load, component="engine_system"):
+                add_suggestion("medium", "Charge moteur", "Réduire la charge ou vérifier les conditions de roulage et le système moteur.")
 
         # ── CPU / GPU / Températures périphériques ──────────────────────────
         if temp_cpu is not None and temp_cpu > 90:
-            add_risk("device_cpu_temp", "critical", "Température CPU boîtier critique", temp_cpu)
-            add_suggestion("high", "Boîtier télématique", "Contrôler le refroidissement du boîtier et l'exposition à la chaleur.")
+            if add_risk("device_cpu_temp", "critical", "Température CPU boîtier critique", temp_cpu, component="telematics_device"):
+                add_suggestion("high", "Boîtier télématique", "Contrôler le refroidissement du boîtier et l'exposition à la chaleur.")
         elif temp_cpu is not None and temp_cpu > 80:
             add_risk("device_cpu_temp", "warning", "Température CPU boîtier élevée", temp_cpu)
             add_suggestion("medium", "Boîtier télématique", "Surveiller la température CPU du boîtier.")
@@ -107,12 +164,12 @@ class RecommendationEngine:
             add_suggestion("medium", "Charge système", "Vérifier les tâches télématiques actives (CPU élevé).")
 
         if gpu is not None and gpu > 90:
-            add_risk("device_gpu_load", "warning", "Charge GPU boîtier élevée", gpu)
-            add_suggestion("medium", "Charge système", "Vérifier les charges GPU anormales sur le boîtier.")
+            if add_risk("device_gpu_load", "warning", "Charge GPU boîtier élevée", gpu, component="telematics_device"):
+                add_suggestion("medium", "Charge système", "Vérifier les charges GPU anormales sur le boîtier.")
 
         if intake_temp is not None and intake_temp > 75:
-            add_risk("intake", "critical", "Température d'admission critique", intake_temp)
-            add_suggestion("high", "Admission d'air", "Contrôler le circuit d'admission et la circulation d'air moteur.")
+            if add_risk("intake", "critical", "Température d'admission critique", intake_temp, component="intake_system"):
+                add_suggestion("high", "Admission d'air", "Contrôler le circuit d'admission et la circulation d'air moteur.")
         elif intake_temp is not None and intake_temp > 60:
             add_risk("intake", "warning", "Température d'admission élevée", intake_temp)
             add_suggestion("medium", "Admission d'air", "Inspecter le filtre et la prise d'air.")
@@ -121,16 +178,80 @@ class RecommendationEngine:
             add_risk("ambient_heat", "warning", "Température ambiante élevée", ambient_air_temp)
             add_suggestion("low", "Conditions externes", "Adapter la conduite et surveiller les températures moteur en période chaude.")
 
-        if temp is not None and intake_temp is not None and (temp - intake_temp) > 45:
-            add_risk("thermal_delta", "warning", "Écart thermique moteur/admission élevé", temp - intake_temp)
-            add_suggestion("medium", "Diagnostic thermique", "Vérifier capteurs température moteur/admission et circuit de refroidissement.")
+        if (
+            temp is not None
+            and intake_temp is not None
+            and (temp - intake_temp) > 45
+            and (temp >= 99 or intake_temp >= 60)
+        ):
+            if add_risk("thermal_delta", "warning", "Écart thermique moteur/admission élevé", temp - intake_temp, component="cooling_system"):
+                add_suggestion("medium", "Diagnostic thermique", "Vérifier capteurs température moteur/admission et circuit de refroidissement.")
 
-        if odometer is not None and odometer >= 200000:
-            add_risk("mileage", "warning", "Kilometrage tres eleve - maintenance lourde a planifier", odometer)
-            add_suggestion("medium", "Maintenance kilometrage", "Prevoir un controle complet des organes moteur, refroidissement, admission et charge.")
-        elif odometer is not None and odometer >= 120000:
-            add_risk("mileage", "info", "Kilometrage eleve - maintenance preventive conseillee", odometer)
-            add_suggestion("low", "Entretien preventif", "Verifier l'entretien periodique du vehicule en fonction du kilometrage.")
+        # ── Maintenance par intervalle depuis dernier entretien ─────────────
+        def _safe_delta(current: float | None, previous: float | None) -> float | None:
+            if current is None or previous is None:
+                return None
+            try:
+                delta = float(current) - float(previous)
+            except (TypeError, ValueError):
+                return None
+            return delta if delta >= 0 else None
+
+        last_oil = maintenance_context.get("last_oil_change_odometer")
+        oil_interval = maintenance_context.get("oil_change_interval_km")
+        if odometer is not None and last_oil is not None and oil_interval and oil_interval > 0:
+            oil_delta = _safe_delta(odometer, last_oil)
+            if oil_delta is not None:
+                if oil_delta >= oil_interval * 1.20:
+                    if add_risk("maintenance_oil", "critical", "Vidange tres en retard", oil_delta, component="oil_service"):
+                        add_suggestion("high", "Vidange urgente", "Depasser fortement l'intervalle de vidange. Faire la vidange immediatement.")
+                elif oil_delta >= oil_interval:
+                    add_risk("maintenance_oil", "warning", "Vidange due", oil_delta)
+                    add_suggestion("medium", "Vidange", "Intervalle de vidange atteint. Planifier la vidange rapidement.")
+                elif oil_delta >= oil_interval * 0.85:
+                    add_risk("maintenance_oil", "info", "Vidange bientot due", oil_delta)
+                    add_suggestion("low", "Preparation vidange", "La vidange approche. Preparer le rendez-vous d'entretien.")
+
+        last_service = maintenance_context.get("last_maintenance_odometer")
+        service_interval = maintenance_context.get("maintenance_interval_km")
+        if odometer is not None and last_service is not None and service_interval and service_interval > 0:
+            service_delta = _safe_delta(odometer, last_service)
+            if service_delta is not None:
+                if service_delta >= service_interval * 1.15:
+                    if add_risk("maintenance_general", "warning", "Entretien general en retard", service_delta, component="general_service"):
+                        add_suggestion("medium", "Entretien general", "L'intervalle d'entretien general est depasse. Planifier un controle complet.")
+                elif service_delta >= service_interval * 0.90:
+                    add_risk("maintenance_general", "info", "Entretien general bientot du", service_delta)
+                    add_suggestion("low", "Preparation entretien", "Prevoir le prochain entretien general.")
+
+        last_parts = maintenance_context.get("last_major_parts_change_odometer")
+        parts_interval = maintenance_context.get("major_parts_interval_km")
+        if odometer is not None and last_parts is not None and parts_interval and parts_interval > 0:
+            parts_delta = _safe_delta(odometer, last_parts)
+            if parts_delta is not None:
+                if parts_delta >= parts_interval * 1.10:
+                    if add_risk("maintenance_parts", "warning", "Controle des pieces majeures recommande", parts_delta, component="major_parts"):
+                        add_suggestion("medium", "Pieces majeures", "Verifier l'etat des pieces majeures selon l'intervalle configure.")
+                elif parts_delta >= parts_interval * 0.90:
+                    add_risk("maintenance_parts", "info", "Pieces majeures bientot a controler", parts_delta)
+                    add_suggestion("low", "Suivi pieces", "Prevoir un controle preventif des pieces majeures.")
+
+        # Fallback historique: si aucune info d'entretien n'est fournie, utiliser kilometrage brut.
+        has_maintenance_baseline = bool(maintenance_records) or any(
+            maintenance_context.get(k) is not None
+            for k in (
+                "last_oil_change_odometer",
+                "last_maintenance_odometer",
+                "last_major_parts_change_odometer",
+            )
+        )
+        if not has_maintenance_baseline and odometer is not None:
+            if odometer >= 200000:
+                if add_risk("mileage", "warning", "Kilometrage tres eleve - maintenance lourde a planifier", odometer, component="general_service"):
+                    add_suggestion("medium", "Maintenance kilometrage", "Prevoir un controle complet des organes moteur, refroidissement, admission et charge.")
+            elif odometer >= 120000:
+                if add_risk("mileage", "info", "Kilometrage eleve - maintenance preventive conseillee", odometer, component="general_service"):
+                    add_suggestion("low", "Entretien preventif", "Verifier l'entretien periodique du vehicule en fonction du kilometrage.")
 
         # ── DTC actifs ───────────────────────────────────────────────────────
         for dtc in active_dtc_events:
@@ -140,13 +261,13 @@ class RecommendationEngine:
             if dtc_sev_raw not in {"info", "warning", "critical"}:
                 dtc_sev_raw = "warning"
 
-            add_risk("dtc", dtc_sev_raw, f"{code}: {desc}", dtc.get("occurrence_count"))
-            suggested_action = dtc.get("recommended_action") or f"Diagnostiquer le code {code} et corriger la cause racine."
-            add_suggestion(
-                "high" if dtc_sev_raw == "critical" else "medium",
-                f"Code défaut {code}",
-                suggested_action,
-            )
+            if add_risk("dtc", dtc_sev_raw, f"{code}: {desc}", dtc.get("occurrence_count"), component="dtc", dtc_code=code):
+                suggested_action = dtc.get("recommended_action") or f"Diagnostiquer le code {code} et corriger la cause racine."
+                add_suggestion(
+                    "high" if dtc_sev_raw == "critical" else "medium",
+                    f"Code défaut {code}",
+                    suggested_action,
+                )
 
         # ── Store raw ML output before any rule adjustment ─────────────────────
         ml_severity   = severity
@@ -279,6 +400,10 @@ class RecommendationEngine:
             }
 
         prediction["predicted_risks"] = predicted_risks
+        prediction["maintenance_filter"] = {
+            "applied": bool(suppressed_alerts),
+            "suppressed_alerts": suppressed_alerts,
+        }
         prediction["maintenance_status"] = maintenance_status
         prediction["maintenance_suggestions"] = maintenance_suggestions
         prediction["predicted_risk_score"] = round(risk_score, 2)
