@@ -6,6 +6,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+import re
 
 import joblib
 import pandas as pd
@@ -13,7 +14,7 @@ from imblearn.over_sampling import RandomOverSampler, SMOTE
 from sklearn.base import clone
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.metrics import accuracy_score, classification_report, mean_absolute_error, r2_score, recall_score
-from sklearn.model_selection import StratifiedKFold, train_test_split
+from sklearn.model_selection import StratifiedKFold
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 if str(BASE_DIR) not in sys.path:
@@ -48,24 +49,33 @@ def get_training_status() -> dict:
     }
 
 
-def split_train_val_test(X, y, *, stratify_enabled: bool):
-    stratify_all = y if stratify_enabled and y.value_counts().min() >= 2 else None
-    X_train_val, X_test, y_train_val, y_test = train_test_split(
-        X,
-        y,
-        test_size=0.2,
-        random_state=42,
-        stratify=stratify_all,
-    )
+def split_train_val_test_temporal(X: pd.DataFrame, y: pd.Series, ts_series: pd.Series):
+    """Chronological 60/20/20 split to avoid temporal leakage."""
+    if len(X) != len(y) or len(X) != len(ts_series):
+        raise ValueError("X, y and ts_series must have the same length.")
 
-    stratify_train = y_train_val if stratify_enabled and y_train_val.value_counts().min() >= 2 else None
-    X_train, X_val, y_train, y_val = train_test_split(
-        X_train_val,
-        y_train_val,
-        test_size=0.25,
-        random_state=42,
-        stratify=stratify_train,
-    )
+    if len(X) < 5:
+        raise ValueError("Not enough rows to build temporal train/val/test split.")
+
+    ts_dt = pd.to_datetime(ts_series, errors="coerce")
+    # Stable ordering preserves relative order for identical timestamps.
+    order = ts_dt.sort_values(kind="mergesort", na_position="last").index
+
+    X_ordered = X.loc[order].reset_index(drop=True)
+    y_ordered = y.loc[order].reset_index(drop=True)
+
+    n = len(X_ordered)
+    i1 = int(n * 0.60)
+    i2 = int(n * 0.80)
+    i1 = max(1, min(i1, n - 2))
+    i2 = max(i1 + 1, min(i2, n - 1))
+
+    X_train = X_ordered.iloc[:i1].copy()
+    X_val = X_ordered.iloc[i1:i2].copy()
+    X_test = X_ordered.iloc[i2:].copy()
+    y_train = y_ordered.iloc[:i1].copy()
+    y_val = y_ordered.iloc[i1:i2].copy()
+    y_test = y_ordered.iloc[i2:].copy()
     return X_train, X_val, X_test, y_train, y_val, y_test
 
 
@@ -228,12 +238,158 @@ def temporal_holdout_indices(df: pd.DataFrame, test_ratio: float = 0.2):
     }
 
 
+def _severity_to_num(value: Any) -> int:
+    if value is None:
+        return 1
+    as_str = str(value).strip().lower()
+    if as_str in {"0", "info", "low"}:
+        return 0
+    if as_str in {"2", "critical", "high", "error"}:
+        return 2
+    if as_str in {"1", "warning", "medium", "warn"}:
+        return 1
+    try:
+        as_int = int(float(as_str))
+        return max(0, min(2, as_int))
+    except (TypeError, ValueError):
+        return 1
+
+
+def build_dtc_context_features(labels: pd.DataFrame, dtc_records: pd.DataFrame) -> pd.DataFrame:
+    """Build per-row DTC context aligned with labels timestamps.
+
+    Features:
+    - active_dtc_count: number of active DTC events at label timestamp
+    - max_dtc_severity: max active severity (0=info,1=warning,2=critical)
+    """
+    base = labels[["vehicle_id", "ts"]].copy()
+    base["active_dtc_count"] = 0
+    base["max_dtc_severity"] = 0
+
+    if dtc_records.empty:
+        return base
+
+    dtc = dtc_records.copy()
+    if "vehicle_id" not in dtc.columns:
+        return base
+
+    first_col = "first_detected" if "first_detected" in dtc.columns else "created_at"
+    last_col = "last_occurrence" if "last_occurrence" in dtc.columns else first_col
+
+    dtc[first_col] = pd.to_datetime(dtc[first_col], errors="coerce")
+    dtc[last_col] = pd.to_datetime(dtc[last_col], errors="coerce")
+    dtc["severity_num"] = dtc.get("severity", pd.Series(index=dtc.index, dtype=object)).map(_severity_to_num)
+    dtc["resolved"] = dtc.get("resolved", False).fillna(False).astype(bool)
+    dtc["last_active_ts"] = dtc[last_col].where(dtc["resolved"], pd.NaT)
+
+    for vehicle_id, label_idx in base.groupby("vehicle_id").groups.items():
+        vehicle_labels = base.loc[label_idx]
+        vehicle_dtc = dtc[dtc["vehicle_id"] == vehicle_id]
+        if vehicle_dtc.empty:
+            continue
+
+        for idx, ts in vehicle_labels["ts"].items():
+            if pd.isna(ts):
+                continue
+            started = vehicle_dtc[first_col].notna() & (vehicle_dtc[first_col] <= ts)
+            still_open = (~vehicle_dtc["resolved"]) | vehicle_dtc["last_active_ts"].isna() | (vehicle_dtc["last_active_ts"] >= ts)
+            active = vehicle_dtc[started & still_open]
+            if active.empty:
+                continue
+
+            base.at[idx, "active_dtc_count"] = int(len(active))
+            base.at[idx, "max_dtc_severity"] = int(active["severity_num"].max())
+
+    return base
+
+
+def _safe_dtc_col_name(code: Any) -> str:
+    raw = str(code).strip().upper()
+    cleaned = re.sub(r"[^A-Z0-9]+", "_", raw)
+    cleaned = cleaned.strip("_")
+    if not cleaned:
+        cleaned = "UNKNOWN"
+    return f"dtc_code_{cleaned}"
+
+
+def build_dtc_code_features(labels: pd.DataFrame, dtc_records: pd.DataFrame) -> pd.DataFrame:
+    """Build binary features for each active DTC code at label timestamps."""
+    if dtc_records.empty or labels.empty:
+        return pd.DataFrame(index=labels.index)
+
+    dtc = dtc_records.copy()
+    if "vehicle_id" not in dtc.columns:
+        return pd.DataFrame(index=labels.index)
+
+    code_col = "code" if "code" in dtc.columns else ("dtc_code" if "dtc_code" in dtc.columns else None)
+    if code_col is None:
+        return pd.DataFrame(index=labels.index)
+
+    dtc[code_col] = dtc[code_col].astype(str).str.strip().str.upper()
+    dtc = dtc[dtc[code_col] != ""]
+    if dtc.empty:
+        return pd.DataFrame(index=labels.index)
+
+    unique_codes = sorted(dtc[code_col].dropna().unique().tolist())
+    if not unique_codes:
+        return pd.DataFrame(index=labels.index)
+
+    code_to_col = {}
+    used_cols: set[str] = set()
+    for code in unique_codes:
+        base_col = _safe_dtc_col_name(code)
+        col_name = base_col
+        idx = 2
+        while col_name in used_cols:
+            col_name = f"{base_col}_{idx}"
+            idx += 1
+        code_to_col[code] = col_name
+        used_cols.add(col_name)
+
+    first_col = "first_detected" if "first_detected" in dtc.columns else "created_at"
+    last_col = "last_occurrence" if "last_occurrence" in dtc.columns else first_col
+    dtc[first_col] = pd.to_datetime(dtc[first_col], errors="coerce")
+    dtc[last_col] = pd.to_datetime(dtc[last_col], errors="coerce")
+    dtc["resolved"] = dtc.get("resolved", False).fillna(False).astype(bool)
+    dtc["last_active_ts"] = dtc[last_col].where(dtc["resolved"], pd.NaT)
+
+    dtc_features = pd.DataFrame(0, index=labels.index, columns=sorted(used_cols), dtype="int8")
+    base = labels[["vehicle_id", "ts"]].copy()
+
+    for vehicle_id, label_idx in base.groupby("vehicle_id").groups.items():
+        vehicle_labels = base.loc[label_idx]
+        vehicle_dtc = dtc[dtc["vehicle_id"] == vehicle_id]
+        if vehicle_dtc.empty:
+            continue
+
+        for idx, ts in vehicle_labels["ts"].items():
+            if pd.isna(ts):
+                continue
+
+            started = vehicle_dtc[first_col].notna() & (vehicle_dtc[first_col] <= ts)
+            still_open = (~vehicle_dtc["resolved"]) | vehicle_dtc["last_active_ts"].isna() | (vehicle_dtc["last_active_ts"] >= ts)
+            active = vehicle_dtc[started & still_open]
+            if active.empty:
+                continue
+
+            for code in active[code_col].dropna().unique().tolist():
+                col = code_to_col.get(code)
+                if col is not None:
+                    dtc_features.at[idx, col] = 1
+
+    return dtc_features
+
+
 def load_training_dataset() -> pd.DataFrame:
     dataset_path = resolve_dataset_path()
     print(f"Using dataset: {dataset_path}")
 
     telemetry = pd.read_excel(dataset_path, sheet_name="telemetry_data")
     labels = pd.read_excel(dataset_path, sheet_name="ai_labels")
+    try:
+        dtc_records = pd.read_excel(dataset_path, sheet_name="dtc_records")
+    except ValueError:
+        dtc_records = pd.DataFrame(columns=["vehicle_id", "first_detected", "last_occurrence", "severity", "resolved"])
 
     telemetry = clean_telemetry_dataframe(telemetry)
     labels = clean_label_dataframe(labels)
@@ -249,6 +405,17 @@ def load_training_dataset() -> pd.DataFrame:
         on=["vehicle_id", "plate", "ts"],
         how="left",
     )
+
+    # Attach DTC context so ML can use reliable OBD-II fault signals.
+    merged["ts"] = pd.to_datetime(merged["ts"], errors="coerce")
+    dtc_context = build_dtc_context_features(merged[["vehicle_id", "ts"]], dtc_records)
+    merged["active_dtc_count"] = pd.to_numeric(dtc_context["active_dtc_count"], errors="coerce").fillna(0).astype(int)
+    merged["max_dtc_severity"] = pd.to_numeric(dtc_context["max_dtc_severity"], errors="coerce").fillna(0).astype(int)
+
+    # Add one binary feature per DTC code to train on all known fault codes.
+    dtc_code_features = build_dtc_code_features(merged[["vehicle_id", "ts"]], dtc_records)
+    if not dtc_code_features.empty:
+        merged = pd.concat([merged, dtc_code_features], axis=1)
 
     return merged.sort_values(["vehicle_id", "ts"]).reset_index(drop=True)
 
@@ -287,6 +454,7 @@ def prepare_xy(df: pd.DataFrame):
 
 def train_models(df: pd.DataFrame) -> dict:
     X, y_class, y_reg, feature_names = prepare_xy(df)
+    ts_series = pd.to_datetime(df["ts"], errors="coerce")
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
     before_status = get_training_status()
@@ -300,36 +468,29 @@ def train_models(df: pd.DataFrame) -> dict:
     }
 
     if y_class.nunique() > 1:
-        X_train, X_val, X_test, y_train, y_val, y_test = split_train_val_test(
-            X,
-            y_class,
-            stratify_enabled=True,
-        )
+        X_train, X_val, X_test, y_train, y_val, y_test = split_train_val_test_temporal(X, y_class, ts_series)
         X_train_val = pd.concat([X_train, X_val], ignore_index=True)
         y_train_val = pd.concat([y_train, y_val], ignore_index=True)
         critical_label = resolve_critical_label(y_train_val)
 
         clf_candidates = {
-            "baseline": RandomForestClassifier(
-                n_estimators=250,
-                max_depth=10,
-                min_samples_leaf=2,
+            # max_depth is capped to prevent memorising training noise.
+            # Unlimited-depth forests with only 2 dominant features (engine_temp,
+            # battery_voltage) produced temporal-holdout MAE jumps of +385 %.
+            "shallow": RandomForestClassifier(
+                n_estimators=300,
+                max_depth=8,
+                min_samples_leaf=4,
+                max_features="sqrt",
                 random_state=42,
                 class_weight="balanced",
+                n_jobs=-1,
             ),
-            "improved": RandomForestClassifier(
-                n_estimators=500,
-                max_depth=None,
-                min_samples_leaf=1,
-                min_samples_split=4,
-                random_state=42,
-                class_weight="balanced_subsample",
-            ),
-            "high_accuracy": RandomForestClassifier(
-                n_estimators=900,
-                max_depth=None,
-                min_samples_leaf=1,
-                min_samples_split=2,
+            "balanced": RandomForestClassifier(
+                n_estimators=400,
+                max_depth=6,
+                min_samples_leaf=10,
+                min_samples_split=20,
                 max_features="sqrt",
                 random_state=42,
                 class_weight="balanced_subsample",
@@ -345,8 +506,9 @@ def train_models(df: pd.DataFrame) -> dict:
         )
 
         clf = clf_candidates[best_clf_name]
-        X_train_final, y_train_final, final_resampling = balance_training_classes(X_train_val, y_train_val)
-        clf.fit(X_train_final, y_train_final)
+        # Évaluation honnête : fit sur train seul, prédit sur test (jamais vu)
+        X_train_eval, y_train_eval, _ = balance_training_classes(X_train, y_train)
+        clf.fit(X_train_eval, y_train_eval)
         y_pred = clf.predict(X_test)
         critical_recall_test = compute_critical_recall(y_test, y_pred, critical_label)
 
@@ -355,7 +517,6 @@ def train_models(df: pd.DataFrame) -> dict:
             "candidates": clf_trials,
             "cross_validation": cv_meta,
             "critical_label": critical_label,
-            "final_train_resampling": final_resampling,
             "split": {
                 "train_rows": int(len(X_train)),
                 "val_rows": int(len(X_val)),
@@ -390,6 +551,12 @@ def train_models(df: pd.DataFrame) -> dict:
             }
 
         metrics["classification"] = class_metrics
+        # Refit prod sur train+val (80% des données) — après évaluation honnête
+        X_prod = pd.concat([X_train, X_val], ignore_index=True)
+        y_prod = pd.concat([y_train, y_val], ignore_index=True)
+        X_train_final, y_train_final, final_resampling = balance_training_classes(X_prod, y_prod)
+        clf.fit(X_train_final, y_train_final)
+        class_metrics["final_train_resampling"] = final_resampling
         joblib.dump({
             "model": clf,
             "feature_names": feature_names,
@@ -398,25 +565,29 @@ def train_models(df: pd.DataFrame) -> dict:
     else:
         metrics["classification"] = {"skipped": True, "reason": "Only one severity class present in the dataset."}
 
-    X_train_r, X_val_r, X_test_r, y_train_r, y_val_r, y_test_r = split_train_val_test(
-        X,
-        y_reg,
-        stratify_enabled=False,
-    )
+    X_train_r, X_val_r, X_test_r, y_train_r, y_val_r, y_test_r = split_train_val_test_temporal(X, y_reg, ts_series)
 
     reg_candidates = {
-        "baseline": RandomForestRegressor(
-            n_estimators=250,
-            max_depth=10,
-            min_samples_leaf=2,
+        # max_depth capped to reduce overfitting on engine_temp + battery_voltage
+        # which alone explain ~99 % of variance in an unlimited forest.
+        # max_features='sqrt' forces the regressor to use diverse feature subsets
+        # so other signals (speed, rpm, fuel) contribute to predictions.
+        "shallow": RandomForestRegressor(
+            n_estimators=300,
+            max_depth=8,
+            min_samples_leaf=4,
+            max_features="sqrt",
             random_state=42,
+            n_jobs=-1,
         ),
-        "improved": RandomForestRegressor(
-            n_estimators=500,
-            max_depth=None,
-            min_samples_leaf=1,
-            min_samples_split=4,
+        "balanced": RandomForestRegressor(
+            n_estimators=400,
+            max_depth=6,
+            min_samples_leaf=10,
+            min_samples_split=20,
+            max_features="sqrt",
             random_state=42,
+            n_jobs=-1,
         ),
     }
 
@@ -442,7 +613,8 @@ def train_models(df: pd.DataFrame) -> dict:
             best_reg_name = candidate_name
 
     reg = reg_candidates[best_reg_name]
-    reg.fit(pd.concat([X_train_r, X_val_r]), pd.concat([y_train_r, y_val_r]))
+    # Fix 1C: evaluate on test using train-only fit (honest metrics).
+    reg.fit(X_train_r, y_train_r)
     y_pred_r = reg.predict(X_test_r)
 
     reg_metrics = {
@@ -478,7 +650,10 @@ def train_models(df: pd.DataFrame) -> dict:
         }
 
     metrics["regression"] = reg_metrics
-    joblib.dump({"model": reg, "feature_names": feature_names}, REGRESSOR_PATH)
+    # Production refit on train+val after evaluation.
+    reg_prod = clone(reg)
+    reg_prod.fit(pd.concat([X_train_r, X_val_r]), pd.concat([y_train_r, y_val_r]))
+    joblib.dump({"model": reg_prod, "feature_names": feature_names}, REGRESSOR_PATH)
 
     metrics["status_after_training"] = get_training_status()
 

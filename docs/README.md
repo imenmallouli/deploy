@@ -90,3 +90,12 @@ python mqtt_client.py
 # Terminal 3 — frontend (optionnel)
 cd "C:\auto diagnostic platform\frontend-web"
 npm run dev
+
+
+
+
+# traint model 
+"/c/auto diagnostic platform/backend/.venv/Scripts/python.exe" "scripts/train_alert_model.py"
+
+# test model
+"/c/auto diagnostic platform/backend/.venv/Scripts/python.exe" "scripts/test_model.py"

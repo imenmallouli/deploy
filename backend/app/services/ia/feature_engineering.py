@@ -24,6 +24,9 @@ def build_telemetry_features(df: pd.DataFrame) -> pd.DataFrame:
         "battery_voltage",
         "engine_load",
         "fuel_level",
+        "temp_cpu",
+        "cpu",
+        "gpu",
     ]
 
     for col in rolling_source_cols:
@@ -42,6 +45,12 @@ def build_telemetry_features(df: pd.DataFrame) -> pd.DataFrame:
     battery_voltage = featured.get("battery_voltage", pd.Series(0, index=featured.index))
     fuel_level = featured.get("fuel_level", pd.Series(0, index=featured.index))
     engine_load = featured.get("engine_load", pd.Series(0, index=featured.index))
+    intake_temp = featured.get("intake_temp", pd.Series(0, index=featured.index))
+    ambient_air_temp = featured.get("ambient_air_temp", pd.Series(0, index=featured.index))
+
+    temp_cpu = featured.get("temp_cpu", pd.Series(0, index=featured.index))
+    cpu = featured.get("cpu", pd.Series(0, index=featured.index))
+    gpu = featured.get("gpu", pd.Series(0, index=featured.index))
 
     featured["is_idling"] = ((speed < 5) & (rpm > 600)).astype(int)
     featured["is_overheating"] = (engine_temp > 100).astype(int)
@@ -49,6 +58,12 @@ def build_telemetry_features(df: pd.DataFrame) -> pd.DataFrame:
     featured["is_low_fuel"] = (fuel_level < 15).astype(int)
     featured["is_engine_overload"] = (engine_load > 85).astype(int)
     featured["high_rpm_flag"] = (rpm > 4500).astype(int)
+    featured["is_cpu_hot"] = (temp_cpu > 80).astype(int)
+    featured["is_cpu_overload"] = (cpu > 90).astype(int)
+    featured["is_gpu_overload"] = (gpu > 90).astype(int)
+    featured["engine_intake_delta"] = engine_temp - intake_temp
+    featured["is_intake_hot"] = (intake_temp > 60).astype(int)
+    featured["is_ambient_hot"] = (ambient_air_temp > 40).astype(int)
 
     featured["idle_duration_min"] = grouped["is_idling"].transform(_consecutive_true_minutes)
 

@@ -18,6 +18,14 @@ class AIPredictRequest(BaseModel):
     ambient_air_temp: float | None = Field(default=None, description="Température de l'air ambiant en degrés Celsius.", examples=[28.0])
     intake_temp: float | None = Field(default=None, description="Température de l'air d'admission en degrés Celsius.", examples=[33.0])
     odometer: float | None = Field(default=None, description="Kilométrage total du véhicule.", examples=[120345.6])
+    temp_cpu: float | None = Field(default=None, description="Température CPU du boîtier en degrés Celsius.", examples=[62.5])
+    cpu: float | None = Field(default=None, description="Charge CPU du boîtier en pourcentage.", examples=[44.0])
+    gpu: float | None = Field(default=None, description="Charge GPU du boîtier en pourcentage.", examples=[28.0])
+    active_dtc_codes: list[str] = Field(
+        default_factory=list,
+        description="Liste des codes DTC actifs à injecter dans l'inférence IA (ex: P0300, P0171).",
+        examples=[["P0300", "P0171"]],
+    )
 
 
 class PredictedRiskItem(BaseModel):
@@ -39,6 +47,16 @@ class AIInsight(BaseModel):
     next_action: str = Field(..., description="Prochaine action recommandée à l'utilisateur.")
 
 
+class AIDtcEvent(BaseModel):
+    code: str = Field(..., description="Code DTC actif détecté ou injecté dans l'inférence.")
+    description: str | None = Field(default=None, description="Description du code défaut.")
+    severity: str = Field(..., description="Sévérité du code défaut: info, warning ou critical.")
+    category: str | None = Field(default=None, description="Catégorie ou origine du DTC.")
+    recommended_action: str | None = Field(default=None, description="Action de maintenance recommandée pour ce code.")
+    occurrence_count: int | None = Field(default=None, description="Nombre d'occurrences observées pour ce code.")
+    last_occurrence: datetime | str | None = Field(default=None, description="Dernière date d'occurrence connue du code défaut.")
+
+
 class AIPredictResponse(BaseModel):
     vehicle_id: int = Field(..., description="Identifiant du véhicule analysé.")
     generated_at: datetime = Field(..., description="Date/heure de génération de la prédiction.")
@@ -47,7 +65,9 @@ class AIPredictResponse(BaseModel):
     predicted_severity: str = Field(..., description="Classe prédite par le modèle: info, warning ou critical.")
     predicted_risk_score: float = Field(ge=0, le=100, description="Score de risque prédit entre 0 et 100.")
     confidence: float | None = Field(default=None, ge=0, le=100, description="Niveau de confiance de la classification en pourcentage.")
+    telemetry_window_size: int | None = Field(default=None, description="Nombre de snapshots utilisés pour l'inférence quand une fenêtre temporelle est disponible.")
     telemetry_snapshot: dict = Field(..., description="Instantané des mesures télémétriques utilisées pour l'inférence.")
+    active_dtc_events: list[AIDtcEvent] = Field(default_factory=list, description="Liste détaillée des codes défaut actifs pris en compte dans l'analyse.")
     predicted_risks: list[PredictedRiskItem] = Field(default_factory=list, description="Liste des risques identifiés à partir de la prédiction.")
     maintenance_suggestions: list[MaintenanceSuggestion] = Field(default_factory=list, description="Liste des suggestions de maintenance générées dynamiquement.")
     ai_insights: AIInsight = Field(..., description="Résumé interprétable par l'utilisateur final.")
@@ -74,6 +94,7 @@ class AIInsightsResponse(BaseModel):
     predicted_severity: str
     predicted_risk_score: float = Field(ge=0, le=100)
     insights: AIInsight
+    active_dtc_events: list[AIDtcEvent] = Field(default_factory=list)
     predicted_risks: list[PredictedRiskItem] = Field(default_factory=list)
 
 

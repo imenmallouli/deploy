@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import re
 from typing import Any
 
 import pandas as pd
@@ -16,6 +17,64 @@ from app.services.ia.model_loader import (
 
 
 class AIInferenceService:
+    PAYLOAD_DTC_CATALOG = {
+        "P0300": {
+            "description": "Rates d'allumage detectes (cylindres multiples)",
+            "severity": "critical",
+            "recommended_action": "Verifier bobines, bougies et systeme d'allumage.",
+        },
+        "P0420": {
+            "description": "Efficacite du catalyseur sous le seuil",
+            "severity": "warning",
+            "recommended_action": "Controler catalyseur, sonde lambda et combustion moteur.",
+        },
+        "P0171": {
+            "description": "Melange trop pauvre",
+            "severity": "warning",
+            "recommended_action": "Verifier admission d'air, injecteurs et capteur MAF.",
+        },
+        "P0101": {
+            "description": "Capteur MAF hors plage",
+            "severity": "warning",
+            "recommended_action": "Nettoyer ou remplacer le capteur MAF.",
+        },
+        "P0113": {
+            "description": "Capteur temperature air admission signal haut",
+            "severity": "warning",
+            "recommended_action": "Verifier capteur d'admission et faisceau.",
+        },
+        "P0562": {
+            "description": "Tension systeme faible",
+            "severity": "critical",
+            "recommended_action": "Controler batterie, alternateur et circuit de charge.",
+        },
+        "P0401": {
+            "description": "Debit EGR insuffisant",
+            "severity": "info",
+            "recommended_action": "Verifier vanne EGR et conduits associes.",
+        },
+        "P0455": {
+            "description": "Fuite EVAP importante detectee",
+            "severity": "info",
+            "recommended_action": "Verifier bouchon de reservoir et circuit EVAP.",
+        },
+        "P0217": {
+            "description": "Temperature moteur trop elevee",
+            "severity": "critical",
+            "recommended_action": "Verifier liquide de refroidissement, radiateur et ventilateur.",
+        },
+        "P0500": {
+            "description": "Capteur vitesse vehicule defaillant",
+            "severity": "warning",
+            "recommended_action": "Verifier capteur vitesse et cablage associe.",
+        },
+        "P0605": {
+            "description": "Erreur interne ROM calculateur moteur",
+            "severity": "critical",
+            "recommended_action": "Diagnostiquer le calculateur moteur rapidement.",
+        },
+    }
+
     SNAPSHOT_KEYS = [
         "speed",
         "rpm",
@@ -26,7 +85,71 @@ class AIInferenceService:
         "ambient_air_temp",
         "intake_temp",
         "odometer",
+        "temp_cpu",
+        "cpu",
+        "gpu",
     ]
+
+    @staticmethod
+    def _infer_payload_dtc_severity(code: str, description: str) -> str:
+        text = f"{code} {description}".lower()
+        if any(token in text for token in ["surchauffe", "temperature moteur trop elevee", "tension systeme faible", "erreur interne", "rates d'allumage"]):
+            return "critical"
+        if any(token in text for token in ["hors plage", "capteur", "fuite", "efficacite", "melange trop pauvre"]):
+            return "warning"
+        return "info"
+
+    @classmethod
+    def _build_payload_dtc_events(cls, payload: dict[str, Any]) -> list[dict[str, Any]]:
+        events: list[dict[str, Any]] = []
+        for raw_code in payload.get("active_dtc_codes") or []:
+            code = str(raw_code).strip().upper()
+            if not code:
+                continue
+            meta = cls.PAYLOAD_DTC_CATALOG.get(code, {})
+            description = str(meta.get("description") or "Code defaut detecte")
+            severity = str(meta.get("severity") or cls._infer_payload_dtc_severity(code, description)).lower()
+            if severity not in {"info", "warning", "critical"}:
+                severity = "warning"
+            events.append(
+                {
+                    "code": code,
+                    "description": description,
+                    "severity": severity,
+                    "category": "payload_dtc",
+                    "recommended_action": meta.get("recommended_action") or f"Diagnostiquer le code {code} et corriger la cause racine.",
+                    "occurrence_count": 1,
+                    "last_occurrence": payload.get("ts"),
+                }
+            )
+        return events
+
+    @staticmethod
+    async def _latest_active_dtc_for_vehicle(vehicle_id: int, limit: int = 5) -> list[dict[str, Any]]:
+        """Return unresolved DTC events for a vehicle, most recent first."""
+        db = get_mongo_db()
+        cursor = db.dtc_events.find(
+            {
+                "vehicle_id": vehicle_id,
+                "$or": [{"resolved": False}, {"resolved": {"$exists": False}}],
+            }
+        ).sort([("last_occurrence", -1), ("_id", -1)]).limit(limit)
+
+        docs = await cursor.to_list(length=limit)
+        events: list[dict[str, Any]] = []
+        for doc in docs:
+            events.append(
+                {
+                    "code": doc.get("code") or doc.get("dtc_code"),
+                    "description": doc.get("description"),
+                    "severity": str(doc.get("severity") or "warning").lower(),
+                    "category": doc.get("category"),
+                    "recommended_action": doc.get("recommended_action"),
+                    "occurrence_count": doc.get("occurrence_count"),
+                    "last_occurrence": doc.get("last_occurrence") or doc.get("created_at"),
+                }
+            )
+        return events
 
     @staticmethod
     def _normalize_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -67,13 +190,34 @@ class AIInferenceService:
         classifier_bundle = load_classifier_bundle()
         feature_names = classifier_bundle.get("feature_names", [])
 
-        for col in feature_names:
-            if col not in featured.columns:
-                featured[col] = 0.0
+        missing_cols = [col for col in feature_names if col not in featured.columns]
+        if missing_cols:
+            featured = pd.concat(
+                [featured, pd.DataFrame(0.0, index=featured.index, columns=missing_cols)],
+                axis=1,
+            )
 
         X = featured[feature_names].copy() if feature_names else featured.select_dtypes(include=["number"]).copy()
         X = X.apply(pd.to_numeric, errors="coerce")
         X = X.fillna(X.median(numeric_only=True)).fillna(0.0)
+
+        # Inject active DTC code features if caller provides them in payload.
+        active_codes = payload.get("active_dtc_codes") or []
+        if active_codes:
+            import re as _re
+            active_dtc_count = 0
+            for code in active_codes:
+                raw = str(code).strip().upper()
+                cleaned = _re.sub(r"[^A-Z0-9]+", "_", raw).strip("_") or "UNKNOWN"
+                col = f"dtc_code_{cleaned}"
+                if col in X.columns:
+                    X[col] = 1.0
+                    active_dtc_count += 1
+            if "active_dtc_count" in X.columns:
+                X["active_dtc_count"] = float(active_dtc_count)
+            if "max_dtc_severity" in X.columns:
+                X["max_dtc_severity"] = 2.0  # assume critical when codes passed explicitly
+
         return normalized, X
 
     @staticmethod
@@ -127,6 +271,8 @@ class AIInferenceService:
             probabilities = classifier.predict_proba(X)[0]
             confidence = round(float(max(probabilities) * 100), 2)
 
+        active_dtc_events = AIInferenceService._build_payload_dtc_events(payload)
+
         return {
             "vehicle_id": normalized["vehicle_id"],
             "generated_at": datetime.now(timezone.utc),
@@ -135,6 +281,7 @@ class AIInferenceService:
             "predicted_severity": predicted_severity,
             "predicted_risk_score": predicted_risk_score,
             "confidence": confidence,
+            "active_dtc_events": active_dtc_events,
             "telemetry_snapshot": {
                 key: normalized.get(key) for key in AIInferenceService.SNAPSHOT_KEYS
             },
@@ -180,6 +327,9 @@ class AIInferenceService:
             "ambient_air_temp": None,
             "intake_temp": None,
             "odometer": float(vehicle.mileage) if vehicle.mileage is not None else None,
+            "temp_cpu": None,
+            "cpu": None,
+            "gpu": None,
         }
 
     @staticmethod
@@ -240,6 +390,8 @@ class AIInferenceService:
             probabilities = classifier.predict_proba(X)[0]
             confidence = round(float(max(probabilities) * 100), 2)
 
+        active_dtc_events = await cls._latest_active_dtc_for_vehicle(vehicle_id=normalized["vehicle_id"], limit=5)
+
         return {
             "vehicle_id": normalized["vehicle_id"],
             "generated_at": datetime.now(timezone.utc),
@@ -249,6 +401,7 @@ class AIInferenceService:
             "predicted_risk_score": predicted_risk_score,
             "confidence": confidence,
             "telemetry_window_size": len(window) if window else 1,
+            "active_dtc_events": active_dtc_events,
             "telemetry_snapshot": {
                 key: normalized.get(key) for key in AIInferenceService.SNAPSHOT_KEYS
             },

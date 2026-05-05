@@ -4,7 +4,7 @@ Génère un fichier Excel de démonstration avec des données réalistes
 correspondant exactement au schéma backend de la plateforme Auto Diagnostic.
 
 Sheets:
-  1. telemetry_data  — mesures OBD (9 métriques) par véhicule sur 7 jours
+    1. telemetry_data  — mesures OBD + système (temp_cpu/cpu/gpu) par véhicule sur 7 jours
   2. dtc_records     — codes de défaut DTC enregistrés
   3. iot_logs        — logs événements device AutoPi
   4. ai_labels       — étiquettes IA / Risk Score dérivés des règles métier
@@ -16,8 +16,10 @@ Output:
 """
 
 import os
+import re
 import random
 from datetime import datetime, timedelta
+from html import unescape
 
 import pandas as pd
 
@@ -186,6 +188,11 @@ def gen_telemetry():
 
             intake_temp = round(clamp(ambient_air_temp + 3 + engine_load * 0.06 + random.uniform(-1.5, 1.5), 10, 55), 1)
 
+            # Device-level metrics (AutoPi-like): CPU temperature + CPU/GPU usage
+            temp_cpu = round(clamp(43 + ambient_air_temp * 0.22 + engine_load * 0.10 + random.uniform(-3.0, 3.0), 35, 94), 1)
+            cpu = round(clamp(18 + (speed * 0.14) + (6 if traffic_jam else 0) + random.uniform(-8, 8), 2, 98), 1)
+            gpu = round(clamp(14 + (cpu * 0.58) + random.uniform(-10, 10), 1, 95), 1)
+
             fuel_burn = 0.0035 + speed * 0.00022 + engine_load * 0.00016 + (0.003 if mode == "stop_go" else 0)
             fuel_level = clamp(fuel_level - fuel_burn, 0, 100)
             odometer += speed * (INTERVAL_MIN / 60)
@@ -204,6 +211,9 @@ def gen_telemetry():
                 "ambient_air_temp": ambient_air_temp,
                 "intake_temp": intake_temp,
                 "odometer": round(odometer, 1),
+                "temp_cpu": temp_cpu,
+                "cpu": cpu,
+                "gpu": gpu,
             })
 
     # Injecter un mélange de cas faibles, modérés et critiques (anomalies simples)
@@ -294,11 +304,124 @@ DTC_CATALOG = [
     ("P0605", "ROM du calculateur moteur — erreur interne",                   "critical"),
 ]
 
+DTC_SOURCE_BASE_URL = "https://www.outilsobdfacile.fr/code-defaut-standard-obd.php?dtc={range_key}#dtc"
+DTC_SOURCE_RANGES = [
+    "p0000-p0299",
+    "p0300-p0399",
+    "p0400-p0499",
+    "p0500-p0599",
+    "p0600-p0699",
+    "p0700-p0999",
+]
+
+
+def infer_dtc_severity(code: str, description: str) -> str:
+    text = f"{code} {description}".lower()
+    critical_tokens = [
+        "surchauffe",
+        "trop élevée",
+        "trop haute",
+        "pression .* trop haute",
+        "tension système faible",
+        "erreur interne",
+        "ratés d'allumage",
+        "régime excessif",
+        "vitesse excessive",
+    ]
+    warning_tokens = [
+        "hors plage",
+        "problème de performance",
+        "circuit intermittent",
+        "signal haut",
+        "signal bas",
+        "fuite",
+        "capteur",
+        "efficacité",
+    ]
+
+    for token in critical_tokens:
+        if re.search(token, text):
+            return "critical"
+    for token in warning_tokens:
+        if re.search(token, text):
+            return "warning"
+    return "info"
+
+
+def fetch_remote_dtc_catalog() -> list[tuple[str, str, str]]:
+    """Fetch DTC codes from source website ranges and infer severity.
+
+    Returns list of tuples: (code, description, severity)
+    """
+    catalog_map: dict[str, tuple[str, str]] = {}
+
+    try:
+        import requests
+    except Exception:
+        return []
+
+    row_re = re.compile(
+        r"<tr>\s*<td>\s*([PCBU][0-9A-F]{4})\s*</td>\s*<td>(.*?)</td>\s*</tr>",
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    for range_key in DTC_SOURCE_RANGES:
+        url = DTC_SOURCE_BASE_URL.format(range_key=range_key)
+        try:
+            resp = requests.get(
+                url,
+                timeout=25,
+                headers={"User-Agent": "Mozilla/5.0 (compatible; ADP-DTC-Builder/1.0)"},
+            )
+            html_text = resp.text
+        except Exception:
+            continue
+
+        for code, desc_html in row_re.findall(html_text):
+            code = str(code).strip().upper()
+            desc = re.sub(r"<[^>]+>", "", str(desc_html))
+            desc = unescape(desc).strip()
+            if not re.fullmatch(r"[PCBU][0-9A-F]{4}", code):
+                continue
+            if not desc:
+                continue
+            if code not in catalog_map:
+                catalog_map[code] = (desc, infer_dtc_severity(code, desc))
+
+    # Keep deterministic ordering by code
+    return [(code, desc, sev) for code, (desc, sev) in sorted(catalog_map.items(), key=lambda x: x[0])]
+
+
+def get_dtc_catalog() -> list[tuple[str, str, str]]:
+    remote_catalog = fetch_remote_dtc_catalog()
+    if remote_catalog:
+        return remote_catalog
+    return DTC_CATALOG
+
+DTC_BY_VEHICLE_PROFILE = {
+    "TUN-001": ["P0217", "P0562", "P0605", "P0101", "P0171", "P0401", "P0455"],
+    "TUN-002": ["P0115", "P0101", "P0171", "P0500", "P0113", "P0455"],
+    "TUN-003": ["P0300", "P0562", "P0401", "P0500", "P0420", "P0455"],
+}
+
 def gen_dtc():
     rows = []
+    dtc_catalog = get_dtc_catalog()
+    catalog_map = {code: (desc, severity) for code, desc, severity in dtc_catalog}
+    used_codes: set[str] = set()
     for veh in VEHICLES:
-        sample = random.sample(DTC_CATALOG, k=random.randint(3, 7))
+        forced_codes = DTC_BY_VEHICLE_PROFILE.get(veh["plate"], [])
+        if forced_codes:
+            sample = [
+                (code, catalog_map.get(code, ("Code défaut OBD-II détecté", "warning"))[0], catalog_map.get(code, ("", "warning"))[1])
+                for code in forced_codes
+            ]
+        else:
+            pool = dtc_catalog if len(dtc_catalog) >= 7 else DTC_CATALOG
+            sample = random.sample(pool, k=random.randint(3, min(10, len(pool))))
+
         for code, desc, severity in sample:
+            used_codes.add(code)
             first   = START_DATE + timedelta(days=random.randint(0, 4),  hours=random.randint(0, 23))
             last    = first + timedelta(hours=random.randint(1, 48))
             resolved = random.choice([True, False, False])   # 33% résolus
@@ -313,6 +436,28 @@ def gen_dtc():
                 "resolved"        : resolved,
                 "occurrences"     : random.randint(1, 25),
             })
+
+    # Guarantee full catalog coverage: every known DTC appears at least once.
+    all_codes = [code for code, _, _ in dtc_catalog]
+    missing_codes = [code for code in all_codes if code not in used_codes]
+    for code in missing_codes:
+        desc, severity = catalog_map.get(code, ("Code défaut OBD-II détecté", "warning"))
+        veh = random.choice(VEHICLES)
+        first = START_DATE + timedelta(days=random.randint(0, DAYS - 1), hours=random.randint(0, 23))
+        last = first + timedelta(hours=random.randint(1, 24))
+        rows.append(
+            {
+                "vehicle_id": veh["vehicle_id"],
+                "plate": veh["plate"],
+                "code": code,
+                "description": desc,
+                "severity": severity,
+                "first_detected": first.strftime("%Y-%m-%d %H:%M:%S"),
+                "last_occurrence": last.strftime("%Y-%m-%d %H:%M:%S"),
+                "resolved": random.choice([True, False]),
+                "occurrences": random.randint(1, 5),
+            }
+        )
     return pd.DataFrame(rows)
 
 
@@ -451,22 +596,24 @@ def apply_rules(row: dict) -> tuple[str, str, int]:
 
     score += max(0, (temp - 90) * 0.6)
     score += max(0, (12.5 - battery) * 7.0)
-    score += random.uniform(-2.5, 2.5)
+    # Wider jitter so scores don't cluster at a single value
+    score += random.uniform(-4.0, 8.0)
     score = int(clamp(score, 0, 100))
 
-    # Planchers de score pour éviter la sous-estimation
+    # Planchers de score — utiliser des plages aléatoires pour disperser
+    # la distribution warning (36-64) plutôt qu'un pic fixe à 36.
     if battery < 11.5:
-        score = max(score, 70)
+        score = max(score, random.randint(70, 86))
     if battery > 15.8:
-        score = max(score, 70)
+        score = max(score, random.randint(70, 86))
     elif battery > 15.5:
-        score = max(score, 36)
+        score = max(score, random.randint(36, 54))
     elif 12.0 <= battery < 12.5:
-        score = max(score, 36)
+        score = max(score, random.randint(36, 52))
     if temp > 99 and temp <= 106:
-        score = max(score, 36)
+        score = max(score, random.randint(36, 56))
     if temp > 106:
-        score = max(score, 72)
+        score = max(score, random.randint(72, 90))
 
     if score >= 65 or (battery < 11.5):
         severity = "critical"
@@ -526,13 +673,63 @@ def rebalance_ai_labels_by_score(
     return balanced
 
 
-def gen_ai_labels(df_telem: pd.DataFrame) -> pd.DataFrame:
+def _dtc_severity_to_num(value: str | None) -> int:
+    val = str(value or "warning").strip().lower()
+    if val == "critical":
+        return 2
+    if val == "warning":
+        return 1
+    return 0
+
+
+def _attach_dtc_labels(ai_subset: pd.DataFrame, dtc_records: pd.DataFrame) -> pd.DataFrame:
+    enriched = ai_subset.copy()
+    enriched["has_active_dtc"] = 0
+    enriched["active_dtc_count"] = 0
+    enriched["max_dtc_severity"] = 0
+
+    if dtc_records.empty:
+        return enriched
+
+    dtc = dtc_records.copy()
+    dtc["first_detected"] = pd.to_datetime(dtc.get("first_detected"), errors="coerce")
+    dtc["last_occurrence"] = pd.to_datetime(dtc.get("last_occurrence"), errors="coerce")
+    dtc["resolved"] = dtc.get("resolved", False).fillna(False).astype(bool)
+    dtc["severity_num"] = dtc.get("severity", "warning").map(_dtc_severity_to_num)
+
+    for vehicle_id, idxs in enriched.groupby("vehicle_id").groups.items():
+        vehicle_dtc = dtc[dtc["vehicle_id"] == vehicle_id]
+        if vehicle_dtc.empty:
+            continue
+
+        for idx in idxs:
+            ts = enriched.at[idx, "ts"]
+            if pd.isna(ts):
+                continue
+
+            started = vehicle_dtc["first_detected"].notna() & (vehicle_dtc["first_detected"] <= ts)
+            still_active = (~vehicle_dtc["resolved"]) | vehicle_dtc["last_occurrence"].isna() | (vehicle_dtc["last_occurrence"] >= ts)
+            active = vehicle_dtc[started & still_active]
+
+            if active.empty:
+                continue
+
+            active_count = int(len(active))
+            enriched.at[idx, "has_active_dtc"] = 1
+            enriched.at[idx, "active_dtc_count"] = active_count
+            enriched.at[idx, "max_dtc_severity"] = int(active["severity_num"].max())
+
+    return enriched
+
+
+def gen_ai_labels(df_telem: pd.DataFrame, df_dtc: pd.DataFrame) -> pd.DataFrame:
     """Échantillonne un volume fixe puis applique les règles métier."""
     if len(df_telem) >= AI_LABELS_TARGET_ROWS:
         subset = df_telem.sample(n=AI_LABELS_TARGET_ROWS, random_state=RANDOM_SEED).copy()
     else:
         subset = df_telem.sample(n=AI_LABELS_TARGET_ROWS, replace=True, random_state=RANDOM_SEED).copy()
     subset = subset.sort_values(["vehicle_id", "ts"]).reset_index(drop=True)
+    subset["ts"] = pd.to_datetime(subset["ts"], errors="coerce")
 
     results = subset.apply(
         lambda row: pd.Series(
@@ -543,11 +740,15 @@ def gen_ai_labels(df_telem: pd.DataFrame) -> pd.DataFrame:
     )
     subset = pd.concat([subset, results], axis=1)
     subset = rebalance_ai_labels_by_score(subset)
+    subset = _attach_dtc_labels(subset, df_dtc)
 
     return subset[[
         "vehicle_id", "plate", "ts",
         "speed", "rpm", "engine_temp", "battery_voltage",
         "fuel_level", "engine_load",
+        "ambient_air_temp", "intake_temp", "odometer",
+        "temp_cpu", "cpu", "gpu",
+        "has_active_dtc", "active_dtc_count", "max_dtc_severity",
         "rule_triggered", "severity", "risk_score",
     ]].reset_index(drop=True)
 
@@ -620,7 +821,7 @@ def main():
     df_logs  = gen_iot_logs()
 
     print("   → ai_labels       …")
-    df_ai    = gen_ai_labels(df_telem)
+    df_ai    = gen_ai_labels(df_telem, df_dtc)
 
     sheets = {
         "telemetry_data" : df_telem,

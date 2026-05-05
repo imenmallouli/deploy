@@ -148,6 +148,7 @@ async def get_insights(
             "predicted_severity": enriched["predicted_severity"],
             "predicted_risk_score": enriched["predicted_risk_score"],
             "insights": enriched["ai_insights"],
+            "active_dtc_events": enriched.get("active_dtc_events", []),
             "predicted_risks": enriched["predicted_risks"],
         }
     except Exception as exc:
@@ -173,6 +174,7 @@ async def get_summary(
             "predicted_severity": enriched["predicted_severity"],
             "predicted_risk_score": enriched["predicted_risk_score"],
             "insights": enriched["ai_insights"],
+            "active_dtc_events": enriched.get("active_dtc_events", []),
             "predicted_risks": enriched["predicted_risks"],
         }
     except Exception as exc:
