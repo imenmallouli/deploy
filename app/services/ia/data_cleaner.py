@@ -13,6 +13,9 @@ NUMERIC_RANGES: dict[str, tuple[float, float]] = {
     "ambient_air_temp": (-20, 60),
     "intake_temp": (-20, 80),
     "odometer": (0, 2_000_000),
+    "temp_cpu": (20, 120),
+    "cpu": (0, 100),
+    "gpu": (0, 100),
     "risk_score": (0, 100),
 }
 
