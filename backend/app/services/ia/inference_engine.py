@@ -89,6 +89,57 @@ class AIInferenceService:
         "cpu",
         "gpu",
     ]
+    MAINTENANCE_KEYS = [
+        "last_oil_change_odometer",
+        "oil_change_interval_km",
+        "last_maintenance_odometer",
+        "maintenance_interval_km",
+        "last_major_parts_change_odometer",
+        "major_parts_interval_km",
+    ]
+
+    @staticmethod
+    def _normalize_maintenance_records(payload: dict[str, Any]) -> list[dict[str, Any]]:
+        raw_records = payload.get("maintenance_records") or []
+        normalized_records: list[dict[str, Any]] = []
+        if not isinstance(raw_records, list):
+            return normalized_records
+
+        for item in raw_records:
+            if not isinstance(item, dict):
+                continue
+
+            component = str(item.get("component") or "").strip().lower()
+            if not component:
+                continue
+
+            try:
+                serviced_at_odometer = float(item.get("serviced_at_odometer")) if item.get("serviced_at_odometer") is not None else None
+            except (TypeError, ValueError):
+                serviced_at_odometer = None
+
+            try:
+                valid_for_km = float(item.get("valid_for_km")) if item.get("valid_for_km") is not None else 3000.0
+            except (TypeError, ValueError):
+                valid_for_km = 3000.0
+
+            resolved_dtc_codes = []
+            for code in item.get("resolved_dtc_codes") or []:
+                code_str = str(code).strip().upper()
+                if code_str:
+                    resolved_dtc_codes.append(code_str)
+
+            normalized_records.append(
+                {
+                    "component": component,
+                    "serviced_at_odometer": serviced_at_odometer,
+                    "valid_for_km": max(0.0, valid_for_km),
+                    "resolved_dtc_codes": resolved_dtc_codes,
+                    "note": str(item.get("note") or "").strip(),
+                }
+            )
+
+        return normalized_records
 
     @staticmethod
     def _infer_payload_dtc_severity(code: str, description: str) -> str:
@@ -152,6 +203,39 @@ class AIInferenceService:
         return events
 
     @staticmethod
+    async def _fetch_maintenance_records_for_vehicle(vehicle_id: int, limit: int = 10) -> list[dict[str, Any]]:
+        """Fetch recent maintenance records from MongoDB for a vehicle.
+        
+        Returns the most recent maintenance records sorted by serviced_at_odometer (descending),
+        which will be used to suppress alerts for already-serviced components.
+        """
+        db = get_mongo_db()
+        cursor = db.maintenance_records.find(
+            {"vehicle_id": vehicle_id}
+        ).sort([("serviced_at_odometer", -1)]).limit(limit)
+
+        docs = await cursor.to_list(length=limit)
+        records: list[dict[str, Any]] = []
+        for doc in docs:
+            doc.pop("_id", None)
+            doc["vehicle_id"] = int(doc.get("vehicle_id") or vehicle_id)
+            
+            # Normalize the record structure to match AIMaintenanceRecord schema
+            normalized_record = {
+                "component": str(doc.get("component") or "").strip().lower(),
+                "serviced_at_odometer": float(doc.get("serviced_at_odometer")) if doc.get("serviced_at_odometer") is not None else None,
+                "valid_for_km": float(doc.get("valid_for_km")) if doc.get("valid_for_km") is not None else 3000.0,
+                "resolved_dtc_codes": [str(code).strip().upper() for code in (doc.get("resolved_dtc_codes") or [])],
+                "note": str(doc.get("note") or "").strip(),
+            }
+            
+            # Only include records that have required fields
+            if normalized_record["component"] and normalized_record["serviced_at_odometer"] is not None:
+                records.append(normalized_record)
+        
+        return records
+
+    @staticmethod
     def _normalize_payload(payload: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(payload)
         normalized["vehicle_id"] = int(normalized.get("vehicle_id") or 0)
@@ -171,6 +255,18 @@ class AIInferenceService:
                 normalized[key] = float(value)
             except (TypeError, ValueError):
                 normalized[key] = None
+
+        for key in AIInferenceService.MAINTENANCE_KEYS:
+            value = normalized.get(key)
+            if value is None:
+                normalized[key] = None
+                continue
+            try:
+                normalized[key] = float(value)
+            except (TypeError, ValueError):
+                normalized[key] = None
+
+        normalized["maintenance_records"] = AIInferenceService._normalize_maintenance_records(payload)
 
         return normalized
 
@@ -282,6 +378,10 @@ class AIInferenceService:
             "predicted_risk_score": predicted_risk_score,
             "confidence": confidence,
             "active_dtc_events": active_dtc_events,
+            "maintenance_context": {
+                key: normalized.get(key) for key in AIInferenceService.MAINTENANCE_KEYS
+            },
+            "maintenance_records": normalized.get("maintenance_records", []),
             "telemetry_snapshot": {
                 key: normalized.get(key) for key in AIInferenceService.SNAPSHOT_KEYS
             },
@@ -391,6 +491,9 @@ class AIInferenceService:
             confidence = round(float(max(probabilities) * 100), 2)
 
         active_dtc_events = await cls._latest_active_dtc_for_vehicle(vehicle_id=normalized["vehicle_id"], limit=5)
+        
+        # Fetch maintenance records from database for this vehicle
+        maintenance_records = await cls._fetch_maintenance_records_for_vehicle(vehicle_id=normalized["vehicle_id"], limit=10)
 
         return {
             "vehicle_id": normalized["vehicle_id"],
@@ -402,6 +505,10 @@ class AIInferenceService:
             "confidence": confidence,
             "telemetry_window_size": len(window) if window else 1,
             "active_dtc_events": active_dtc_events,
+            "maintenance_context": {
+                key: normalized.get(key) for key in AIInferenceService.MAINTENANCE_KEYS
+            },
+            "maintenance_records": maintenance_records,
             "telemetry_snapshot": {
                 key: normalized.get(key) for key in AIInferenceService.SNAPSHOT_KEYS
             },
