@@ -41,6 +41,14 @@ class MaintenanceSuggestion(BaseModel):
     message: str = Field(..., description="Action de maintenance conseillée.")
 
 
+class AIMaintenanceStatus(BaseModel):
+    maintenance_required: bool = Field(..., description="Indique clairement si le vehicule doit passer en maintenance.")
+    maintenance_type: str = Field(..., description="Type de maintenance conseillee: none, preventive, planned ou urgent.")
+    priority: str = Field(..., description="Priorite globale de maintenance: low, medium ou high.")
+    summary: str = Field(..., description="Resume clair de l'etat de maintenance du vehicule.")
+    reasons: list[str] = Field(default_factory=list, description="Principales raisons qui motivent la maintenance.")
+
+
 class AIInsight(BaseModel):
     summary: str = Field(..., description="Résumé global de l'état du véhicule généré à partir de la prédiction.")
     priority: str = Field(..., description="Priorité globale de l'insight: low, medium ou high.")
@@ -69,6 +77,7 @@ class AIPredictResponse(BaseModel):
     telemetry_snapshot: dict = Field(..., description="Instantané des mesures télémétriques utilisées pour l'inférence.")
     active_dtc_events: list[AIDtcEvent] = Field(default_factory=list, description="Liste détaillée des codes défaut actifs pris en compte dans l'analyse.")
     predicted_risks: list[PredictedRiskItem] = Field(default_factory=list, description="Liste des risques identifiés à partir de la prédiction.")
+    maintenance_status: AIMaintenanceStatus = Field(..., description="Statut explicite indiquant si le vehicule a besoin d'une maintenance.")
     maintenance_suggestions: list[MaintenanceSuggestion] = Field(default_factory=list, description="Liste des suggestions de maintenance générées dynamiquement.")
     ai_insights: AIInsight = Field(..., description="Résumé interprétable par l'utilisateur final.")
 
@@ -85,6 +94,7 @@ class AIRecommendationsResponse(BaseModel):
     vehicle_id: int
     predicted_severity: str
     predicted_risk_score: float = Field(ge=0, le=100)
+    maintenance_status: AIMaintenanceStatus
     recommendations: list[MaintenanceSuggestion] = Field(default_factory=list)
 
 
@@ -94,6 +104,7 @@ class AIInsightsResponse(BaseModel):
     predicted_severity: str
     predicted_risk_score: float = Field(ge=0, le=100)
     insights: AIInsight
+    maintenance_status: AIMaintenanceStatus
     active_dtc_events: list[AIDtcEvent] = Field(default_factory=list)
     predicted_risks: list[PredictedRiskItem] = Field(default_factory=list)
 

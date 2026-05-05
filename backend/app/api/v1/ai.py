@@ -123,6 +123,7 @@ async def get_recommendations(
             "vehicle_id": vehicle_id,
             "predicted_severity": enriched["predicted_severity"],
             "predicted_risk_score": enriched["predicted_risk_score"],
+            "maintenance_status": enriched["maintenance_status"],
             "recommendations": enriched["maintenance_suggestions"],
         }
     except Exception as exc:
@@ -148,6 +149,7 @@ async def get_insights(
             "predicted_severity": enriched["predicted_severity"],
             "predicted_risk_score": enriched["predicted_risk_score"],
             "insights": enriched["ai_insights"],
+            "maintenance_status": enriched["maintenance_status"],
             "active_dtc_events": enriched.get("active_dtc_events", []),
             "predicted_risks": enriched["predicted_risks"],
         }
@@ -174,6 +176,7 @@ async def get_summary(
             "predicted_severity": enriched["predicted_severity"],
             "predicted_risk_score": enriched["predicted_risk_score"],
             "insights": enriched["ai_insights"],
+            "maintenance_status": enriched["maintenance_status"],
             "active_dtc_events": enriched.get("active_dtc_events", []),
             "predicted_risks": enriched["predicted_risks"],
         }
