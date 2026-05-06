@@ -64,18 +64,7 @@ async def create_geofence(payload: GeofenceCreate, context: dict = Depends(get_c
     return await OpsService.create_item("geofences", payload.model_dump())
 
 
-@router.put("/geofences/{item_id}")
-async def update_geofence(item_id: str, payload: GeofenceUpdate, context: dict = Depends(get_current_context)):
-    _ = context
-    return await OpsService.update_item("geofences", item_id, payload.model_dump())
-
-
-@router.delete("/geofences/{item_id}")
-async def delete_geofence(item_id: str, context: dict = Depends(get_current_context)):
-    _ = context
-    return await OpsService.delete_item("geofences", item_id)
-
-
+# ✅ FIXED ROUTES FIRST — before /{item_id} parameterized routes
 @router.post("/geofences/check")
 async def check_geofences(payload: GeofenceCheckRequest, context: dict = Depends(get_current_context)):
     _ = context
@@ -128,6 +117,19 @@ async def report_geofence_exit(
     if context["role"] not in ("admin",):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acces refuse")
     return await OpsService.handle_geofence_exit(payload)
+
+
+# ✅ PARAMETERIZED ROUTES LAST — after all fixed routes
+@router.put("/geofences/{item_id}")
+async def update_geofence(item_id: str, payload: GeofenceUpdate, context: dict = Depends(get_current_context)):
+    _ = context
+    return await OpsService.update_item("geofences", item_id, payload.model_dump())
+
+
+@router.delete("/geofences/{item_id}")
+async def delete_geofence(item_id: str, context: dict = Depends(get_current_context)):
+    _ = context
+    return await OpsService.delete_item("geofences", item_id)
 
 
 @router.get("/groups")

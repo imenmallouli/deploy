@@ -263,22 +263,6 @@ class DtcService:
             },
         )
 
-        # Geofence logic stays in backend (Mongo + services), bridge just forwards data.
-        if payload.vehicle_id is not None:
-            gps = DtcService._extract_gps_from_iot_log(payload)
-            if gps:
-                latitude, longitude = gps
-                await OpsService.save_vehicle_position(
-                    vehicle_id=payload.vehicle_id,
-                    latitude=latitude,
-                    longitude=longitude,
-                )
-                await OpsService.check_geofences(
-                    latitude=latitude,
-                    longitude=longitude,
-                    vehicle_id=payload.vehicle_id,
-                )
-
         return {
             "status": "success",
             "message": "Log technique IoT enregistré",
