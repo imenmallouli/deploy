@@ -34,6 +34,20 @@ class DtcEventModel(BaseModel):
         mongo_id = payload.pop("_id", None)
         if mongo_id is not None:
             payload["id"] = str(mongo_id)
+
+        # Simulator writes can store native datetimes in Mongo while API
+        # contracts expect ISO strings.
+        for field in (
+            "first_detected",
+            "last_occurrence",
+            "created_at",
+            "end_date",
+            "resolved_at",
+            "cleared_at",
+        ):
+            value = payload.get(field)
+            if isinstance(value, datetime):
+                payload[field] = value.isoformat() + "Z"
         return cls(**payload)
 
     def to_mongo(self) -> dict[str, Any]:

@@ -30,6 +30,21 @@ type AiPredictedRisk = {
   value?: number | null;
 };
 
+export type MaintenanceRecord = {
+  id: string;
+  vehicle_id: number;
+  component: string;
+  serviced_at_odometer: number;
+  valid_for_km: number;
+  resolved_dtc_codes: string[];
+  note: string;
+  technicien?: string | null;
+  urgency?: string | null;
+  date_intervention?: string | null;
+  created_at?: string;
+  created_by?: number;
+};
+
 export type AiRiskScoreResponse = {
   status: string;
   vehicle_id: number;
@@ -91,6 +106,31 @@ export async function createVehicle(payload: Partial<Vehicle>) {
 export async function getVehicle(vehicleId: number) {
   const { data } = await apiClient.get(`/api/v1/vehicles/${vehicleId}`);
   return data as ApiResult<{ vehicle: Vehicle }>;
+}
+
+export async function listMaintenanceRecords(vehicleId: number) {
+  const { data } = await apiClient.get(`/api/v1/maintenance/${vehicleId}`);
+  return data as ApiResult<{ items: MaintenanceRecord[]; count: number }>;
+}
+
+export async function createMaintenanceRecord(payload: {
+  vehicle_id: number;
+  component: string;
+  serviced_at_odometer?: number;
+  valid_for_km?: number;
+  resolved_dtc_codes?: string[];
+  note?: string;
+  technicien?: string;
+  urgency?: string;
+  date_intervention?: string;
+}) {
+  const { data } = await apiClient.post('/api/v1/maintenance', payload);
+  return data as ApiResult<{ item: MaintenanceRecord }>;
+}
+
+export async function deleteMaintenanceRecord(recordId: string) {
+  const { data } = await apiClient.delete(`/api/v1/maintenance/${recordId}`);
+  return data as ApiResult<Record<string, never>>;
 }
 
 export async function updateVehicle(vehicleId: number, payload: Partial<Vehicle>) {
@@ -407,6 +447,6 @@ export async function getAiRecommendations(vehicleId: number) {
 }
 
 export async function getAiInsights(vehicleId: number) {
-  const { data } = await apiClient.get('/api/v1/ai/insights', { params: { vehicle_id: vehicleId } });
+  const { data } = await apiClient.get('/api/v1/ai/summary', { params: { vehicle_id: vehicleId } });
   return data as AiInsightsResponse;
 }

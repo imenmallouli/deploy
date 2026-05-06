@@ -7,6 +7,7 @@ import {
   getAiRiskScore,
   getDtcHistory,
   getTelemetryHistory,
+  listDtc,
   listDtcByVehicle,
   listVehicles,
   pingDtc,
@@ -370,13 +371,31 @@ export function DtcPage() {
     queryFn: listVehicles,
   });
 
+  const recentDtcQuery = useQuery({
+    queryKey: ['dtc-latest'],
+    queryFn: () => listDtc(500),
+  });
+
+  const hasLoadedDtcBootstrap = recentDtcQuery.isFetched || recentDtcQuery.isError;
+
   useEffect(() => {
-    if (selectedVehicleId !== null) return;
-    const firstVehicleId = vehiclesQuery.data?.items?.[0]?.id;
-    if (firstVehicleId) {
-      setSelectedVehicleId(firstVehicleId);
+    if (selectedVehicleId !== null || !hasLoadedDtcBootstrap) return;
+
+    const vehicles = vehiclesQuery.data?.items ?? [];
+    if (!vehicles.length) return;
+
+    const vehicleIdsWithDtc = (recentDtcQuery.data?.items ?? [])
+      .map((item) => Number(item.vehicle_id))
+      .filter((id) => Number.isFinite(id));
+
+    const preferredVehicle = vehicles.find((vehicle) => vehicleIdsWithDtc.includes(vehicle.id));
+    if (preferredVehicle) {
+      setSelectedVehicleId(preferredVehicle.id);
+      return;
     }
-  }, [selectedVehicleId, vehiclesQuery.data]);
+
+    setSelectedVehicleId(vehicles[0].id);
+  }, [selectedVehicleId, vehiclesQuery.data, recentDtcQuery.data, hasLoadedDtcBootstrap]);
 
   const dtcQuery = useQuery({
     queryKey: ['dtc', selectedVehicleId],
@@ -467,8 +486,14 @@ export function DtcPage() {
   const fromDate = dateFilter ? new Date(dateFilter) : null;
   const hasValidDateRange = !fromDate || !Number.isNaN(fromDate.getTime());
 
+  const dtcItemsSource = useMemo(() => {
+    const byVehicleItems = dtcQuery.data?.items ?? [];
+    if (byVehicleItems.length > 0) return byVehicleItems;
+    return recentDtcQuery.data?.items ?? [];
+  }, [dtcQuery.data, recentDtcQuery.data]);
+
   const rows = useMemo<DtcRow[]>(() => {
-    const items = dtcQuery.data?.items ?? [];
+    const items = dtcItemsSource;
 
     return items
       .filter((item) => {
@@ -494,7 +519,7 @@ export function DtcPage() {
         lastOccurrence: (item as { last_occurrence?: string; created_at?: string }).last_occurrence ?? item.created_at ?? '-',
         count: (item as { occurrence_count?: number }).occurrence_count ?? 1,
       }));
-  }, [dtcQuery.data, hasValidDateRange, fromDate, search]);
+  }, [dtcItemsSource, hasValidDateRange, fromDate, search]);
 
   const selectedVehicle = useMemo(
     () => vehiclesQuery.data?.items?.find((vehicle) => vehicle.id === selectedVehicleId) ?? null,
@@ -673,6 +698,18 @@ export function DtcPage() {
           </div>
 
           <div className="diagnostics-toolbar">
+            <select
+              className="toolbar-input"
+              value={selectedVehicleId ?? ''}
+              onChange={(event) => setSelectedVehicleId(Number(event.target.value))}
+              disabled={!vehiclesQuery.data?.items?.length}
+            >
+              {(vehiclesQuery.data?.items ?? []).map((vehicle) => (
+                <option key={vehicle.id} value={vehicle.id}>
+                  {vehicle.make} {vehicle.model} {vehicle.year} — {vehicle.license_plate}
+                </option>
+              ))}
+            </select>
             <input
               className="toolbar-input"
               placeholder={text.searchCode}
@@ -700,13 +737,12 @@ export function DtcPage() {
                 <th>{text.lastOccurrenceCol}</th>
                 <th>{text.count}</th>
                 <th>{text.state}</th>
-                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="empty-cell">{text.noCode}</td>
+                  <td colSpan={7} className="empty-cell">{text.noCode}</td>
                 </tr>
               )}
               {rows.map((item, index) => (
@@ -718,33 +754,6 @@ export function DtcPage() {
                   <td>{item.lastOccurrence}</td>
                   <td>{item.count}</td>
                   <td>{item.resolved ? 'resolved' : 'active'}</td>
-                  <td className="actions-cell">
-                    <button
-                      className="inline-link-btn"
-                      type="button"
-                      onClick={() => {
-                        const historyKey = item.id ?? item.code ?? item.dtc_code;
-                        if (historyKey) {
-                          setActionMessage('');
-                          setActionError('');
-                          historyMutation.mutate(String(historyKey));
-                        }
-                      }}
-                    >
-                      {text.history}
-                    </button>
-                    <button
-                      className="inline-danger"
-                      type="button"
-                      onClick={() => {
-                        setActionMessage('');
-                        setActionError('');
-                        clearMutation.mutate({ vehicle_id: item.vehicle_id, dtc_code: item.code ?? item.dtc_code });
-                      }}
-                    >
-                      {text.clear}
-                    </button>
-                  </td>
                 </tr>
               ))}
             </tbody>
