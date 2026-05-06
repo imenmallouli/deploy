@@ -6,6 +6,7 @@ from bson import ObjectId
 from app.db.mongodb import get_mongo_db
 from app.db.session import SessionLocal
 from app.models.vehicle import Vehicle
+from app.services.alert_service import AlertService
 from app.services.email_service import EmailService
 
 
@@ -391,6 +392,19 @@ class OpsService:
                     item["transition"] = transition
 
                     if transition == "exit":
+                        # Always create an in-app alert for geofence exit
+                        zone_name = fence.get("name", "Zone")
+                        AlertService.create_alert_system(
+                            vehicle_id=vehicle_id,
+                            type="geofence_exit",
+                            severity="info",
+                            title=f"Sortie de zone : {zone_name}",
+                            message=(
+                                f"Le véhicule a quitté la zone « {zone_name} » "
+                                f"(lat={round(latitude, 5)}, lng={round(longitude, 5)})."
+                            ),
+                        )
+
                         monitoring = await db.geofence_monitoring.find_one(
                             {"geofence_id": geofence_id, "vehicle_ids": vehicle_id, "enabled": {"$ne": False}}
                         )

@@ -2,8 +2,10 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
+from app.db.session import SessionLocal
 from app.models.alert import Alert
 from app.models.fleet import Fleet
+from app.models.user import User  # noqa: F401 – needed for FK resolution (acknowledged_by → users.id)
 from app.models.vehicle import Vehicle
 
 
@@ -125,6 +127,35 @@ class AlertService:
             "acknowledged_by": alert.acknowledged_by,
             "note": alert.note,
         }
+
+    @staticmethod
+    def create_alert_system(
+        vehicle_id: int,
+        type: str,
+        severity: str,
+        title: str,
+        message: str,
+    ):
+        """Create an alert from an internal backend service (no role check)."""
+        db = SessionLocal()
+        try:
+            alert = Alert(
+                vehicle_id=vehicle_id,
+                type=type,
+                severity=severity,
+                title=title,
+                message=message,
+                status="pending",
+            )
+            db.add(alert)
+            db.commit()
+            db.refresh(alert)
+            return AlertService._to_dict(alert)
+        except Exception:
+            db.rollback()
+            return None
+        finally:
+            db.close()
 
     @staticmethod
     def _to_dict(alert: Alert):

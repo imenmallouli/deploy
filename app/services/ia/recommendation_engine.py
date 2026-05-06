@@ -285,12 +285,12 @@ class RecommendationEngine:
         elif _has_critical_rule:
             risk_score = max(risk_score, 70.0)
         elif _has_warning_rule:
-            risk_score = max(risk_score, 36.0)
+            risk_score = max(risk_score, 40.0)
 
         # Promote severity if rule-corrected score crosses thresholds
         if risk_score >= 70:
             severity = "critical"
-        elif risk_score >= 35 and severity == "info":
+        elif risk_score >= 40 and severity == "info":
             severity = "warning"
 
         # Build override metadata after suppression-aware post-processing.
@@ -365,11 +365,10 @@ class RecommendationEngine:
 
             next_action = f"Anomalies prioritaires: {' | '.join(key_messages)}" if key_messages else ""
         else:
-            # If every alert has been suppressed because it was already treated,
-            # never expose a CRITICAL/70+ result with no visible risk.
-            if suppressed_alerts:
-                severity = "info"
-                risk_score = min(risk_score, 30.0)
+            # Coherence guardrail: with no visible anomalies, never expose
+            # warning/critical severity. Keep score in a low-safe range.
+            severity = "info"
+            risk_score = min(risk_score, 30.0)
             priority = "low"
             summary = "Aucune anomalie détectée."
             next_action = ""
@@ -383,9 +382,11 @@ class RecommendationEngine:
             elif _has_critical_rule:
                 triggered.append("critical_floor_70")
             elif _has_warning_rule:
-                triggered.append("warning_floor_36")
+                triggered.append("warning_floor_40")
             if suppressed_alerts and not predicted_risks:
                 triggered.append("all_alerts_suppressed_force_info")
+            elif not predicted_risks:
+                triggered.append("no_visible_risk_force_info")
             if _severity_changed:
                 triggered.append(f"severity_promoted_{ml_severity}_to_{severity}")
             rule_override = {
