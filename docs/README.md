@@ -99,3 +99,89 @@ npm run dev
 
 # test model
 "/c/auto diagnostic platform/backend/.venv/Scripts/python.exe" "scripts/test_model.py"
+
+
+
+# lancer test 
+## Démarrer les conteneurs
+cd "/c/auto diagnostic platform/backend"
+docker compose up -d
+## Copier les scripts de test dans le backend container à refaire après rebuild/recreate
+cd "/c/auto diagnostic platform"
+
+docker cp backend/scripts/simulate_live_vehicle_stream.py adp-backend:/app/scripts/
+docker cp backend/scripts/run_vehicle11_2min_stream.py adp-backend:/app/scripts/
+
+ ## Lancer le stream de test (vehicle 11) en arrière-plan
+
+cd "/c/auto diagnostic platform"
+
+docker exec -d adp-backend sh -lc "nohup python scripts/run_vehicle11_2min_stream.py >> /tmp/stream.log 2>&1 &"
+ ## Vérifier que le test tourne
+ cd "/c/auto diagnostic platform"
+
+docker exec adp-backend sh -lc "tail -n 20 /tmp/stream.log"
+
+## Vérifier que des DTC existent pour vehicle 11
+cd "/c/auto diagnostic platform"
+
+docker exec adp-mongo mongosh mallouliauto --quiet --eval "db.dtc_events.countDocuments({vehicle_id:11})"
+
+## Arrêter le test
+cd "/c/auto diagnostic platform"
+
+docker exec adp-backend pkill -f run_vehicle11_2min_stream.py
+
+
+# 1. Aller au répertoire du projet
+cd /c/auto\ diagnostic\ platform
+
+# 2. Démarrer les services (si pas déjà lancés)
+docker compose -f backend/docker-compose.yml up -d
+
+# 3. Attendre 10 secondes que les services démarrent
+sleep 10
+
+# 4. Copier les scripts du simulateur dans le conteneur
+docker cp backend/scripts/simulate_live_vehicle_stream.py adp-backend:/app/scripts/
+docker cp backend/scripts/run_vehicle11_2min_stream.py adp-backend:/app/scripts/
+
+# 5. Lancer le flux de données EN ARRIÈRE-PLAN
+docker exec -d adp-backend sh -lc "nohup python scripts/run_vehicle11_2min_stream.py >> /tmp/stream.log 2>&1 &"
+
+# 6. Attendre 5 secondes, puis voir les logs du flux
+sleep 5
+docker exec adp-backend sh -lc "tail -n 30 /tmp/stream.log"
+
+
+
+# Vérifier les DTC
+docker exec adp-mongo mongosh mallouliauto --quiet --eval "db.dtc_events.countDocuments({vehicle_id:11})"
+
+# Vérifier les alertes
+docker exec adp-postgres psql -U autopi_user -d mallouliauto -c "SELECT COUNT(*) FROM alerts WHERE vehicle_id = 11;"
+
+# Vérifier la télémétrie
+docker exec adp-mongo mongosh mallouliauto --quiet --eval "db.telemetry_data.countDocuments({vehicle_id:11})"
+
+
+# Vérifier les DTC
+docker exec adp-mongo mongosh mallouliauto --quiet --eval "db.dtc_events.countDocuments({vehicle_id:11})"
+
+# Vérifier les alertes
+docker exec adp-postgres psql -U autopi_user -d mallouliauto -c "SELECT COUNT(*) FROM alerts WHERE vehicle_id = 11;"
+
+# Vérifier la télémétrie
+docker exec adp-mongo mongosh mallouliauto --quiet --eval "db.telemetry_data.countDocuments({vehicle_id:11})"
+
+# Vérifier les DTC
+docker exec adp-mongo mongosh mallouliauto --quiet --eval "db.dtc_events.countDocuments({vehicle_id:11})"
+
+# Vérifier les alertes
+docker exec adp-postgres psql -U autopi_user -d mallouliauto -c "SELECT COUNT(*) FROM alerts WHERE vehicle_id = 11;"
+
+# Vérifier la télémétrie
+docker exec adp-mongo mongosh mallouliauto --quiet --eval "db.telemetry_data.countDocuments({vehicle_id:11})"
+
+# Arrêter le test
+docker exec adp-backend sh -lc "pkill -f run_vehicle11_2min_stream.py"
