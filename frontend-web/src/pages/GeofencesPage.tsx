@@ -38,6 +38,8 @@ export function GeofencesPage() {
   const [drawnPolygon, setDrawnPolygon] = useState<number[][]>([]);
   const [createError, setCreateError] = useState('');
   const [createFeedback, setCreateFeedback] = useState('');
+  const [isLocatingMain, setIsLocatingMain] = useState(false);
+  const [isLocatingModal, setIsLocatingModal] = useState(false);
 
   const [selectedGeofenceId, setSelectedGeofenceId] = useState('');
   const [selectedVehicles, setSelectedVehicles] = useState<number[]>([]);
@@ -78,9 +80,10 @@ export function GeofencesPage() {
     vehicleLayerRef.current = vehicleLayer;
 
     // Auto-locate user on load with real-time updates
+    let watchId: number | null = null;
     if (navigator.geolocation) {
       const geoOptions = { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 };
-      navigator.geolocation.watchPosition(
+      watchId = navigator.geolocation.watchPosition(
         (pos) => {
           const { latitude, longitude } = pos.coords;
           map.setView([latitude, longitude], 15);
@@ -96,12 +99,23 @@ export function GeofencesPage() {
             }).bindPopup('My location').addTo(map);
           }
         },
-        () => { /* permission denied or unavailable – keep default view */ },
+        (error) => {
+          console.error('Geolocation error:', error.message);
+          if (error.code === 1) {
+            alert('❌ Permission refusée. Veuillez autoriser la localisation dans les paramètres du navigateur.');
+          }
+        },
         geoOptions
       );
+    } else {
+      alert('⚠️ Géolocalisation non supportée par votre navigateur.');
     }
 
     return () => {
+      // ✅ FIX BUG 4: Cleanup watchPosition to prevent memory leak
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+      }
       map.remove();
       mapRef.current = null;
     };
@@ -164,7 +178,7 @@ export function GeofencesPage() {
         // Force map to recalculate size
         setTimeout(() => {
           map.invalidateSize();
-        }, 200);
+        }, 400); // ✅ FIX BUG 5: Increased from 200ms to 400ms to ensure CSS animation completes
       } catch (err) {
         console.error('Error initializing modal map:', err);
       }
@@ -297,6 +311,81 @@ export function GeofencesPage() {
     );
   };
 
+  const centerToCurrentLocation = (
+    map: L.Map | null,
+    markerRef: React.MutableRefObject<L.CircleMarker | null>,
+    popupLabel: string,
+    setLoading: (loading: boolean) => void
+  ) => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by this browser.');
+      return;
+    }
+    if (!map) {
+      alert('Map is still loading. Please try again in a second.');
+      return;
+    }
+
+    setLoading(true);
+
+    const applyPosition = (pos: GeolocationPosition) => {
+      const { latitude, longitude } = pos.coords;
+      map.setView([latitude, longitude], 16);
+
+      if (markerRef.current) {
+        markerRef.current.setLatLng([latitude, longitude]);
+      } else {
+        markerRef.current = L.circleMarker([latitude, longitude], {
+          radius: 8,
+          color: '#1a56db',
+          fillColor: '#3b82f6',
+          fillOpacity: 0.9,
+          weight: 2,
+        }).bindPopup(popupLabel).addTo(map);
+      }
+
+      markerRef.current.bindPopup(`${popupLabel}<br/>Accuracy: ~${Math.round(pos.coords.accuracy)}m`);
+      setLoading(false);
+    };
+
+    const fallbackLocate = () => {
+      navigator.geolocation.getCurrentPosition(
+        applyPosition,
+        () => {
+          alert('Unable to retrieve your location. Check GPS/permission and try again.');
+          setLoading(false);
+        },
+        {
+          enableHighAccuracy: false,
+          timeout: 25000,
+          maximumAge: 60000,
+        }
+      );
+    };
+
+    navigator.geolocation.getCurrentPosition(
+      applyPosition,
+      (error) => {
+        if (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE) {
+          fallbackLocate();
+          return;
+        }
+
+        if (error.code === error.PERMISSION_DENIED) {
+          alert('Permission denied. Enable location for this site in browser settings.');
+        } else {
+          alert('Unable to retrieve your location.');
+        }
+        setLoading(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 30000,
+        maximumAge: 0,
+      }
+    );
+  };
+
   const handleSetupMonitoring = () => {
     setSetupError('');
     if (!selectedGeofenceId) {
@@ -354,30 +443,11 @@ export function GeofencesPage() {
             <button
               className="btn-secondary"
               onClick={() => {
-                if (!navigator.geolocation || !mapRef.current) return;
-                const geoOptions = { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 };
-                navigator.geolocation.getCurrentPosition(
-                  (pos) => {
-                    const { latitude, longitude } = pos.coords;
-                    mapRef.current!.setView([latitude, longitude], 15);
-                    if (userMarkerRef.current) {
-                      userMarkerRef.current.setLatLng([latitude, longitude]);
-                    } else {
-                      userMarkerRef.current = L.circleMarker([latitude, longitude], {
-                        radius: 8,
-                        color: '#1a56db',
-                        fillColor: '#3b82f6',
-                        fillOpacity: 0.9,
-                        weight: 2,
-                      }).bindPopup('My location').addTo(mapRef.current!);
-                    }
-                  },
-                  () => alert('Unable to get your location.'),
-                  geoOptions
-                );
+                centerToCurrentLocation(mapRef.current, userMarkerRef, 'My location', setIsLocatingMain);
               }}
+              disabled={isLocatingMain}
             >
-              📍 My Location
+              {isLocatingMain ? 'Locating...' : '📍 My Location'}
             </button>
           </div>
         </div>
@@ -454,31 +524,12 @@ Create a geofence</h3>
                   <button
                     className="btn-secondary"
                     onClick={() => {
-                      if (!navigator.geolocation || !modalMapRef.current) return;
-                      const geoOptions = { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 };
-                      navigator.geolocation.getCurrentPosition(
-                        (pos) => {
-                          const { latitude, longitude } = pos.coords;
-                          modalMapRef.current!.setView([latitude, longitude], 15);
-                          if (modalUserMarkerRef.current) {
-                            modalUserMarkerRef.current.setLatLng([latitude, longitude]);
-                          } else {
-                            modalUserMarkerRef.current = L.circleMarker([latitude, longitude], {
-                              radius: 8,
-                              color: '#1a56db',
-                              fillColor: '#3b82f6',
-                              fillOpacity: 0.9,
-                              weight: 2,
-                            }).bindPopup('Ma localisation').addTo(modalMapRef.current!);
-                          }
-                        },
-                        () => alert('Unable to get your location.'),
-                        geoOptions
-                      );
+                      centerToCurrentLocation(modalMapRef.current, modalUserMarkerRef, 'Ma localisation', setIsLocatingModal);
                     }}
+                    disabled={isLocatingModal}
                     style={{ fontSize: 12, padding: '6px 12px' }}
                   >
-                    📍 Ma localisation
+                    {isLocatingModal ? 'Locating...' : '📍 Ma localisation'}
                   </button>
                 </div>
                 <div

@@ -31,8 +31,25 @@ export function LoginPage() {
     },
     onError: (error: unknown) => {
       if (error instanceof AxiosError) {
-        const apiData = error.response?.data as { detail?: string; message?: string } | undefined;
-        setError(apiData?.detail ?? apiData?.message ?? error.message ?? t('auth.login.unable'));
+        const apiData = error.response?.data as { detail?: unknown; message?: unknown } | undefined;
+        const detail = apiData?.detail;
+        const message = apiData?.message;
+
+        const resolveText = (value: unknown): string | null => {
+          if (typeof value === 'string' && value.trim()) {
+            return value;
+          }
+          if (Array.isArray(value)) {
+            const joined = value
+              .map((entry) => (typeof entry === 'string' ? entry : (entry as { msg?: unknown })?.msg))
+              .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+              .join(' | ');
+            return joined || null;
+          }
+          return null;
+        };
+
+        setError(resolveText(detail) ?? resolveText(message) ?? error.message ?? t('auth.login.unable'));
         return;
       }
       setError(t('auth.login.checkBackend'));

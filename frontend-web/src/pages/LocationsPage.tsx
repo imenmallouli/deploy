@@ -70,6 +70,7 @@ export function LocationsPage() {
   const [createError, setCreateError] = useState('');
   const [createSuccess, setCreateSuccess] = useState('');
   const [locationError, setLocationError] = useState('');
+  const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [visibleColumns] = useState({
     name: true,
@@ -186,6 +187,7 @@ export function LocationsPage() {
       (position) => {
         setLatitudeInput(position.coords.latitude.toFixed(6));
         setLongitudeInput(position.coords.longitude.toFixed(6));
+        setLocationAccuracy(Math.round(position.coords.accuracy));
         setIsLocating(false);
       },
       (error) => {
@@ -366,6 +368,9 @@ export function LocationsPage() {
 
         {createError && <p className="form-error">{createError}</p>}
         {locationError && <p className="form-error">{locationError}</p>}
+        {locationAccuracy !== null && (
+          <p className="muted-note">📍 Location accuracy: ~{locationAccuracy}m {locationAccuracy > 100 ? '(WiFi/IP — limited accuracy on PC)' : '(good)'}</p>
+        )}
         {createSuccess && <p className="muted-note">{createSuccess}</p>}
 
         <table className="vehicles-table">
