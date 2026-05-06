@@ -1,4 +1,4 @@
-"""
+﻿"""
 test_model.py  — Teste le modèle IA sur plusieurs scénarios télémétrie + DTC + maintenance.
 
 Usage:

@@ -41,7 +41,6 @@ export function GeofencesPage() {
 
   const [selectedGeofenceId, setSelectedGeofenceId] = useState('');
   const [selectedVehicles, setSelectedVehicles] = useState<number[]>([]);
-  const [notificationEmail, setNotificationEmail] = useState('');
   const [setupError, setSetupError] = useState('');
   const [setupFeedback, setSetupFeedback] = useState('');
 
@@ -78,22 +77,27 @@ export function GeofencesPage() {
     const vehicleLayer = L.layerGroup().addTo(map);
     vehicleLayerRef.current = vehicleLayer;
 
-    // Auto-locate user on load
+    // Auto-locate user on load with real-time updates
     if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
+      const geoOptions = { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 };
+      navigator.geolocation.watchPosition(
         (pos) => {
           const { latitude, longitude } = pos.coords;
           map.setView([latitude, longitude], 15);
-          const marker = L.circleMarker([latitude, longitude], {
-            radius: 8,
-            color: '#1a56db',
-            fillColor: '#3b82f6',
-            fillOpacity: 0.9,
-            weight: 2,
-          }).bindPopup('My location').addTo(map);
-          userMarkerRef.current = marker;
+          if (userMarkerRef.current) {
+            userMarkerRef.current.setLatLng([latitude, longitude]);
+          } else {
+            userMarkerRef.current = L.circleMarker([latitude, longitude], {
+              radius: 8,
+              color: '#1a56db',
+              fillColor: '#3b82f6',
+              fillOpacity: 0.9,
+              weight: 2,
+            }).bindPopup('My location').addTo(map);
+          }
         },
-        () => { /* permission denied or unavailable – keep default view */ }
+        () => { /* permission denied or unavailable – keep default view */ },
+        geoOptions
       );
     }
 
@@ -166,7 +170,13 @@ export function GeofencesPage() {
       }
     }, 180);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      if (modalMapRef.current) {
+        modalMapRef.current.remove();
+        modalMapRef.current = null;
+      }
+    };
   }, [showCreateModal]);
 
   // Sync geofences on main map
@@ -210,45 +220,6 @@ export function GeofencesPage() {
     });
   }, [vehiclePositionsQuery.data, vehiclesQuery.data]);
 
-  useEffect(() => {
-    const geofenceLayer = geofenceLayerRef.current;
-    if (!geofenceLayer) return;
-
-    geofenceLayer.clearLayers();
-    const geofences = geofencesQuery.data?.items ?? [];
-    geofences.forEach((g) => {
-      if (g.polygon && g.polygon.length >= 3) {
-        L.polygon(g.polygon as [number, number][], {
-          color: '#1465c0',
-          weight: 2,
-          fillOpacity: 0.2,
-        })
-          .bindPopup(`<strong>${g.name}</strong>`)
-          .addTo(geofenceLayer);
-      }
-    });
-  }, [geofencesQuery.data]);
-
-  useEffect(() => {
-    const vehicleLayer = vehicleLayerRef.current;
-    if (!vehicleLayer) return;
-
-    vehicleLayer.clearLayers();
-    const positions = vehiclePositionsQuery.data?.items ?? [];
-    positions.forEach((p) => {
-      const vehicle = vehiclesQuery.data?.items?.find((v) => v.id === p.vehicle_id);
-      const plateLabel = vehicle?.license_plate ? ` · ${vehicle.license_plate}` : '';
-      L.circleMarker([p.latitude, p.longitude], {
-        radius: 6,
-        color: '#0f8c4a',
-        fillColor: '#20bf6b',
-        fillOpacity: 0.9,
-      })
-        .bindPopup(`<strong>Vehicle ${p.vehicle_id}${plateLabel}</strong><br/>${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}`)
-        .addTo(vehicleLayer);
-    });
-  }, [vehiclePositionsQuery.data, vehiclesQuery.data]);
-
   const createMutation = useMutation({
     mutationFn: createGeofence,
     onSuccess: () => {
@@ -270,7 +241,6 @@ export function GeofencesPage() {
     mutationFn: setupGeofenceMonitoring,
     onSuccess: () => {
       setSelectedVehicles([]);
-      setNotificationEmail('');
       setSetupError('');
       setSetupFeedback('Monitoring sauvegarde avec succes.');
       setTimeout(() => setSetupFeedback(''), 3000);
@@ -337,15 +307,10 @@ export function GeofencesPage() {
       setSetupError('Selectionnez au moins un vehicule.');
       return;
     }
-    if (!notificationEmail.includes('@')) {
-      setSetupError('Entrez un email valide.');
-      return;
-    }
-
     setupMutation.mutate({
       geofence_id: selectedGeofenceId,
       vehicle_ids: selectedVehicles,
-      notification_email: notificationEmail.trim(),
+      notification_email: '',
     });
   };
 
@@ -371,12 +336,12 @@ export function GeofencesPage() {
   const vehicles = vehiclesQuery.data?.items ?? [];
   const polygonForCreate = drawnPolygon.length > 0 ? drawnPolygon : extractDrawnPolygons();
   const isCreateFormValid = zoneName.trim().length > 0 && polygonForCreate.length >= 3;
-  const isMonitoringFormValid = Boolean(selectedGeofenceId) && selectedVehicles.length > 0 && notificationEmail.includes('@');
+  const isMonitoringFormValid = Boolean(selectedGeofenceId) && selectedVehicles.length > 0;
 
   return (
     <section>
       <h2>Geofences</h2>
-      <p className="subtitle">Draw your area on the map and then configure the notification email.</p>
+      <p className="subtitle">Dessinez une zone sur la carte — une alerte in-app sera déclenchée automatiquement à chaque sortie de zone.</p>
 
       {/* MAIN PAGE MAP */}
       <div className="panel table-shell" style={{ marginBottom: 16 }}>
@@ -390,6 +355,7 @@ export function GeofencesPage() {
               className="btn-secondary"
               onClick={() => {
                 if (!navigator.geolocation || !mapRef.current) return;
+                const geoOptions = { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 };
                 navigator.geolocation.getCurrentPosition(
                   (pos) => {
                     const { latitude, longitude } = pos.coords;
@@ -406,7 +372,8 @@ export function GeofencesPage() {
                       }).bindPopup('My location').addTo(mapRef.current!);
                     }
                   },
-                  () => alert('Unable to get your location.')
+                  () => alert('Unable to get your location.'),
+                  geoOptions
                 );
               }}
             >
@@ -488,6 +455,7 @@ Create a geofence</h3>
                     className="btn-secondary"
                     onClick={() => {
                       if (!navigator.geolocation || !modalMapRef.current) return;
+                      const geoOptions = { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 };
                       navigator.geolocation.getCurrentPosition(
                         (pos) => {
                           const { latitude, longitude } = pos.coords;
@@ -504,7 +472,8 @@ Create a geofence</h3>
                             }).bindPopup('Ma localisation').addTo(modalMapRef.current!);
                           }
                         },
-                        () => alert('Unable to get your location.')
+                        () => alert('Unable to get your location.'),
+                        geoOptions
                       );
                     }}
                     style={{ fontSize: 12, padding: '6px 12px' }}
@@ -561,7 +530,7 @@ Create a geofence</h3>
 
             {/* SECTION 2: MONITORING */}
             <div style={{ marginBottom: 24, paddingBottom: 24, borderBottom: '1px solid #eee' }}>
-              <h3 style={{ marginTop: 0, marginBottom: 12 }}>Monitoring and email</h3>
+              <h3 style={{ marginTop: 0, marginBottom: 12 }}>Monitoring — alertes in-app</h3>
               <div className="toolbar-row" style={{ flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
                 <select
                   className="toolbar-input"
@@ -576,14 +545,6 @@ Create a geofence</h3>
                     </option>
                   ))}
                 </select>
-                <input
-                  className="toolbar-input"
-                  placeholder="Email notification"
-                  value={notificationEmail}
-                  onChange={(e) => setNotificationEmail(e.target.value)}
-                  type="email"
-                  style={{ flex: '1 1 240px' }}
-                />
                 <button
                   className="btn-primary"
                   onClick={handleSetupMonitoring}
@@ -605,7 +566,7 @@ Create a geofence</h3>
 
               {!selectedGeofenceId && (
                 <p className="muted-note" style={{ marginTop: 0, marginBottom: 10 }}>
-                 Geofencing selection is required to activate email monitoring.
+                 Sélectionnez une zone pour activer le monitoring. Les alertes in-app sont déclenchées automatiquement à chaque sortie de zone.
                 </p>
               )}
 
