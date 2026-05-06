@@ -326,18 +326,18 @@ export function VehicleDetailsPage() {
       </div>
 
       {/* ── Fiche d'Intervention ── */}
-      <div style={{ background: '#141928', borderRadius: 16, padding: 24, marginTop: 20 }}>
+      <div style={{ background: '#f6f8fb', border: '1px solid #b8cfee', borderRadius: 16, padding: 24, marginTop: 20 }}>
         {/* Header */}
-        <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#6b7fa3', letterSpacing: '.08em', textTransform: 'uppercase' }}>
+        <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#4f6a90', letterSpacing: '.08em', textTransform: 'uppercase' }}>
           🔧 FICHE D'INTERVENTION
         </p>
-        <p style={{ margin: '0 0 20px', fontSize: 13, color: '#4a5a7a' }}>
+        <p style={{ margin: '0 0 20px', fontSize: 13, color: '#4a6b90' }}>
           Enregistrez l'intervention réalisée. L'IA supprimera les alertes liées.
         </p>
 
         {/* TYPE D'INTERVENTION */}
-        <div style={{ background: '#1e2538', borderRadius: 12, padding: '16px 20px', marginBottom: 12 }}>
-          <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 700, color: '#6b7fa3', letterSpacing: '.08em', textTransform: 'uppercase' }}>
+        <div style={{ background: '#edf5ff', border: '1px solid #c8ddff', borderRadius: 12, padding: '16px 20px', marginBottom: 12 }}>
+          <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 700, color: '#4f6a90', letterSpacing: '.08em', textTransform: 'uppercase' }}>
             ⚙ TYPE D'INTERVENTION
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -353,9 +353,9 @@ export function VehicleDetailsPage() {
                   style={{
                     padding: '8px 16px',
                     borderRadius: 999,
-                    border: isSelected ? 'none' : '1px solid #2d3e5a',
-                    background: isSelected ? '#e2e8f0' : 'transparent',
-                    color: isSelected ? '#141928' : '#8898aa',
+                    border: isSelected ? '1px solid #7fb4ff' : '1px solid #b8cfee',
+                    background: isSelected ? '#dcebff' : '#ffffff',
+                    color: isSelected ? '#0f4dbd' : '#4a6b90',
                     fontSize: 13,
                     fontWeight: isSelected ? 700 : 400,
                     cursor: 'pointer',
@@ -370,14 +370,14 @@ export function VehicleDetailsPage() {
         </div>
 
         {/* CODES DTC RÉSOLUS */}
-        <div style={{ background: '#1e2538', borderRadius: 12, padding: '16px 20px', marginBottom: 12 }}>
-          <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 700, color: '#6b7fa3', letterSpacing: '.08em', textTransform: 'uppercase' }}>
+        <div style={{ background: '#edf5ff', border: '1px solid #c8ddff', borderRadius: 12, padding: '16px 20px', marginBottom: 12 }}>
+          <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 700, color: '#4f6a90', letterSpacing: '.08em', textTransform: 'uppercase' }}>
             ⚠ CODES DTC RÉSOLUS
           </p>
           <div style={{ display: 'flex', gap: 8 }}>
             <input
               type="text"
-              style={{ flex: 1, background: '#12172a', border: '1px solid #2d3e5a', borderRadius: 8, padding: '10px 14px', color: '#cbd5e1', fontSize: 14, outline: 'none' }}
+              style={{ flex: 1, background: '#ffffff', border: '1px solid #b8cfee', borderRadius: 8, padding: '10px 14px', color: '#0f2f57', fontSize: 14, outline: 'none' }}
               placeholder="Ex: P0300, P0171..."
               value={taskDtcInput}
               onChange={(e) => setTaskDtcInput(e.target.value)}
@@ -393,7 +393,7 @@ export function VehicleDetailsPage() {
             />
             <button
               type="button"
-              style={{ background: '#e2e8f0', color: '#141928', border: 'none', borderRadius: 8, padding: '10px 18px', fontWeight: 700, cursor: 'pointer', fontSize: 14, whiteSpace: 'nowrap' }}
+              style={{ background: '#dcebff', color: '#0f4dbd', border: '1px solid #7fb4ff', borderRadius: 8, padding: '10px 18px', fontWeight: 700, cursor: 'pointer', fontSize: 14, whiteSpace: 'nowrap' }}
               onMouseDown={(e) => {
                 e.preventDefault(); // prevent input blur before click fires
                 const input = e.currentTarget.previousElementSibling as HTMLInputElement | null;
@@ -408,9 +408,9 @@ export function VehicleDetailsPage() {
           {taskDtcCodes.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
               {taskDtcCodes.map((code) => (
-                <span key={code} style={{ background: '#2d3e5a', color: '#cbd5e1', borderRadius: 6, padding: '4px 10px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span key={code} style={{ background: '#dcebff', color: '#0f2f57', border: '1px solid #b8cfee', borderRadius: 6, padding: '4px 10px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
                   {code}
-                  <button type="button" onClick={() => setTaskDtcCodes((prev) => prev.filter((c) => c !== code))} style={{ background: 'none', border: 'none', color: '#8898aa', cursor: 'pointer', padding: 0, fontSize: 16, lineHeight: 1 }}>×</button>
+                  <button type="button" onClick={() => setTaskDtcCodes((prev) => prev.filter((c) => c !== code))} style={{ background: 'none', border: 'none', color: '#4a6b90', cursor: 'pointer', padding: 0, fontSize: 16, lineHeight: 1 }}>×</button>
                 </span>
               ))}
             </div>
@@ -418,19 +418,19 @@ export function VehicleDetailsPage() {
         </div>
 
         {/* DÉTAIL DE L'INTERVENTION */}
-        <div style={{ background: '#1e2538', borderRadius: 12, padding: '16px 20px', marginBottom: 12 }}>
-          <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 700, color: '#6b7fa3', letterSpacing: '.08em', textTransform: 'uppercase' }}>
+        <div style={{ background: '#edf5ff', border: '1px solid #c8ddff', borderRadius: 12, padding: '16px 20px', marginBottom: 12 }}>
+          <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 700, color: '#4f6a90', letterSpacing: '.08em', textTransform: 'uppercase' }}>
             📋 DÉTAIL DE L'INTERVENTION
           </p>
-          <p style={{ margin: '0 0 8px', fontSize: 13, color: '#8898aa' }}>Description des travaux</p>
+          <p style={{ margin: '0 0 8px', fontSize: 13, color: '#4a6b90' }}>Description des travaux</p>
           <textarea
             rows={3}
             placeholder="Ex: Vidange moteur avec huile 5W40, remplacement filtre à huile, nettoyage cache culbuteurs..."
             value={taskNote}
             onChange={(e) => setTaskNote(e.target.value)}
-            style={{ width: '100%', background: '#12172a', border: '1px solid #2d3e5a', borderRadius: 8, padding: '10px 14px', color: '#cbd5e1', fontSize: 14, resize: 'vertical', boxSizing: 'border-box', outline: 'none' }}
+            style={{ width: '100%', background: '#ffffff', border: '1px solid #b8cfee', borderRadius: 8, padding: '10px 14px', color: '#0f2f57', fontSize: 14, resize: 'vertical', boxSizing: 'border-box', outline: 'none' }}
           />
-          <p style={{ margin: '14px 0 8px', fontSize: 13, color: '#8898aa' }}>Urgence / Criticité</p>
+          <p style={{ margin: '14px 0 8px', fontSize: 13, color: '#4a6b90' }}>Urgence / Criticité</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
             {([
               { key: 'routine'   as UrgencyLevel, label: '✓ Routine'    },
@@ -444,9 +444,9 @@ export function VehicleDetailsPage() {
                 style={{
                   padding: '10px',
                   borderRadius: 8,
-                  border: `1px solid ${taskUrgency === u.key ? '#e2e8f0' : '#2d3e5a'}`,
-                  background: taskUrgency === u.key ? 'rgba(226,232,240,.12)' : 'transparent',
-                  color: taskUrgency === u.key ? '#e2e8f0' : '#8898aa',
+                  border: `1px solid ${taskUrgency === u.key ? '#7fb4ff' : '#b8cfee'}`,
+                  background: taskUrgency === u.key ? '#dcebff' : '#ffffff',
+                  color: taskUrgency === u.key ? '#0f4dbd' : '#4a6b90',
                   cursor: 'pointer',
                   fontSize: 14,
                   fontWeight: taskUrgency === u.key ? 700 : 400,
@@ -461,26 +461,26 @@ export function VehicleDetailsPage() {
 
         {/* TECHNICIEN + DATE */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-          <div style={{ background: '#1e2538', borderRadius: 12, padding: '16px 20px' }}>
-            <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: '#6b7fa3', letterSpacing: '.08em', textTransform: 'uppercase' }}>
+          <div style={{ background: '#edf5ff', border: '1px solid #c8ddff', borderRadius: 12, padding: '16px 20px' }}>
+            <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: '#4f6a90', letterSpacing: '.08em', textTransform: 'uppercase' }}>
               👤 TECHNICIEN
             </p>
             <input
               placeholder="Nom du mécanicien"
               value={taskTechnicien}
               onChange={(e) => setTaskTechnicien(e.target.value)}
-              style={{ width: '100%', background: '#12172a', border: '1px solid #2d3e5a', borderRadius: 8, padding: '10px 14px', color: '#cbd5e1', fontSize: 14, boxSizing: 'border-box', outline: 'none' }}
+              style={{ width: '100%', background: '#ffffff', border: '1px solid #b8cfee', borderRadius: 8, padding: '10px 14px', color: '#0f2f57', fontSize: 14, boxSizing: 'border-box', outline: 'none' }}
             />
           </div>
-          <div style={{ background: '#1e2538', borderRadius: 12, padding: '16px 20px' }}>
-            <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: '#6b7fa3', letterSpacing: '.08em', textTransform: 'uppercase' }}>
+          <div style={{ background: '#edf5ff', border: '1px solid #c8ddff', borderRadius: 12, padding: '16px 20px' }}>
+            <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: '#4f6a90', letterSpacing: '.08em', textTransform: 'uppercase' }}>
               📅 DATE D'INTERVENTION
             </p>
             <input
               type="date"
               value={taskDate}
               onChange={(e) => setTaskDate(e.target.value)}
-              style={{ width: '100%', background: '#12172a', border: '1px solid #2d3e5a', borderRadius: 8, padding: '10px 14px', color: '#cbd5e1', fontSize: 14, boxSizing: 'border-box', outline: 'none' }}
+              style={{ width: '100%', background: '#ffffff', border: '1px solid #b8cfee', borderRadius: 8, padding: '10px 14px', color: '#0f2f57', fontSize: 14, boxSizing: 'border-box', outline: 'none' }}
             />
           </div>
         </div>
@@ -497,10 +497,10 @@ export function VehicleDetailsPage() {
           style={{
             width: '100%',
             padding: '14px',
-            background: '#1e2538',
-            border: '1px solid #2d3e5a',
+            background: '#dcebff',
+            border: '1px solid #7fb4ff',
             borderRadius: 10,
-            color: '#cbd5e1',
+            color: '#0f4dbd',
             fontSize: 15,
             fontWeight: 700,
             cursor: 'pointer',
@@ -515,19 +515,19 @@ export function VehicleDetailsPage() {
 
         {/* ── Saved Maintenance Tasks ── */}
         <div style={{ marginTop: 24 }}>
-          <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 700, color: '#6b7fa3', letterSpacing: '.08em', textTransform: 'uppercase' }}>
+          <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 700, color: '#4f6a90', letterSpacing: '.08em', textTransform: 'uppercase' }}>
             🗂 HISTORIQUE DES INTERVENTIONS
           </p>
           {maintenanceQuery.isLoading ? (
             <p className="vd-metric-loading">Chargement...</p>
           ) : maintenanceItems.length === 0 ? (
-            <p style={{ color: '#4a5a7a', fontSize: 13 }}>Aucune intervention enregistrée pour ce véhicule.</p>
+            <p style={{ color: '#4a6b90', fontSize: 13 }}>Aucune intervention enregistrée pour ce véhicule.</p>
           ) : (
             <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
               {maintenanceItems.map((item) => (
-                <li key={item.id} style={{ background: '#1e2538', borderRadius: 10, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <li key={item.id} style={{ background: '#edf5ff', border: '1px solid #c8ddff', borderRadius: 10, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <span style={{ fontWeight: 700, color: '#cbd5e1', fontSize: 14 }}>
+                    <span style={{ fontWeight: 700, color: '#0f2f57', fontSize: 14 }}>
                       {item.component}
                       {item.urgency && item.urgency !== 'routine' && (
                         <span style={{ marginLeft: 8, fontSize: 12, color: item.urgency === 'critique' ? '#f87171' : '#f59e0b' }}>
@@ -545,14 +545,14 @@ export function VehicleDetailsPage() {
                       Supprimer
                     </button>
                   </div>
-                  <span style={{ fontSize: 12, color: '#6b7fa3' }}>
+                  <span style={{ fontSize: 12, color: '#4a6b90' }}>
                     {item.technicien ? `👤 ${item.technicien}` : ''}
                     {item.date_intervention ? ` • 📅 ${item.date_intervention}` : ''}
                   </span>
                   {!!item.resolved_dtc_codes?.length && (
-                    <span style={{ fontSize: 12, color: '#8898aa' }}>DTC résolus : {item.resolved_dtc_codes.join(', ')}</span>
+                    <span style={{ fontSize: 12, color: '#4a6b90' }}>DTC résolus : {item.resolved_dtc_codes.join(', ')}</span>
                   )}
-                  {!!item.note && <span style={{ fontSize: 12, color: '#8898aa' }}>{item.note}</span>}
+                  {!!item.note && <span style={{ fontSize: 12, color: '#4a6b90' }}>{item.note}</span>}
                 </li>
               ))}
             </ul>

@@ -2871,8 +2871,9 @@ h2 {
 
 .vd-page {
   padding: 28px 32px;
-  max-width: 880px;
-  background: #ffffff;
+  width: 100%;
+  max-width: none;
+  background: #f6f8fb;
   border: 1px solid #b8cfee;
   border-radius: 18px;
 }
@@ -2886,19 +2887,19 @@ h2 {
   margin: 0 0 4px;
   font-size: 22px;
   font-weight: 700;
-  color: #010812;
+  color: #0f2f57;
 }
 
 .vd-page-sub {
   margin: 0;
   font-size: 13px;
-  color: #393a3a;
+  color: #4a6b90;
 }
 
 /* ── White card ── */
 .vd-card {
-  background: #f6f8fb;
-  border: 1px solid #7191bd;
+  background: #edf5ff;
+  border: 1px solid #c8ddff;
   border-radius: 14px;
   padding: 20px 24px;
   box-shadow: 0 8px 20px rgba(30, 64, 175, 0.08);
@@ -3095,7 +3096,7 @@ h2 {
 
 .vd-rec-list li {
   font-size: 13px;
-  color: #1f4f8f;
+  color: #0f2f57;
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -3110,7 +3111,7 @@ h2 {
 .vd-insight-line {
   margin: 0 0 6px;
   font-size: 13px;
-  color: #1f4f8f;
+  color: #0f2f57;
 }
 
 .vd-insight-action {
