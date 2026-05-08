@@ -727,37 +727,39 @@ export function DtcPage() {
           </div>
           {dateError && <p className="form-error">{dateError}</p>}
 
-          <table className="vehicles-table diagnostics-table">
-            <thead>
-              <tr>
-                <th>Code</th>
-                <th>{text.description}</th>
-                <th>{text.vehicle}</th>
-                <th>{text.firstOccurrence}</th>
-                <th>{text.lastOccurrenceCol}</th>
-                <th>{text.count}</th>
-                <th>{text.state}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 && (
+          <div className="table-shell diagnostics-table-shell">
+            <table className="vehicles-table diagnostics-table">
+              <thead>
                 <tr>
-                  <td colSpan={7} className="empty-cell">{text.noCode}</td>
+                  <th>Code</th>
+                  <th>{text.description}</th>
+                  <th>{text.vehicle}</th>
+                  <th>{text.firstOccurrence}</th>
+                  <th>{text.lastOccurrenceCol}</th>
+                  <th>{text.count}</th>
+                  <th>{text.state}</th>
                 </tr>
-              )}
-              {rows.map((item, index) => (
-                <tr key={`${item.code ?? item.dtc_code}-${index}`}>
-                  <td>{item.code ?? item.dtc_code ?? '-'}</td>
-                  <td>{item.description ?? '-'}</td>
-                  <td>{item.vehicle_id}</td>
-                  <td>{item.firstOccurrence}</td>
-                  <td>{item.lastOccurrence}</td>
-                  <td>{item.count}</td>
-                  <td>{item.resolved ? 'resolved' : 'active'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="empty-cell">{text.noCode}</td>
+                  </tr>
+                )}
+                {rows.map((item, index) => (
+                  <tr key={`${item.code ?? item.dtc_code}-${index}`}>
+                    <td>{item.code ?? item.dtc_code ?? '-'}</td>
+                    <td>{item.description ?? '-'}</td>
+                    <td>{item.vehicle_id}</td>
+                    <td>{item.firstOccurrence}</td>
+                    <td>{item.lastOccurrence}</td>
+                    <td>{item.count}</td>
+                    <td>{item.resolved ? 'resolved' : 'active'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           <p className="muted-note">{rows.length} {text.total}</p>
           {actionError && <p className="form-error">{actionError}</p>}

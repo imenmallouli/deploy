@@ -5,11 +5,24 @@ from bson import ObjectId
 from app.db.mongodb import get_mongo_db
 from app.db.session import SessionLocal
 from app.models.dtc import DtcEventModel, IotDeviceLogModel, ObdRawPayloadModel
+from app.models.vehicle import Vehicle
 from app.services.ingestion_guard import assert_vehicle_dongle_linked
 from app.services.ops_service import OpsService
 
 
 class DtcService:
+    @staticmethod
+    def _allowed_vehicle_ids(role: str, user_id: int) -> list[int] | None:
+        normalized = (role or "user").strip().lower()
+        if normalized == "admin":
+            return None
+
+        sql_db = SessionLocal()
+        try:
+            return [row[0] for row in sql_db.query(Vehicle.id).filter(Vehicle.driver_id == user_id).all()]
+        finally:
+            sql_db.close()
+
     @staticmethod
     def _extract_gps_from_iot_log(payload: IotDeviceLogModel) -> tuple[float, float] | None:
         if (payload.event_type or "").lower() != "gps":
@@ -69,10 +82,18 @@ class DtcService:
         }
 
     @staticmethod
-    async def list_dtc_events(limit: int = 50):
+    async def list_dtc_events(limit: int = 50, role: str = "user", user_id: int | None = None):
         db = get_mongo_db()
 
-        cursor = db.dtc_events.find().sort("_id", -1).limit(limit)
+        query: dict = {}
+        if user_id is not None:
+            allowed_vehicle_ids = DtcService._allowed_vehicle_ids(role=role, user_id=user_id)
+            if allowed_vehicle_ids is not None:
+                if not allowed_vehicle_ids:
+                    return {"status": "success", "count": 0, "items": []}
+                query["vehicle_id"] = {"$in": allowed_vehicle_ids}
+
+        cursor = db.dtc_events.find(query).sort("_id", -1).limit(limit)
         items = []
         async for doc in cursor:
             items.append(DtcEventModel.from_mongo(doc).model_dump(exclude_none=True))
@@ -84,8 +105,13 @@ class DtcService:
         }
 
     @staticmethod
-    async def list_dtc_by_vehicle(vehicle_id: int, limit: int = 50):
+    async def list_dtc_by_vehicle(vehicle_id: int, limit: int = 50, role: str = "user", user_id: int | None = None):
         db = get_mongo_db()
+
+        if user_id is not None:
+            allowed_vehicle_ids = DtcService._allowed_vehicle_ids(role=role, user_id=user_id)
+            if allowed_vehicle_ids is not None and vehicle_id not in allowed_vehicle_ids:
+                return {"status": "error", "message": "Accès refusé"}
 
         cursor = db.dtc_events.find({"vehicle_id": vehicle_id}).sort("_id", -1).limit(limit)
         items = []
@@ -170,9 +196,18 @@ class DtcService:
 
     @staticmethod
     async def clear_dtc(role: str, user_id: int, vehicle_id: int, dtc_code: str | None = None):
-        role = (role or "driver").strip().lower()
-        if role not in {"admin", "manager"}:
+        role = (role or "user").strip().lower()
+        if role not in {"admin", "manager", "user"}:
             return {"status": "error", "message": "Accès refusé"}
+
+        if role == "user":
+            sql_db = SessionLocal()
+            try:
+                own_vehicle = sql_db.query(Vehicle.id).filter(Vehicle.id == vehicle_id, Vehicle.driver_id == user_id).first()
+                if not own_vehicle:
+                    return {"status": "error", "message": "Accès refusé"}
+            finally:
+                sql_db.close()
 
         db = get_mongo_db()
         query = {"vehicle_id": vehicle_id}

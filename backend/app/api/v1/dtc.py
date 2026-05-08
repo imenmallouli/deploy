@@ -22,7 +22,9 @@ def get_current_context(
         ) from exc
 
     user_id = payload.get("user_id")
-    role = (payload.get("role", "driver") or "driver").strip().lower()
+    role = (payload.get("role", "user") or "user").strip().lower()
+    if role not in {"user", "admin"}:
+        role = "user"
 
     if not user_id:
         raise HTTPException(
@@ -71,7 +73,11 @@ async def list_dtc_events(
 ):
     try:
         _ = context
-        return await DtcService.list_dtc_events(limit=limit)
+        return await DtcService.list_dtc_events(
+            limit=limit,
+            role=context["role"],
+            user_id=context["user_id"],
+        )
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -86,8 +92,12 @@ async def list_dtc_by_vehicle(
     context: dict = Depends(get_current_context),
 ):
     try:
-        _ = context
-        return await DtcService.list_dtc_by_vehicle(vehicle_id=vehicle_id, limit=limit)
+        return await DtcService.list_dtc_by_vehicle(
+            vehicle_id=vehicle_id,
+            limit=limit,
+            role=context["role"],
+            user_id=context["user_id"],
+        )
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

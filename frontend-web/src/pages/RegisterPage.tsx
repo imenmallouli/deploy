@@ -1,13 +1,14 @@
 import { useMutation } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { register } from '../lib/api/endpoints';
 import { saveSession } from '../lib/auth/session';
 import { useI18n } from '../lib/i18n';
 
 export function RegisterPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useI18n();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -15,6 +16,10 @@ export function RegisterPage() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const requestedPath = typeof location.state === 'object' && location.state && 'from' in location.state && typeof location.state.from === 'string'
+    ? location.state.from
+    : null;
+  const isAdminBootstrap = requestedPath === '/admin' || requestedPath?.startsWith('/admin/');
 
   const mutation = useMutation({
     mutationFn: register,
@@ -30,7 +35,15 @@ export function RegisterPage() {
         email: result.email,
         userId: result.user_id,
       });
-      navigate('/');
+
+      const normalizedRole = (result.role ?? '').toLowerCase();
+      const nextPath = requestedPath && requestedPath.startsWith('/')
+        ? requestedPath
+        : normalizedRole === 'admin'
+          ? '/admin'
+          : '/overview';
+
+      navigate(nextPath, { replace: true });
     },
     onError: (error: unknown) => {
       if (error instanceof AxiosError) {
@@ -49,7 +62,7 @@ export function RegisterPage() {
       first_name: firstName,
       last_name: lastName,
       email,
-      role: 'admin',
+      role: isAdminBootstrap ? 'admin' : 'user',
       phone,
       password,
     });
@@ -60,6 +73,7 @@ export function RegisterPage() {
       <section className="auth-page auth-shared-card">
         <h2>{t('auth.register.title')}</h2>
         <p className="subtitle">{t('auth.register.subtitle')}</p>
+        {isAdminBootstrap ? <p className="muted-note">Compte admin en cours de creation depuis l'acces /admin.</p> : null}
         <form className="auth-form" onSubmit={handleSubmit}>
           <label>
             {t('auth.firstName')}
@@ -84,7 +98,7 @@ export function RegisterPage() {
           {error ? <p className="form-error">{error}</p> : null}
           <button type="submit" disabled={mutation.isPending}>{mutation.isPending ? t('auth.register.creating') : t('auth.register.createAccount')}</button>
           <p className="auth-switch">
-            {t('auth.register.alreadyRegistered')} <Link to="/login">{t('auth.register.signIn')}</Link>
+            {t('auth.register.alreadyRegistered')} <Link to="/login" state={requestedPath ? { from: requestedPath } : undefined}>{t('auth.register.signIn')}</Link>
           </p>
         </form>
       </section>

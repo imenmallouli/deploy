@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
-import { createLocation, deleteLocation, listLocations, updateLocation } from '../lib/api/endpoints';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createLocation, deleteLocation, listGeofenceVehiclePositions, listLocations, listVehicles, updateLocation } from '../lib/api/endpoints';
+import type { Vehicle } from '../lib/api/types';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 type LocationItem = {
   id: string;
@@ -16,28 +19,26 @@ type LocationItem = {
   longitude?: number;
 };
 
+type VehiclePositionItem = {
+  id: string;
+  vehicle_id: number;
+  latitude: number;
+  longitude: number;
+  speed?: number;
+  updated_at?: string;
+};
+
+type DongleLocationRow = {
+  vehicle: Vehicle;
+  position?: VehiclePositionItem;
+  lastSeen?: string | null;
+  isConnected: boolean;
+};
+
 function parseDecimal(value: string) {
   const normalized = value.trim().replace(',', '.');
   if (!normalized) return Number.NaN;
   return Number(normalized);
-}
-
-function buildMapEmbedUrl(latitude?: number, longitude?: number) {
-  if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
-    const lat = Number(latitude);
-    const lng = Number(longitude);
-    const lngDelta = 0.02;
-    const latDelta = 0.01;
-    const left = (lng - lngDelta).toFixed(6);
-    const bottom = (lat - latDelta).toFixed(6);
-    const right = (lng + lngDelta).toFixed(6);
-    const top = (lat + latDelta).toFixed(6);
-    const marker = `${lat.toFixed(6)}%2C${lng.toFixed(6)}`;
-
-    return `https://www.openstreetmap.org/export/embed.html?bbox=${left}%2C${bottom}%2C${right}%2C${top}&layer=mapnik&marker=${marker}`;
-  }
-
-  return 'https://www.openstreetmap.org/export/embed.html?bbox=-3.8%2C43.8%2C3.8%2C49.2&layer=mapnik';
 }
 
 function getErrorMessage(error: unknown) {
@@ -45,8 +46,26 @@ function getErrorMessage(error: unknown) {
   return data?.message ?? data?.detail ?? 'Request failed. Please try again.';
 }
 
+function formatDateTime(value?: string | null) {
+  if (!value) return '-';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return `${String(parsed.getDate()).padStart(2, '0')}/${String(parsed.getMonth() + 1).padStart(2, '0')}/${parsed.getFullYear()} ${String(parsed.getHours()).padStart(2, '0')}:${String(parsed.getMinutes()).padStart(2, '0')}`;
+}
+
+function isFreshTimestamp(value?: string | null, thresholdMs = 5 * 60 * 1000) {
+  if (!value) return false;
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) return false;
+  return Date.now() - parsed <= thresholdMs;
+}
+
 export function LocationsPage() {
   const queryClient = useQueryClient();
+  const mapRef = useRef<L.Map | null>(null);
+  const mapNodeRef = useRef<HTMLDivElement | null>(null);
+  const userMarkerRef = useRef<L.CircleMarker | null>(null);
+  const dongleMarkerRef = useRef<L.CircleMarker | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -72,6 +91,7 @@ export function LocationsPage() {
   const [locationError, setLocationError] = useState('');
   const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null);
   const [isLocating, setIsLocating] = useState(false);
+  const [myPosition, setMyPosition] = useState<{ latitude: number; longitude: number } | null>(null);
   const [visibleColumns] = useState({
     name: true,
     notes: true,
@@ -84,6 +104,12 @@ export function LocationsPage() {
     onExit: true,
   });
   const locationsQuery = useQuery({ queryKey: ['locations'], queryFn: () => listLocations() });
+  const vehiclesQuery = useQuery({ queryKey: ['vehicles', 'locations-page'], queryFn: listVehicles });
+  const positionsQuery = useQuery({
+    queryKey: ['vehicle-positions', 'locations-page'],
+    queryFn: listGeofenceVehiclePositions,
+    refetchInterval: 15000,
+  });
   const createMutation = useMutation({
     mutationFn: createLocation,
     onSuccess: () => {
@@ -144,10 +170,122 @@ export function LocationsPage() {
   const editLatitudeValid = !editLatitudeProvided || Number.isFinite(editLatitude);
   const editLongitudeValid = !editLongitudeProvided || Number.isFinite(editLongitude);
   const sourceItems = locationsQuery.data?.items ?? [];
-  const firstMappableItem = sourceItems.find((item) => item.latitude != null && item.longitude != null);
-  const mapLatitude = Number.isFinite(latitude) ? latitude : firstMappableItem?.latitude;
-  const mapLongitude = Number.isFinite(longitude) ? longitude : firstMappableItem?.longitude;
-  const mapSrc = buildMapEmbedUrl(mapLatitude, mapLongitude);
+  const vehicles = vehiclesQuery.data?.items ?? [];
+  const positionItems = positionsQuery.data?.items ?? [];
+
+  const dongleRows = useMemo<DongleLocationRow[]>(() => {
+    return vehicles
+      .filter((vehicle) => vehicle.dongle_id || vehicle.autopi_device_id || vehicle.autopi_unit_id)
+      .map((vehicle) => {
+        const position = positionItems.find((item) => item.vehicle_id === vehicle.id);
+        const lastSeen = position?.updated_at ?? vehicle.last_autopi_seen ?? vehicle.last_connection ?? null;
+        return {
+          vehicle,
+          position,
+          lastSeen,
+          isConnected: isFreshTimestamp(lastSeen),
+        };
+      });
+  }, [vehicles, positionItems]);
+
+  const selectedDongle = useMemo(() => {
+    const connected = dongleRows.find((row) => row.isConnected && row.position);
+    if (connected) return connected;
+    return dongleRows.find((row) => row.position) ?? dongleRows[0];
+  }, [dongleRows]);
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        setMyPosition({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+      },
+      () => {
+        // Keep silent: user can still see dongle position without browser geolocation.
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 15000,
+      },
+    );
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!mapNodeRef.current || mapRef.current) return;
+
+    const map = L.map(mapNodeRef.current).setView([35.8256, 10.6084], 12);
+    mapRef.current = map;
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(map);
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      userMarkerRef.current = null;
+      dongleMarkerRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (myPosition) {
+      if (!userMarkerRef.current) {
+        userMarkerRef.current = L.circleMarker([myPosition.latitude, myPosition.longitude], {
+          radius: 7,
+          color: '#2563eb',
+          fillColor: '#3b82f6',
+          fillOpacity: 0.95,
+          weight: 2,
+        }).addTo(map).bindPopup('Ma position');
+      } else {
+        userMarkerRef.current.setLatLng([myPosition.latitude, myPosition.longitude]);
+      }
+    }
+
+    const showDongleLocation = Boolean(selectedDongle?.isConnected && selectedDongle?.position);
+    if (showDongleLocation && selectedDongle?.position) {
+      const { latitude: dLat, longitude: dLng } = selectedDongle.position;
+      if (!dongleMarkerRef.current) {
+        dongleMarkerRef.current = L.circleMarker([dLat, dLng], {
+          radius: 7,
+          color: '#15803d',
+          fillColor: '#22c55e',
+          fillOpacity: 0.95,
+          weight: 2,
+        }).addTo(map).bindPopup('Position dongle');
+      } else {
+        dongleMarkerRef.current.setLatLng([dLat, dLng]);
+      }
+    } else if (dongleMarkerRef.current) {
+      map.removeLayer(dongleMarkerRef.current);
+      dongleMarkerRef.current = null;
+    }
+
+    const bounds: Array<[number, number]> = [];
+    if (myPosition) bounds.push([myPosition.latitude, myPosition.longitude]);
+    if (showDongleLocation && selectedDongle?.position) {
+      bounds.push([selectedDongle.position.latitude, selectedDongle.position.longitude]);
+    }
+    if (bounds.length === 1) {
+      map.setView(bounds[0], 14);
+    } else if (bounds.length > 1) {
+      map.fitBounds(bounds, { padding: [24, 24] });
+    }
+  }, [myPosition, selectedDongle]);
+
   const items = sourceItems;
 
   const handleCreate = () => {
@@ -204,6 +342,8 @@ export function LocationsPage() {
 
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ['locations'] });
+    queryClient.invalidateQueries({ queryKey: ['vehicles', 'locations-page'] });
+    queryClient.invalidateQueries({ queryKey: ['vehicle-positions', 'locations-page'] });
   };
 
   const startEdit = (item: LocationItem) => {
@@ -330,11 +470,51 @@ export function LocationsPage() {
       )}
 
       <div className="panel map-panel">
-        <iframe
-          title="Locations map"
-          className="fleet-map compact"
-          src={mapSrc}
-        />
+        <div className="panel-title-row">
+          <h3>Locations map</h3>
+          <button className="btn-link" type="button" onClick={handleRefresh}>Refresh</button>
+        </div>
+        <div style={{ position: 'relative' }}>
+          <div title="Locations map" className="fleet-map compact" ref={mapNodeRef} />
+          <div
+            style={{
+              position: 'absolute',
+              top: 12,
+              right: 12,
+              background: 'rgba(255,255,255,0.93)',
+              border: '1px solid #b8cfee',
+              borderRadius: 10,
+              padding: '8px 10px',
+              fontSize: 12,
+              lineHeight: 1.4,
+              color: '#0f2f57',
+              minWidth: 220,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{ width: 10, height: 10, borderRadius: 10, background: '#3b82f6', display: 'inline-block' }} />
+              <span>Ma position</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{ width: 10, height: 10, borderRadius: 10, background: '#22c55e', display: 'inline-block' }} />
+              <span>Position dongle (connecte)</span>
+            </div>
+            {!selectedDongle ? (
+              <div>Aucun dongle disponible.</div>
+            ) : selectedDongle.isConnected ? (
+              <div>
+                <strong>Dongle connecte:</strong>{' '}
+                {selectedDongle.position
+                  ? `${selectedDongle.position.latitude.toFixed(5)}, ${selectedDongle.position.longitude.toFixed(5)}`
+                  : 'position indisponible'}
+              </div>
+            ) : (
+              <div>
+                <strong>Derniere connexion:</strong> {formatDateTime(selectedDongle.lastSeen)}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="panel table-shell">

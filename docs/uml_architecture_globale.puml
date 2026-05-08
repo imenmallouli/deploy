@@ -1,0 +1,49 @@
+@startuml
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultTextAlignment center
+skinparam wrapWidth 260
+left to right direction
+
+node "Vehicule" as Vehicle {
+  component "Dongle AutoPi / OBD" as Dongle
+}
+
+cloud "AutoPi Cloud" as AutoPi
+
+node "Plateforme Auto Diagnostic" as Platform {
+  component "Service de recuperation\ndes donnees AutoPi\n(Bridge / MQTT Gateway)" as Bridge
+  component "Backend FastAPI\nAPI + logique metier" as Backend
+  component "Service WebSocket\nflux temps reel" as WebSocket
+  queue "Broker MQTT\nMosquitto" as MQTT
+  database "MongoDB\ntelemetrie, DTC,\ndonnees brutes" as Mongo
+  database "PostgreSQL\nvehicules, flottes,\nutilisateurs, alertes" as Postgres
+  component "Module IA\nanalyse, scoring,\nrecommandations" as AI
+  component "Frontend Web\ndashboard et supervision" as Frontend
+}
+
+Vehicle --> Dongle : Mesures vehicule\nOBD + GPS
+Dongle --> AutoPi : Envoi des donnees\nvers le cloud
+AutoPi --> Bridge : Recuperation via API AutoPi
+Bridge --> MQTT : Publication des messages
+MQTT --> Backend : Ingestion des flux
+Backend --> Mongo : Stockage telemetrie\net codes defaut
+Backend --> Postgres : Stockage metadonnees\net alertes
+Backend --> AI : Envoi des donnees\npour analyse
+AI --> Backend : Risques, alertes\net recommandations
+Backend --> Frontend : REST\npour affichage
+Backend --> WebSocket : Publication des mises a jour
+WebSocket --> Frontend : Donnees temps reel
+
+note bottom of Platform
+Flux global du systeme :
+1) acquisition depuis la voiture
+2) transit par AutoPi Cloud
+3) integration dans la plateforme
+4) traitement backend
+5) stockage en base
+6) analyse intelligente par IA
+7) visualisation sur l'interface web
+end note
+
+@enduml

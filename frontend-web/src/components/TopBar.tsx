@@ -48,6 +48,12 @@ export function TopBar() {
   return (
     <header className="topbar">
       <input
+        type="search"
+        name="vehicle-search"
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="off"
+        spellCheck={false}
         className="search"
         placeholder={t('topbar.searchPlaceholder')}
         aria-label={t('topbar.searchAriaLabel')}

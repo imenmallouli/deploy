@@ -4,7 +4,9 @@ import { useI18n } from '../lib/i18n';
 
 export function Sidebar() {
   const role = getRole();
-  const canManageFleet = role === 'admin';
+  const isAdmin = role === 'admin';
+  const isUser = role === 'user';
+  const canAccessAutoPiSettings = isUser || isAdmin;
   const { t } = useI18n();
 
   return (
@@ -16,35 +18,21 @@ export function Sidebar() {
       <nav>
         <div className="nav-section">
           <div className="nav-list">
-            <NavLink to="/get-started" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-              {t('sidebar.getStarted')}
-            </NavLink>
-          </div>
-        </div>
-
-        <div className="nav-section">
-          <div className="nav-list">
             <NavLink to="/overview" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
               {t('sidebar.overview')}
             </NavLink>
-            {canManageFleet && (
-              <NavLink to="/vehicles/list" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-                {t('sidebar.vehicles')}
-              </NavLink>
-            )}
+            <NavLink to="/vehicles/list" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+              {t('sidebar.vehicles')}
+            </NavLink>
             <NavLink to="/telemetry" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
               {t('sidebar.telemetry')}
             </NavLink>
-            {canManageFleet && (
-              <NavLink to="/locations" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-                {t('sidebar.locations')}
-              </NavLink>
-            )}
-            {canManageFleet && (
-              <NavLink to="/geofences" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-                {t('sidebar.geofences')}
-              </NavLink>
-            )}
+            <NavLink to="/locations" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+              {t('sidebar.locations')}
+            </NavLink>
+            <NavLink to="/geofences" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+              {t('sidebar.geofences')}
+            </NavLink>
             <NavLink to="/diagnostics" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
               {t('sidebar.diagnostics')}
             </NavLink>
@@ -63,13 +51,24 @@ export function Sidebar() {
             <NavLink to="/devices/list" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
               {t('sidebar.devices')}
             </NavLink>
-            {canManageFleet && (
+            {canAccessAutoPiSettings && (
               <NavLink to="/settings/autopi" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
                 {t('sidebar.autopiSettings')}
               </NavLink>
             )}
           </div>
         </div>
+
+        {isAdmin && (
+          <div className="nav-section">
+            <p className="nav-section-title">{t('sidebar.admin')}</p>
+            <div className="nav-list">
+              <NavLink to="/admin" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+                {t('sidebar.userManagement')}
+              </NavLink>
+            </div>
+          </div>
+        )}
       </nav>
     </aside>
   );

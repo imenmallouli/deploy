@@ -21,9 +21,9 @@ class AlertService:
         title: str,
         message: str,
     ):
-        role = (role or "driver").strip().lower()
+        role = (role or "user").strip().lower()
 
-        if role not in {"admin", "manager"}:
+        if role not in {"admin", "manager", "user", "driver"}:
             return {"status": "error", "message": "Accès refusé"}
 
         vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
@@ -34,6 +34,9 @@ class AlertService:
             fleet = db.query(Fleet).filter(Fleet.id == vehicle.fleet_id).first()
             if not fleet or fleet.manager_id != user_id:
                 return {"status": "error", "message": "Accès refusé"}
+
+        if role in {"user", "driver"} and vehicle.driver_id != user_id:
+            return {"status": "error", "message": "Accès refusé"}
 
         alert = Alert(
             vehicle_id=vehicle_id,
@@ -63,13 +66,13 @@ class AlertService:
         severity: str | None = None,
         alert_status: str | None = None,
     ):
-        role = (role or "driver").strip().lower()
+        role = (role or "user").strip().lower()
 
         query = db.query(Alert).join(Vehicle, Vehicle.id == Alert.vehicle_id)
 
         if role == "manager":
             query = query.join(Fleet, Fleet.id == Vehicle.fleet_id).filter(Fleet.manager_id == user_id)
-        elif role == "driver":
+        elif role in {"driver", "user"}:
             query = query.filter(Vehicle.driver_id == user_id)
 
         if vehicle_id is not None:
@@ -94,9 +97,9 @@ class AlertService:
 
     @staticmethod
     def ack_alert(db: Session, role: str, user_id: int, alert_id: int, note: str | None = None):
-        role = (role or "driver").strip().lower()
+        role = (role or "user").strip().lower()
 
-        if role == "driver":
+        if role not in {"admin", "manager", "user", "driver"}:
             return {"status": "error", "message": "Accès refusé"}
 
         alert = db.query(Alert).filter(Alert.id == alert_id).first()
@@ -109,6 +112,11 @@ class AlertService:
                 return {"status": "error", "message": "Véhicule non trouvé"}
             fleet = db.query(Fleet).filter(Fleet.id == vehicle.fleet_id).first()
             if not fleet or fleet.manager_id != user_id:
+                return {"status": "error", "message": "Accès refusé"}
+
+        if role in {"user", "driver"}:
+            vehicle = db.query(Vehicle).filter(Vehicle.id == alert.vehicle_id).first()
+            if not vehicle or vehicle.driver_id != user_id:
                 return {"status": "error", "message": "Accès refusé"}
 
         alert.status = "acknowledged"

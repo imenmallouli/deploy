@@ -473,8 +473,8 @@ export function TelemetryPage() {
   const currentBatteryChargeLevel = latestMetricValue('battery_charge_level');
   const currentNominalVoltage = latestMetricValue('nominal_voltage');
   const currentEngineLoad  = latestMetricValue('engine_load') ?? 0;
-  const currentAmbientTemp = latestMetricValue('ambient_air_temp') ?? 0;
-  const currentIntakeTemp  = latestMetricValue('intake_temp') ?? 0;
+  const currentAmbientTemp = latestMetricValue('ambient_air_temp');
+  const currentIntakeTemp  = latestMetricValue('intake_temp');
   const currentOdometer    = latestMetricValue('odometer') ?? 0;
   const currentTrackAltitude = latestMetricValue('track_altitude');
   const currentCourseOverGround = latestMetricValue('course_over_ground');
@@ -538,20 +538,22 @@ export function TelemetryPage() {
     <div className="tl-page">
       {vehiclesQuery.isLoading && <p className="tl-muted">Loading vehicles...</p>}
       {vehiclesQuery.isError && <p className="tl-muted">Unable to load vehicles.</p>}
-      {!vehiclesQuery.isLoading && !vehiclesQuery.isError && !hasVehicles && (
-        <p className="tl-muted">No vehicles in the database.</p>
-      )}
+      {!vehiclesQuery.isLoading && !vehiclesQuery.isError && !hasVehicles && <p className="tl-muted">No vehicles in the database. Telemetry panels are shown with empty data.</p>}
 
-      {hasVehicles && vehicleId && (
+      {
         <>
           {/* ── HEADER ── */}
           <div className="tl-header">
             <div className="tl-header-left">
               <h2 className="tl-title">
-                Télémétrie — {currentVehicle?.make?.toUpperCase() ?? ''} {currentVehicle?.model ?? ''} {currentVehicle?.year ?? ''}
+                {hasVehicles
+                  ? `Télémétrie — ${currentVehicle?.make?.toUpperCase() ?? ''} ${currentVehicle?.model ?? ''} ${currentVehicle?.year ?? ''}`
+                  : 'Télémétrie — Aucun véhicule'}
               </h2>
               <p className="tl-sub">
-                VIN {currentVehicle?.vin ?? ''} · Dongle {currentVehicle?.dongle_id ?? ''} · {lastSyncLabel}
+                {hasVehicles
+                  ? `VIN ${currentVehicle?.vin ?? ''} · Dongle ${currentVehicle?.dongle_id ?? ''} · ${lastSyncLabel}`
+                  : 'Aucun véhicule sélectionné · Aucune donnée temps réel'}
               </p>
             </div>
             <div className="tl-header-right">
@@ -564,6 +566,7 @@ export function TelemetryPage() {
                 <button
                   type="button"
                   className="tl-export-btn"
+                  disabled={!hasVehicles || !vehicleId}
                   onClick={() => {
                     const csv = [
                       'Date,' + displayMetrics.join(','),
@@ -580,17 +583,23 @@ export function TelemetryPage() {
                   Exporter
                 </button>
               </div>
-              <select
-                className="tl-vehicle-select"
-                value={vehicleId}
-                onChange={(e) => setVehicleId(Number(e.target.value))}
-              >
-                {vehicles.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.make} {v.model} {v.year} — {v.license_plate}
-                  </option>
-                ))}
-              </select>
+              {hasVehicles ? (
+                <select
+                  className="tl-vehicle-select"
+                  value={vehicleId ?? undefined}
+                  onChange={(e) => setVehicleId(Number(e.target.value))}
+                >
+                  {vehicles.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.make} {v.model} {v.year} — {v.license_plate}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <select className="tl-vehicle-select" value="" disabled>
+                  <option value="">Aucun véhicule</option>
+                </select>
+              )}
             </div>
           </div>
 
@@ -678,8 +687,20 @@ export function TelemetryPage() {
                 <TlHealthBar label="Temp. moteur"    value={Math.min(100, (currentEngineTemp / 120) * 100)}             unit="°C" raw={`${Math.round(currentEngineTemp)}°C`}                  color={currentEngineTemp > 100 ? 'red' : currentEngineTemp > 85 ? 'orange' : 'green'} />
                 <TlHealthBar label="Batterie"        value={batteryPct}                                                  unit="V" raw={`${currentBattery.toFixed(1)}V`}                        color={currentBattery < 11.5 ? 'red' : currentBattery < 12.0 ? 'orange' : 'green'} />
                 <TlHealthBar label="Charge moteur"   value={currentEngineLoad}                                           unit="%" raw={`${Math.round(currentEngineLoad)}%`}                    color={currentEngineLoad > 85 ? 'orange' : 'green'} />
-                <TlHealthBar label="Temp. ambiante"  value={Math.min(100, ((currentAmbientTemp + 20) / 60) * 100)}      unit="°C" raw={`${Math.round(currentAmbientTemp)}°C`}                 color="blue" />
-                <TlHealthBar label="Temp. admission" value={Math.min(100, (currentIntakeTemp / 55) * 100)}              unit="°C" raw={`${Math.round(currentIntakeTemp)}°C`}                  color="blue" />
+                <TlHealthBar
+                  label="Temp. ambiante"
+                  value={currentAmbientTemp != null ? Math.min(100, ((currentAmbientTemp + 20) / 60) * 100) : 0}
+                  unit="°C"
+                  raw={currentAmbientTemp != null ? `${Math.round(currentAmbientTemp)}°C` : '—'}
+                  color="blue"
+                />
+                <TlHealthBar
+                  label="Temp. admission"
+                  value={currentIntakeTemp != null ? Math.min(100, (currentIntakeTemp / 55) * 100) : 0}
+                  unit="°C"
+                  raw={currentIntakeTemp != null ? `${Math.round(currentIntakeTemp)}°C` : '—'}
+                  color="blue"
+                />
                 <TlHealthBar
                   label="Temp. CPU"
                   value={currentTempCpu != null ? Math.min(100, (currentTempCpu / 100) * 100) : 0}
@@ -792,12 +813,12 @@ export function TelemetryPage() {
           <div className="tl-table-panel">
             <div className="tl-panel-hrow">
               <span className="tl-panel-title">Historique télémétrie</span>
-              <span className="tl-panel-sub">Véhicule ID {vehicleId} · Intervalle {interval}</span>
+              <span className="tl-panel-sub">Véhicule ID {vehicleId ?? '--'} · Intervalle {interval}</span>
             </div>
             {telemetryQuery.isLoading && <p className="tl-muted">Loading telemetry history...</p>}
             {telemetryQuery.isError && <p className="tl-muted">Unable to load telemetry history.</p>}
             {!telemetryQuery.isLoading && !telemetryQuery.isError && (
-              <div className="table-shell">
+              <div className="table-shell table-shell-y">
                 <table className="tl-table">
                   <thead>
                     <tr>
@@ -832,7 +853,7 @@ export function TelemetryPage() {
                 {liveError ? ` · ${liveError}` : ''}
               </span>
             </div>
-            <div className="table-shell">
+            <div className="table-shell table-shell-y">
               <table className="tl-table">
                 <thead>
                   <tr>
@@ -857,7 +878,7 @@ export function TelemetryPage() {
             </div>
           </div>
         </>
-      )}
+      }
     </div>
   );
 }

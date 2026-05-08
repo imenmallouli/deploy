@@ -11,6 +11,15 @@ type RegisterPayload = {
   password: string;
 };
 
+export type AdminUserItem = {
+  user_id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  role: string;
+  phone?: string | null;
+};
+
 type AiMaintenanceSuggestion = {
   priority: string;
   title: string;
@@ -91,6 +100,36 @@ export async function login(payload: LoginPayload) {
 export async function register(payload: RegisterPayload) {
   const { data } = await apiClient.post('/api/v1/auth/register', payload);
   return data as ApiResult<{ access_token?: string; role?: string; email?: string; user_id?: number }>;
+}
+
+export async function forgotPassword(payload: { email: string }) {
+  const { data } = await apiClient.post('/api/v1/auth/forgot-password', payload);
+  return data as ApiResult<{ email?: string }>;
+}
+
+export async function listUsers() {
+  const { data } = await apiClient.get('/api/v1/auth/users');
+  return data as ApiResult<{ items: AdminUserItem[]; count: number }>;
+}
+
+export async function createUserByAdmin(payload: RegisterPayload) {
+  const { data } = await apiClient.post('/api/v1/auth/create-user', payload);
+  return data as ApiResult<{ user_id?: number; email?: string; role?: string }>;
+}
+
+export async function setUserRoleByAdmin(userId: number, payload: { role: string }) {
+  const { data } = await apiClient.post(`/api/v1/auth/role/${userId}`, payload);
+  return data as ApiResult<{ user_id?: number; role?: string }>;
+}
+
+export async function resetUserPasswordByAdmin(userId: number, payload: { new_password: string }) {
+  const { data } = await apiClient.post(`/api/v1/auth/reset-password/${userId}`, payload);
+  return data as ApiResult<{ user_id?: number }>;
+}
+
+export async function deleteUserByAdmin(userId: number) {
+  const { data } = await apiClient.delete(`/api/v1/auth/user/${userId}`);
+  return data as ApiResult<{ user_id?: number }>;
 }
 
 export async function listVehicles() {

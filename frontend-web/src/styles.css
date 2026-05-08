@@ -410,6 +410,18 @@ h2 {
   overflow-y: hidden;
 }
 
+.table-shell-y {
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.table-shell-y .tl-table thead th {
+  position: sticky;
+  top: 0;
+  background: #f6f8fb;
+  z-index: 1;
+}
+
 .toolbar-row {
   display: flex;
   flex-wrap: wrap;
@@ -704,6 +716,18 @@ h2 {
 
 .diagnostics-table td {
   color: #374151;
+}
+
+.diagnostics-table-shell {
+  max-height: 430px;
+  overflow-y: auto;
+}
+
+.diagnostics-table-shell .diagnostics-table th {
+  position: sticky;
+  top: 0;
+  background: #f6f8fb;
+  z-index: 1;
 }
 
 .toolbar-input {
@@ -1287,6 +1311,8 @@ h2 {
 .ai-alerts-feed-list {
   display: grid;
   gap: 0;
+  max-height: 66vh;
+  overflow-y: auto;
 }
 
 .ai-alert-row {

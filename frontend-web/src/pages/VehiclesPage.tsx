@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { createVehicle, deleteVehicle, listAlertsByVehicle, listIotLogs, listVehicles, updateVehicle } from '../lib/api/endpoints';
+import { getRole } from '../lib/auth/session';
 import { useI18n } from '../lib/i18n';
 
 type IotLogItem = {
@@ -104,6 +105,7 @@ export function VehiclesPage() {
         routeWithPoints: 'Route tracee avec',
         gpsPoints: 'points GPS du dongle.',
         routeAwaiting: 'Les trajets apparaitront ici des que des points GPS seront disponibles depuis le dongle.',
+        adminOnlyVehicleActions: 'Creation / modification / suppression reservees a l\'admin.',
       }
     : {
         failedCreate: 'Failed to create vehicle',
@@ -140,7 +142,10 @@ export function VehiclesPage() {
         routeWithPoints: 'Route plotted with',
         gpsPoints: 'GPS points from dongle.',
         routeAwaiting: 'Trip routes will appear here once GPS points are available from the dongle.',
+          adminOnlyVehicleActions: 'Create / update / delete actions are admin-only.',
       };
+        const role = getRole() || 'user';
+        const canManageVehicles = role === 'admin' || role === 'user';
   const queryClient = useQueryClient();
   const routeMapRef = useRef<L.Map | null>(null);
   const routeLayerRef = useRef<L.LayerGroup | null>(null);
@@ -342,6 +347,7 @@ export function VehiclesPage() {
 
   const onCreate: React.FormEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
+    if (!canManageVehicles) return;
     createMutation.mutate({
       vin: createVin,
       license_plate: createLicensePlate,
@@ -355,6 +361,7 @@ export function VehiclesPage() {
   };
 
   const onOpenUpdateModal = () => {
+    if (!canManageVehicles) return;
     const vehicle = vehicles.find((v) => v.id === selectedVehicleId);
     if (!vehicle) return;
     setUpdateMake(vehicle.make);
@@ -380,6 +387,7 @@ export function VehiclesPage() {
 
   const onUpdate: React.FormEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
+    if (!canManageVehicles) return;
     if (!selectedVehicleId) return;
     updateMutation.mutate({
       vehicleId: selectedVehicleId,
@@ -403,13 +411,16 @@ export function VehiclesPage() {
           <p className="vehicles-subtitle">
             {vehicles.length} {text.registeredSuffix}
           </p>
+          {!canManageVehicles ? <p className="muted-note">{text.adminOnlyVehicleActions}</p> : null}
         </div>
-        <button className="vehicle-add-trigger" type="button" onClick={() => setIsCreateModalOpen(true)}>
-          + {text.addVehicle}
-        </button>
+        {canManageVehicles ? (
+          <button className="vehicle-add-trigger" type="button" onClick={() => setIsCreateModalOpen(true)}>
+            + {text.addVehicle}
+          </button>
+        ) : null}
       </div>
 
-      {isUpdateModalOpen ? (
+      {canManageVehicles && isUpdateModalOpen ? (
         <div className="vehicle-create-overlay" role="dialog" aria-modal="true" aria-label={text.updateVehicle}>
           <form className="vehicle-create-modal" onSubmit={onUpdate}>
             <h3>{text.updateVehicle}</h3>
@@ -470,7 +481,7 @@ export function VehiclesPage() {
         </div>
       ) : null}
 
-      {isCreateModalOpen ? (
+      {canManageVehicles && isCreateModalOpen ? (
         <div className="vehicle-create-overlay" role="dialog" aria-modal="true" aria-label={text.addVehicle}>
           <form className="vehicle-create-modal" onSubmit={onCreate}>
             <h3>{text.newVehicle}</h3>
@@ -533,26 +544,30 @@ export function VehiclesPage() {
                   </option>
                 ))}
               </select>
-              <button
-                className="btn-primary"
-                type="button"
-                disabled={!selectedVehicleId || updateMutation.isPending}
-                onClick={onOpenUpdateModal}
-              >
-                {updateMutation.isPending ? text.updating : text.update}
-              </button>
-              <button
-                className="btn-danger"
-                type="button"
-                disabled={!selectedVehicleId || !hasManualSelection || deleteMutation.isPending}
-                onClick={() => {
-                  if (!selectedVehicleId) return;
-                  if (!window.confirm(text.deleteConfirm)) return;
-                  deleteMutation.mutate(selectedVehicleId);
-                }}
-              >
-                {deleteMutation.isPending ? text.deleting : text.delete}
-              </button>
+              {canManageVehicles ? (
+                <>
+                  <button
+                    className="btn-primary"
+                    type="button"
+                    disabled={!selectedVehicleId || updateMutation.isPending}
+                    onClick={onOpenUpdateModal}
+                  >
+                    {updateMutation.isPending ? text.updating : text.update}
+                  </button>
+                  <button
+                    className="btn-danger"
+                    type="button"
+                    disabled={!selectedVehicleId || !hasManualSelection || deleteMutation.isPending}
+                    onClick={() => {
+                      if (!selectedVehicleId) return;
+                      if (!window.confirm(text.deleteConfirm)) return;
+                      deleteMutation.mutate(selectedVehicleId);
+                    }}
+                  >
+                    {deleteMutation.isPending ? text.deleting : text.delete}
+                  </button>
+                </>
+              ) : null}
             </div>
           </div>
           {vehiclesQuery.isLoading ? <p>{text.loadingVehicles}</p> : null}

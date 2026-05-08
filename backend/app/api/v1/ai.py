@@ -31,7 +31,9 @@ def get_current_context(
         ) from exc
 
     user_id = payload.get("user_id")
-    role = (payload.get("role", "driver") or "driver").strip().lower()
+    role = (payload.get("role", "user") or "user").strip().lower()
+    if role not in {"user", "admin"}:
+        role = "user"
 
     if not user_id:
         raise HTTPException(

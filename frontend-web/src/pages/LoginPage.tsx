@@ -1,17 +1,21 @@
 import { useMutation } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { login } from '../lib/api/endpoints';
 import { saveSession } from '../lib/auth/session';
 import { useI18n } from '../lib/i18n';
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useI18n();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const requestedPath = typeof location.state === 'object' && location.state && 'from' in location.state && typeof location.state.from === 'string'
+    ? location.state.from
+    : null;
 
   const mutation = useMutation({
     mutationFn: login,
@@ -27,7 +31,15 @@ export function LoginPage() {
         email: result.email,
         userId: result.user_id,
       });
-      navigate('/');
+
+      const normalizedRole = (result.role ?? '').toLowerCase();
+      const nextPath = requestedPath && requestedPath.startsWith('/')
+        ? requestedPath
+        : normalizedRole === 'admin'
+          ? '/admin'
+          : '/overview';
+
+      navigate(nextPath, { replace: true });
     },
     onError: (error: unknown) => {
       if (error instanceof AxiosError) {
@@ -79,7 +91,10 @@ export function LoginPage() {
           {error ? <p className="form-error">{error}</p> : null}
           <button type="submit" disabled={mutation.isPending}>{mutation.isPending ? t('auth.login.signingIn') : t('auth.login.signIn')}</button>
           <p className="auth-switch">
-            {t('auth.login.noAccount')} <Link to="/register">{t('auth.login.createOne')}</Link>
+            <Link to="/forgot-password">{t('auth.login.forgotPassword')}</Link>
+          </p>
+          <p className="auth-switch">
+            {t('auth.login.noAccount')} <Link to="/register" state={requestedPath ? { from: requestedPath } : undefined}>{t('auth.login.createOne')}</Link>
           </p>
         </form>
       </section>

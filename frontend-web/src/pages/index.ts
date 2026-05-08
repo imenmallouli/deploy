@@ -1,12 +1,13 @@
 export { AlertsPage } from './AlertsPage';
+export { AdminUsersPage } from './AdminUsersPage';
 export { AutoPiSettingsPage } from './AutoPiSettingsPage';
 export { DashboardPage } from './DashboardPage';
 export { DeviceOverviewPage } from './DeviceOverviewPage';
 export { DeviceDetailsPage } from './DeviceDetailsPage';
 export { DevicesPage } from './DevicesPage';
 export { DtcPage } from './DtcPage';
+export { ForgotPasswordPage } from './ForgotPasswordPage';
 export { GeofencesPage } from './GeofencesPage';
-export { GetStartedPage } from './GetStartedPage';
 export { LoginPage } from './LoginPage';
 export { LocationsPage } from './LocationsPage';
 export { RegisterPage } from './RegisterPage';

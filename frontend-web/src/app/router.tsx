@@ -2,6 +2,7 @@ import { Navigate, createBrowserRouter } from 'react-router-dom';
 import { AppLayout } from './AppLayout';
 import { RequireAuth, RequireRole } from './RequireAuth';
 import {
+  AdminUsersPage,
   AlertsPage,
   AutoPiSettingsPage,
   DashboardPage,
@@ -9,8 +10,8 @@ import {
   DeviceOverviewPage,
   DevicesPage,
   DtcPage,
+  ForgotPasswordPage,
   GeofencesPage,
-  GetStartedPage,
   LoginPage,
   LocationsPage,
   RegisterPage,
@@ -21,6 +22,7 @@ import {
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
+  { path: '/forgot-password', element: <ForgotPasswordPage /> },
   { path: '/register', element: <RegisterPage /> },
   {
     path: '/',
@@ -30,21 +32,20 @@ export const router = createBrowserRouter([
         path: '/',
         element: <AppLayout />,
         children: [
-          { index: true, element: <Navigate to="/get-started" replace /> },
-          { path: 'get-started', element: <GetStartedPage /> },
-          { path: 'overview', element: <DashboardPage /> },
+          { index: true, element: <Navigate to="/overview" replace /> },
           {
-            path: 'vehicles',
+            path: 'overview',
             element: (
-              <RequireRole allowedRoles={['admin']}>
-                <Navigate to="/vehicles/list" replace />
+              <RequireRole allowedRoles={['user', 'admin']}>
+                <DashboardPage />
               </RequireRole>
             ),
           },
+          { path: 'vehicles', element: <Navigate to="/vehicles/list" replace /> },
           {
             path: 'vehicles/list',
             element: (
-              <RequireRole allowedRoles={['admin']}>
+              <RequireRole allowedRoles={['user', 'admin']}>
                 <VehiclesPage />
               </RequireRole>
             ),
@@ -52,7 +53,7 @@ export const router = createBrowserRouter([
           {
             path: 'vehicles/:vehicleId',
             element: (
-              <RequireRole allowedRoles={['admin']}>
+              <RequireRole allowedRoles={['user', 'admin']}>
                 <VehicleDetailsPage />
               </RequireRole>
             ),
@@ -60,7 +61,7 @@ export const router = createBrowserRouter([
           {
             path: 'locations',
             element: (
-              <RequireRole allowedRoles={['admin']}>
+              <RequireRole allowedRoles={['user', 'admin']}>
                 <LocationsPage />
               </RequireRole>
             ),
@@ -68,7 +69,7 @@ export const router = createBrowserRouter([
           {
             path: 'geofences',
             element: (
-              <RequireRole allowedRoles={['admin']}>
+              <RequireRole allowedRoles={['user', 'admin']}>
                 <GeofencesPage />
               </RequireRole>
             ),
@@ -76,19 +77,84 @@ export const router = createBrowserRouter([
           {
             path: 'settings/autopi',
             element: (
-              <RequireRole allowedRoles={['admin']}>
+              <RequireRole allowedRoles={['user', 'admin']}>
                 <AutoPiSettingsPage />
               </RequireRole>
             ),
           },
-          { path: 'diagnostics', element: <DtcPage /> },
-          { path: 'devices/overview', element: <DeviceOverviewPage /> },
-          { path: 'devices/list', element: <DevicesPage /> },
-          { path: 'devices/:deviceId', element: <DeviceDetailsPage /> },
+          {
+            path: 'admin',
+            element: (
+              <RequireRole allowedRoles={['admin']}>
+                <AdminUsersPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: 'admin/users',
+            element: (
+              <RequireRole allowedRoles={['admin']}>
+                <Navigate to="/admin" replace />
+              </RequireRole>
+            ),
+          },
+          {
+            path: 'diagnostics',
+            element: (
+              <RequireRole allowedRoles={['user', 'admin']}>
+                <DtcPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: 'devices/overview',
+            element: (
+              <RequireRole allowedRoles={['user', 'admin']}>
+                <DeviceOverviewPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: 'devices/list',
+            element: (
+              <RequireRole allowedRoles={['user', 'admin']}>
+                <DevicesPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: 'devices/:deviceId',
+            element: (
+              <RequireRole allowedRoles={['user', 'admin']}>
+                <DeviceDetailsPage />
+              </RequireRole>
+            ),
+          },
 
-          { path: 'telemetry', element: <TelemetryPage /> },
-          { path: 'dtc', element: <DtcPage /> },
-          { path: 'alerts', element: <AlertsPage /> },
+          {
+            path: 'telemetry',
+            element: (
+              <RequireRole allowedRoles={['user', 'admin']}>
+                <TelemetryPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: 'dtc',
+            element: (
+              <RequireRole allowedRoles={['user', 'admin']}>
+                <DtcPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: 'alerts',
+            element: (
+              <RequireRole allowedRoles={['user', 'admin']}>
+                <AlertsPage />
+              </RequireRole>
+            ),
+          },
 
           { path: 'devices', element: <Navigate to="/devices/list" replace /> },
 

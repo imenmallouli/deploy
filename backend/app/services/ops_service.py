@@ -16,6 +16,34 @@ def _now_iso() -> str:
 
 class OpsService:
     @staticmethod
+    def _lookup_vehicle_owner_user_id(vehicle_id: int | None) -> int | None:
+        if vehicle_id is None:
+            return None
+
+        db = SessionLocal()
+        try:
+            vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
+            if not vehicle:
+                return None
+            return vehicle.driver_id
+        except Exception as exc:
+            print(f"[OPS] Unable to resolve SQL vehicle owner for vehicle_id={vehicle_id}: {exc}")
+            return None
+        finally:
+            db.close()
+
+    @staticmethod
+    def _allowed_vehicle_ids(user_id: int | None) -> list[int] | None:
+        if user_id is None:
+            return None
+
+        db = SessionLocal()
+        try:
+            return [row[0] for row in db.query(Vehicle.id).filter(Vehicle.driver_id == user_id).all()]
+        finally:
+            db.close()
+
+    @staticmethod
     def _serialize(doc: dict):
         payload = dict(doc)
         payload["id"] = str(payload.pop("_id"))
@@ -68,9 +96,11 @@ class OpsService:
         return "Vehicule"
 
     @staticmethod
-    async def list_items(collection: str, q: str | None = None):
+    async def list_items(collection: str, q: str | None = None, owner_user_id: int | None = None):
         db = get_mongo_db()
         query = {}
+        if owner_user_id is not None:
+            query["owner_user_id"] = owner_user_id
         if q:
             q_regex = {"$regex": q, "$options": "i"}
             if collection == "devices":
@@ -98,9 +128,11 @@ class OpsService:
         return {"status": "success", "count": len(items), "items": items}
 
     @staticmethod
-    async def create_item(collection: str, payload: dict):
+    async def create_item(collection: str, payload: dict, owner_user_id: int | None = None):
         db = get_mongo_db()
         doc = {**payload, "created_at": _now_iso(), "updated_at": _now_iso()}
+        if owner_user_id is not None:
+            doc["owner_user_id"] = owner_user_id
         result = await db[collection].insert_one(doc)
         created = await db[collection].find_one({"_id": result.inserted_id})
 
@@ -114,7 +146,7 @@ class OpsService:
         return {"status": "success", "item": OpsService._serialize(created)}
 
     @staticmethod
-    async def update_item(collection: str, item_id: str, payload: dict):
+    async def update_item(collection: str, item_id: str, payload: dict, owner_user_id: int | None = None):
         if not ObjectId.is_valid(item_id):
             return {"status": "error", "message": "ID invalide"}
 
@@ -122,8 +154,15 @@ class OpsService:
         updates = {k: v for k, v in payload.items() if v is not None}
         updates["updated_at"] = _now_iso()
 
-        await db[collection].update_one({"_id": ObjectId(item_id)}, {"$set": updates})
-        updated = await db[collection].find_one({"_id": ObjectId(item_id)})
+        filter_query: dict = {"_id": ObjectId(item_id)}
+        if owner_user_id is not None:
+            filter_query["owner_user_id"] = owner_user_id
+
+        result = await db[collection].update_one(filter_query, {"$set": updates})
+        if result.matched_count == 0:
+            return {"status": "error", "message": "Item introuvable"}
+
+        updated = await db[collection].find_one(filter_query)
         if not updated:
             return {"status": "error", "message": "Item introuvable"}
 
@@ -137,23 +176,31 @@ class OpsService:
         return {"status": "success", "item": OpsService._serialize(updated)}
 
     @staticmethod
-    async def delete_item(collection: str, item_id: str):
+    async def delete_item(collection: str, item_id: str, owner_user_id: int | None = None):
         if not ObjectId.is_valid(item_id):
             return {"status": "error", "message": "ID invalide"}
 
         db = get_mongo_db()
-        result = await db[collection].delete_one({"_id": ObjectId(item_id)})
+        filter_query: dict = {"_id": ObjectId(item_id)}
+        if owner_user_id is not None:
+            filter_query["owner_user_id"] = owner_user_id
+
+        result = await db[collection].delete_one(filter_query)
         if result.deleted_count == 0:
             return {"status": "error", "message": "Item introuvable"}
         return {"status": "success", "deleted": True}
 
     @staticmethod
-    async def get_devices_overview():
+    async def get_devices_overview(user_id: int | None = None):
         db = get_mongo_db()
-        total = await db.devices.count_documents({})
-        online = await db.devices.count_documents({"status": "online"})
-        offline = await db.devices.count_documents({"status": "offline"})
-        warning = await db.devices.count_documents({"status": "warning"})
+        query: dict = {}
+        if user_id is not None:
+            query["owner_user_id"] = user_id
+
+        total = await db.devices.count_documents(query)
+        online = await db.devices.count_documents({**query, "status": "online"})
+        offline = await db.devices.count_documents({**query, "status": "offline"})
+        warning = await db.devices.count_documents({**query, "status": "warning"})
         return {
             "status": "success",
             "total": total,
@@ -239,12 +286,15 @@ class OpsService:
             return {"status": "skipped", "reason": "device_id manquant"}
 
         vehicle_identity = OpsService._lookup_vehicle_identity_sql(vehicle_id)
+        owner_user_id = OpsService._lookup_vehicle_owner_user_id(vehicle_id)
         set_doc = {
             "status": status,
             "updated_at": now_iso,
         }
         if vehicle_id is not None:
             set_doc["vehicle_id"] = int(vehicle_id)
+        if owner_user_id is not None:
+            set_doc["owner_user_id"] = int(owner_user_id)
         if vehicle_identity.get("vin"):
             set_doc["vin"] = vehicle_identity["vin"]
 
@@ -317,9 +367,17 @@ class OpsService:
         return inside
 
     @staticmethod
-    async def check_geofences(latitude: float, longitude: float, vehicle_id: int | None = None):
+    async def check_geofences(
+        latitude: float,
+        longitude: float,
+        vehicle_id: int | None = None,
+        owner_user_id: int | None = None,
+    ):
         db = get_mongo_db()
-        cursor = db.geofences.find({"enabled": {"$ne": False}})
+        query: dict = {"enabled": {"$ne": False}}
+        if owner_user_id is not None:
+            query["owner_user_id"] = owner_user_id
+        cursor = db.geofences.find(query)
 
         results = []
         events = []
@@ -435,13 +493,16 @@ class OpsService:
         }
 
     @staticmethod
-    async def setup_geofence_monitoring(payload):
+    async def setup_geofence_monitoring(payload, owner_user_id: int | None = None):
         db = get_mongo_db()
 
         if not ObjectId.is_valid(payload.geofence_id):
             return {"status": "error", "message": "ID geocloture invalide"}
 
-        geofence = await db.geofences.find_one({"_id": ObjectId(payload.geofence_id)})
+        geofence_query: dict = {"_id": ObjectId(payload.geofence_id)}
+        if owner_user_id is not None:
+            geofence_query["owner_user_id"] = owner_user_id
+        geofence = await db.geofences.find_one(geofence_query)
         if not geofence:
             return {"status": "error", "message": "Geocloture introuvable"}
 
@@ -531,7 +592,18 @@ class OpsService:
         }
 
     @staticmethod
-    async def save_vehicle_position(vehicle_id: int, latitude: float, longitude: float, speed: float | None = None):
+    async def save_vehicle_position(
+        vehicle_id: int,
+        latitude: float,
+        longitude: float,
+        speed: float | None = None,
+        user_id: int | None = None,
+    ):
+        if user_id is not None:
+            allowed_vehicle_ids = OpsService._allowed_vehicle_ids(user_id)
+            if vehicle_id not in allowed_vehicle_ids:
+                return
+
         db = get_mongo_db()
         await db.vehicle_positions.update_one(
             {"vehicle_id": vehicle_id},
@@ -548,9 +620,16 @@ class OpsService:
         )
 
     @staticmethod
-    async def get_vehicle_positions():
+    async def get_vehicle_positions(user_id: int | None = None):
         db = get_mongo_db()
-        cursor = db.vehicle_positions.find({})
+        query: dict = {}
+        if user_id is not None:
+            allowed_vehicle_ids = OpsService._allowed_vehicle_ids(user_id)
+            if not allowed_vehicle_ids:
+                return {"status": "success", "items": []}
+            query["vehicle_id"] = {"$in": allowed_vehicle_ids}
+
+        cursor = db.vehicle_positions.find(query)
         items = []
         async for doc in cursor:
             item = dict(doc)
