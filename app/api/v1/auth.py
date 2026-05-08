@@ -3,7 +3,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.schemas.user import UserRegister, UserLogin
+from app.schemas.user import UserForgotPassword, UserLogin, UserRegister, UserResetByAdmin, UserRoleUpdate
 from app.services.user_service import UserService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -21,6 +21,16 @@ def get_current_payload(
             detail=str(exc)
         ) from exc
 
+    return payload
+
+
+def require_admin(payload: dict = Depends(get_current_payload)):
+    role = UserService.normalize_role(payload.get("role"), default="user")
+    if role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acces reserve a l'admin"
+        )
     return payload
 
 
@@ -78,3 +88,70 @@ def get_me(
         )
 
     return result
+
+
+@router.get("/users")
+def list_users(
+    _: dict = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    return UserService.list_users(db=db)
+
+
+@router.post("/create-user")
+def create_user_by_admin(
+    user_data: UserRegister,
+    _: dict = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    return UserService.create_user_by_admin(
+        db=db,
+        first_name=user_data.first_name,
+        last_name=user_data.last_name,
+        email=user_data.email,
+        role=user_data.role,
+        phone=user_data.phone,
+        password=user_data.password,
+    )
+
+
+@router.post("/role/{user_id}")
+def set_role_by_admin(
+    user_id: int,
+    payload: UserRoleUpdate,
+    _: dict = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    return UserService.set_user_role(db=db, user_id=user_id, role=payload.role)
+
+
+@router.post("/reset-password/{user_id}")
+def reset_password_by_admin(
+    user_id: int,
+    payload: UserResetByAdmin,
+    _: dict = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    return UserService.reset_password_by_admin(db=db, user_id=user_id, new_password=payload.new_password)
+
+
+@router.delete("/user/{user_id}")
+def delete_user_by_admin(
+    user_id: int,
+    admin_payload: dict = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    requester_user_id = admin_payload.get("user_id")
+    return UserService.delete_user_by_admin(
+        db=db,
+        user_id=user_id,
+        requester_user_id=requester_user_id,
+    )
+
+
+@router.post("/forgot-password")
+def forgot_password(
+    payload: UserForgotPassword,
+    db: Session = Depends(get_db)
+):
+    return UserService.forgot_password(db=db, email=payload.email)

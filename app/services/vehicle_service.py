@@ -13,6 +13,7 @@ class VehicleService:
     def create_vehicle(
         db: Session,
         role: str,
+        user_id: int,
         vin: str,
         license_plate: str,
         make: str,
@@ -26,9 +27,14 @@ class VehicleService:
         autopi_device_id: str | None = None,
         autopi_unit_id: str | None = None,
     ):
-        role = (role or "driver").strip().lower()
-        if role not in {"admin", "manager"}:
+        role = (role or "user").strip().lower()
+        if role not in {"admin", "manager", "user"}:
             return {"status": "error", "message": "Accès refusé"}
+
+        # Keep user/admin data separated: user can create, but only under their own scope.
+        if role == "user":
+            driver_id = user_id
+            fleet_id = None
 
         existing_vin = db.query(Vehicle).filter(Vehicle.vin == vin).first()
         if existing_vin:
@@ -52,8 +58,8 @@ class VehicleService:
             driver = db.query(User).filter(User.id == driver_id).first()
             if not driver:
                 return {"status": "error", "message": "Driver non trouvé"}
-            if (driver.role or "").strip().lower() != "driver":
-                return {"status": "error", "message": "Utilisateur assigné n'est pas un driver"}
+            if (driver.role or "").strip().lower() not in {"driver", "user", "admin"}:
+                return {"status": "error", "message": "Utilisateur assigné invalide"}
 
         vehicle = Vehicle(
             vin=vin,
@@ -93,7 +99,7 @@ class VehicleService:
 
     @staticmethod
     def list_vehicles(db: Session, role: str, user_id: int):
-        role = (role or "driver").strip().lower()
+        role = (role or "user").strip().lower()
 
         if role == "admin":
             vehicles = db.query(Vehicle).order_by(Vehicle.id.desc()).all()
@@ -106,8 +112,10 @@ class VehicleService:
                 vehicles = []
             else:
                 vehicles = db.query(Vehicle).filter(Vehicle.fleet_id.in_(managed_fleet_ids)).order_by(Vehicle.id.desc()).all()
-        else:
+        elif role == "user":
             vehicles = db.query(Vehicle).filter(Vehicle.driver_id == user_id).order_by(Vehicle.id.desc()).all()
+        else:
+            return {"status": "error", "message": "Accès refusé", "count": 0, "items": []}
 
         return {
             "status": "success",
@@ -117,7 +125,7 @@ class VehicleService:
 
     @staticmethod
     def get_vehicle_by_id(db: Session, role: str, user_id: int, vehicle_id: int):
-        role = (role or "driver").strip().lower()
+        role = (role or "user").strip().lower()
         vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
 
         if not vehicle:
@@ -127,6 +135,9 @@ class VehicleService:
             fleet = db.query(Fleet).filter(Fleet.id == vehicle.fleet_id).first()
             if not fleet or fleet.manager_id != user_id:
                 return {"status": "error", "message": "Accès refusé"}
+
+        if role == "user" and vehicle.driver_id != user_id:
+            return {"status": "error", "message": "Accès refusé"}
 
         if role == "driver" and vehicle.driver_id != user_id:
             return {"status": "error", "message": "Accès refusé"}
@@ -155,7 +166,7 @@ class VehicleService:
         autopi_device_id: str | None = None,
         autopi_unit_id: str | None = None,
     ):
-        role = (role or "driver").strip().lower()
+        role = (role or "user").strip().lower()
 
         if role == "driver":
             return {"status": "error", "message": "Accès refusé"}
@@ -168,6 +179,9 @@ class VehicleService:
             fleet = db.query(Fleet).filter(Fleet.id == vehicle.fleet_id).first()
             if not fleet or fleet.manager_id != user_id:
                 return {"status": "error", "message": "Accès refusé"}
+
+        if role == "user" and vehicle.driver_id != user_id:
+            return {"status": "error", "message": "Accès refusé"}
 
         if vin is not None and vin != vehicle.vin:
             existing_vin = db.query(Vehicle).filter(Vehicle.vin == vin, Vehicle.id != vehicle_id).first()
@@ -223,14 +237,19 @@ class VehicleService:
         }
 
     @staticmethod
-    def delete_vehicle(db: Session, role: str, vehicle_id: int):
-        role = (role or "driver").strip().lower()
-        if role != "admin":
+    def delete_vehicle(db: Session, role: str, user_id: int, vehicle_id: int):
+        role = (role or "user").strip().lower()
+
+        if role not in {"admin", "user"}:
             return {"status": "error", "message": "Accès refusé"}
 
         vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
         if not vehicle:
             return {"status": "error", "message": "Véhicule non trouvé"}
+
+        if role == "user":
+            if vehicle.driver_id != user_id:
+                return {"status": "error", "message": "Accès refusé"}
 
         db.delete(vehicle)
         db.commit()

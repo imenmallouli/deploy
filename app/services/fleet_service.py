@@ -7,10 +7,13 @@ from app.models.vehicle import Vehicle
 
 class FleetService:
     @staticmethod
-    def create_fleet(db: Session, role: str, name: str, description: str | None = None, manager_id: int | None = None):
-        role = (role or "driver").strip().lower()
-        if role != "admin":
+    def create_fleet(db: Session, role: str, user_id: int, name: str, description: str | None = None, manager_id: int | None = None):
+        role = (role or "user").strip().lower()
+        if role not in {"admin", "manager", "user"}:
             return {"status": "error", "message": "Accès refusé"}
+
+        if role in {"manager", "user"}:
+            manager_id = user_id
 
         existing_fleet = db.query(Fleet).filter(Fleet.name == name).first()
         if existing_fleet:
@@ -38,10 +41,10 @@ class FleetService:
 
     @staticmethod
     def list_fleets(db: Session, role: str, user_id: int):
-        role = (role or "driver").strip().lower()
+        role = (role or "user").strip().lower()
         if role == "admin":
             fleets = db.query(Fleet).order_by(Fleet.id.desc()).all()
-        elif role == "manager":
+        elif role in {"manager", "user"}:
             fleets = db.query(Fleet).filter(Fleet.manager_id == user_id).order_by(Fleet.id.desc()).all()
         else:
             return {"status": "error", "message": "Accès refusé"}
@@ -62,7 +65,7 @@ class FleetService:
 
     @staticmethod
     def get_fleet_by_id(db: Session, role: str, user_id: int, fleet_id: int):
-        role = (role or "driver").strip().lower()
+        role = (role or "user").strip().lower()
         fleet = db.query(Fleet).filter(Fleet.id == fleet_id).first()
         if not fleet:
             return {"status": "error", "message": "Flotte non trouvée"}
@@ -70,7 +73,7 @@ class FleetService:
         if role == "driver":
             return {"status": "error", "message": "Accès refusé"}
 
-        if role == "manager" and fleet.manager_id != user_id:
+        if role in {"manager", "user"} and fleet.manager_id != user_id:
             return {"status": "error", "message": "Accès refusé"}
 
         return {
@@ -85,7 +88,7 @@ class FleetService:
 
     @staticmethod
     def list_fleet_vehicles(db: Session, role: str, user_id: int, fleet_id: int):
-        role = (role or "driver").strip().lower()
+        role = (role or "user").strip().lower()
 
         fleet = db.query(Fleet).filter(Fleet.id == fleet_id).first()
         if not fleet:
@@ -94,7 +97,7 @@ class FleetService:
         if role == "driver":
             return {"status": "error", "message": "Accès refusé"}
 
-        if role == "manager" and fleet.manager_id != user_id:
+        if role in {"manager", "user"} and fleet.manager_id != user_id:
             return {"status": "error", "message": "Accès refusé"}
 
         vehicles = db.query(Vehicle).filter(Vehicle.fleet_id == fleet_id).order_by(Vehicle.id.desc()).all()
@@ -119,7 +122,10 @@ class FleetService:
 
     @staticmethod
     def add_vehicle_to_fleet(db: Session, role: str, user_id: int, fleet_id: int, vehicle_id: int):
-        role = (role or "driver").strip().lower()
+        role = (role or "user").strip().lower()
+
+        if role == "user":
+            role = "manager"
 
         if role not in {"admin", "manager"}:
             return {"status": "error", "message": "Accès refusé"}
@@ -134,6 +140,9 @@ class FleetService:
         vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
         if not vehicle:
             return {"status": "error", "message": "Véhicule non trouvé"}
+
+        if role == "manager" and vehicle.driver_id != user_id:
+            return {"status": "error", "message": "Accès refusé"}
 
         if role == "manager" and vehicle.fleet_id is not None and vehicle.fleet_id != fleet_id:
             current_fleet = db.query(Fleet).filter(Fleet.id == vehicle.fleet_id).first()
@@ -170,7 +179,7 @@ class FleetService:
         description: str | None = None,
         manager_id: int | None = None,
     ):
-        role = (role or "driver").strip().lower()
+        role = (role or "user").strip().lower()
         fleet = db.query(Fleet).filter(Fleet.id == fleet_id).first()
         if not fleet:
             return {"status": "error", "message": "Flotte non trouvée"}
@@ -178,7 +187,7 @@ class FleetService:
         if role == "driver":
             return {"status": "error", "message": "Accès refusé"}
 
-        if role == "manager" and fleet.manager_id != user_id:
+        if role in {"manager", "user"} and fleet.manager_id != user_id:
             return {"status": "error", "message": "Accès refusé"}
 
         if name is not None and name != fleet.name:
@@ -212,14 +221,18 @@ class FleetService:
         }
 
     @staticmethod
-    def delete_fleet(db: Session, role: str, fleet_id: int):
-        role = (role or "driver").strip().lower()
-        if role != "admin":
+    def delete_fleet(db: Session, role: str, user_id: int, fleet_id: int):
+        role = (role or "user").strip().lower()
+
+        if role not in {"admin", "manager", "user"}:
             return {"status": "error", "message": "Accès refusé"}
 
         fleet = db.query(Fleet).filter(Fleet.id == fleet_id).first()
         if not fleet:
             return {"status": "error", "message": "Flotte non trouvée"}
+
+        if role in {"manager", "user"} and fleet.manager_id != user_id:
+            return {"status": "error", "message": "Accès refusé"}
 
         # Détacher les véhicules avant de supprimer la flotte
         db.query(Vehicle).filter(Vehicle.fleet_id == fleet_id).update({"fleet_id": None})

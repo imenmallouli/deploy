@@ -23,7 +23,9 @@ def get_current_context(
         ) from exc
 
     user_id = payload.get("user_id")
-    role = (payload.get("role", "driver") or "driver").strip().lower()
+    role = (payload.get("role", "user") or "user").strip().lower()
+    if role not in {"user", "admin"}:
+        role = "user"
 
     if not user_id:
         raise HTTPException(
@@ -43,6 +45,7 @@ def create_vehicle(
     return VehicleService.create_vehicle(
         db=db,
         role=context["role"],
+        user_id=context["user_id"],
         vin=payload.vin,
         license_plate=payload.license_plate,
         make=payload.make,
@@ -134,5 +137,6 @@ def delete_vehicle(
     return VehicleService.delete_vehicle(
         db=db,
         role=context["role"],
+        user_id=context["user_id"],
         vehicle_id=vehicle_id,
     )

@@ -38,7 +38,9 @@ def get_current_context(
         ) from exc
 
     user_id = payload.get("user_id")
-    role = (payload.get("role", "driver") or "driver").strip().lower()
+    role = (payload.get("role", "user") or "user").strip().lower()
+    if role not in {"user", "admin"}:
+        role = "user"
 
     if not user_id:
         raise HTTPException(
@@ -54,47 +56,53 @@ async def list_geofences(
     q: str | None = Query(default=None),
     context: dict = Depends(get_current_context),
 ):
-    _ = context
-    return await OpsService.list_items("geofences", q=q)
+    return await OpsService.list_items(
+        "geofences",
+        q=q,
+        owner_user_id=context["user_id"],
+    )
 
 
 @router.post("/geofences")
 async def create_geofence(payload: GeofenceCreate, context: dict = Depends(get_current_context)):
-    _ = context
-    return await OpsService.create_item("geofences", payload.model_dump())
+    return await OpsService.create_item(
+        "geofences",
+        payload.model_dump(),
+        owner_user_id=context["user_id"],
+    )
 
 
 # ✅ FIXED ROUTES FIRST — before /{item_id} parameterized routes
 @router.post("/geofences/check")
 async def check_geofences(payload: GeofenceCheckRequest, context: dict = Depends(get_current_context)):
-    _ = context
     return await OpsService.check_geofences(
         latitude=payload.latitude,
         longitude=payload.longitude,
         vehicle_id=payload.vehicle_id,
+        owner_user_id=context["user_id"],
     )
 
 
 @router.get("/geofences/vehicle-positions")
 async def get_vehicle_positions(context: dict = Depends(get_current_context)):
-    _ = context
-    return await OpsService.get_vehicle_positions()
+    return await OpsService.get_vehicle_positions(user_id=context["user_id"])
 
 
 @router.post("/geofences/vehicle-positions")
 async def save_vehicle_position(payload: VehiclePositionSave, context: dict = Depends(get_current_context)):
-    _ = context
     await OpsService.save_vehicle_position(
         vehicle_id=payload.vehicle_id,
         latitude=payload.latitude,
         longitude=payload.longitude,
         speed=payload.speed,
+        user_id=context["user_id"],
     )
     # Trigger transition detection in backend service.
     await OpsService.check_geofences(
         latitude=payload.latitude,
         longitude=payload.longitude,
         vehicle_id=payload.vehicle_id,
+        owner_user_id=context["user_id"],
     )
     return {"status": "success"}
 
@@ -106,7 +114,7 @@ async def setup_geofence_monitoring(
 ):
     if context["role"] not in ("admin",):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acces refuse")
-    return await OpsService.setup_geofence_monitoring(payload)
+    return await OpsService.setup_geofence_monitoring(payload, owner_user_id=context["user_id"])
 
 
 @router.post("/geofences/exit")
@@ -122,14 +130,17 @@ async def report_geofence_exit(
 # ✅ PARAMETERIZED ROUTES LAST — after all fixed routes
 @router.put("/geofences/{item_id}")
 async def update_geofence(item_id: str, payload: GeofenceUpdate, context: dict = Depends(get_current_context)):
-    _ = context
-    return await OpsService.update_item("geofences", item_id, payload.model_dump())
+    return await OpsService.update_item(
+        "geofences",
+        item_id,
+        payload.model_dump(),
+        owner_user_id=context["user_id"],
+    )
 
 
 @router.delete("/geofences/{item_id}")
 async def delete_geofence(item_id: str, context: dict = Depends(get_current_context)):
-    _ = context
-    return await OpsService.delete_item("geofences", item_id)
+    return await OpsService.delete_item("geofences", item_id, owner_user_id=context["user_id"])
 
 
 @router.get("/groups")
@@ -182,37 +193,45 @@ async def delete_location(item_id: str, context: dict = Depends(get_current_cont
 
 @router.get("/devices")
 async def list_devices(q: str | None = Query(default=None), context: dict = Depends(get_current_context)):
-    _ = context
-    return await OpsService.list_items("devices", q=q)
+    return await OpsService.list_items(
+        "devices",
+        q=q,
+        owner_user_id=context["user_id"],
+    )
 
 
 @router.get("/devices/overview")
 async def devices_overview(context: dict = Depends(get_current_context)):
-    _ = context
-    return await OpsService.get_devices_overview()
+    return await OpsService.get_devices_overview(user_id=context["user_id"])
 
 
 @router.post("/devices")
 async def create_device(payload: DeviceCreate, context: dict = Depends(get_current_context)):
-    _ = context
-    return await OpsService.create_item("devices", payload.model_dump())
+    return await OpsService.create_item(
+        "devices",
+        payload.model_dump(),
+        owner_user_id=context["user_id"],
+    )
 
 
 @router.put("/devices/{item_id}")
 async def update_device(item_id: str, payload: DeviceUpdate, context: dict = Depends(get_current_context)):
-    _ = context
-    return await OpsService.update_item("devices", item_id, payload.model_dump())
+    return await OpsService.update_item(
+        "devices",
+        item_id,
+        payload.model_dump(),
+        owner_user_id=context["user_id"],
+    )
 
 
 @router.delete("/devices/{item_id}")
 async def delete_device(item_id: str, context: dict = Depends(get_current_context)):
-    _ = context
-    return await OpsService.delete_item("devices", item_id)
+    return await OpsService.delete_item("devices", item_id, owner_user_id=context["user_id"])
 
 
 @router.get("/autopi/settings", response_model=AutoPiSettingsResponse)
 async def get_autopi_settings(context: dict = Depends(get_current_context)):
-    if context["role"] not in ("admin",):
+    if context["role"] not in ("admin", "user"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acces refuse")
     result = await AutoPiSettingsService.get_settings()
     return result["settings"]
@@ -220,7 +239,7 @@ async def get_autopi_settings(context: dict = Depends(get_current_context)):
 
 @router.put("/autopi/settings")
 async def update_autopi_settings(payload: AutoPiSettingsUpdate, context: dict = Depends(get_current_context)):
-    if context["role"] not in ("admin",):
+    if context["role"] not in ("admin", "user"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acces refuse")
     try:
         result = await AutoPiSettingsService.save_settings(payload.model_dump())
