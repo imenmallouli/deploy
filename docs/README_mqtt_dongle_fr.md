@@ -18,7 +18,7 @@ Endpoints backend utilises:
 
 ```bash
 cd "/c/auto diagnostic platform/backend"
-docker compose up -d mqtt-gateway
+docker compose up -d mqtt-gateway 
 ```
 
 - Cette commande affiche seulement les logs (elle ne lance rien):
