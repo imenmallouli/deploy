@@ -408,3 +408,110 @@ Cela permet de tracer:
 ---
 
 En résumé: MQTT sert de transport temps réel entre dongles et plateforme. Le broker reçoit, le bridge transforme et envoie au backend, puis vos pages frontend lisent les données via API.
+
+---
+
+## 13) Procedure finale de test reel (AutoPi Cloud + dongle voiture)
+
+Objectif: valider que seules les donnees reelles du dongle alimentent la plateforme (sans faux data).
+
+### 13.1 Pre-checks
+
+1. Verifier que la stack est lancee:
+
+```powershell
+cd "c:\auto diagnostic platform\backend"
+docker compose up -d
+docker ps
+```
+
+2. Verifier que la gateway est vivante (lecture logs):
+
+```powershell
+docker logs -f adp-mqtt-gateway
+```
+
+Important: cette commande n'execute pas la gateway, elle affiche seulement les logs.
+
+### 13.2 Configuration AutoPi (obligatoire)
+
+1. Device -> Settings -> Returner MQTT
+- Host: `broker.emqx.io`
+- Port: `1883`
+- Enabled: `True`
+- TLS: `False`
+
+2. Device -> Services -> `gnss_manager` (worker `poll_logger`)
+- Enabled: `True`
+- Auto Start: `True`
+- Interval: `5`
+- Returner: inclure `mqtt`
+- Filter: retirer `significant_position` pendant le test initial
+
+3. Device -> Loggers (OBD-II PID)
+- `RPM`, `SPEED`, `ENGINE_LOAD`, `GET_DTC` (au minimum)
+- `Enabled` doit etre vert
+
+4. Save + Sync process to device.
+
+### 13.3 Test en conditions reelles
+
+1. Brancher le dongle dans la voiture.
+2. Contact ON puis moteur ON.
+3. Mettre la voiture en exterieur (GPS fix).
+4. Attendre 30 a 120 secondes.
+
+### 13.4 Ce qui doit apparaitre dans les logs gateway
+
+```text
+[FORWARD] telemetry OK ... topic=spm/bat
+[FORWARD] telemetry OK ... topic=.../track/pos
+[GPS] position saved vehicle_id=11 ...
+```
+
+Si les topics OBD arrivent aussi:
+
+```text
+... topic=.../obd/rpm
+... topic=.../obd/speed
+... topic=.../obd/engine_load
+```
+
+### 13.5 Verification base de donnees
+
+Derniere position GPS:
+
+```powershell
+docker exec adp-mongo mongosh mallouliauto --quiet --eval "db.vehicle_positions.find({vehicle_id:11},{_id:0,latitude:1,longitude:1,updated_at:1}).sort({$natural:-1}).limit(1).toArray()"
+```
+
+Dernieres telemetries (vehicule 11):
+
+```powershell
+docker exec adp-mongo mongosh mallouliauto --quiet --eval "db.telemetry_data.find({vehicleId:11},{_id:0,timestamp:1,ts:1,speed:1,rpm:1,battery_voltage:1,battery_charge_level:1}).sort({$natural:-1}).limit(10).toArray()"
+```
+
+### 13.6 Lecture UI attendue
+
+1. Page Locations:
+- Le point dongle (vert) montre la derniere position connue.
+- Quand un nouveau `track/pos` arrive, la position se met a jour.
+
+2. Page Diagnostic:
+- Si donnees fraiches recues: valeurs live.
+- Si flux stale (plus de donnees recentes): valeurs remises a `0`.
+
+### 13.7 Troubleshooting rapide
+
+1. Cas A: `spm/bat` arrive, mais pas `track/pos`
+- Revoir `gnss_manager` (filter/returner/sync)
+- Verifier GPS fix en exterieur
+
+2. Cas B: `spm/bat` et `track/pos` arrivent, mais pas OBD
+- Verifier moteur ON
+- Verifier loggers OBD (Active peut rester rouge pour certains PIDs non supportes)
+- Tester au minimum RPM/SPEED/ENGINE_LOAD
+
+3. Cas C: rien n'arrive
+- Verifier device online dans AutoPi Cloud
+- Restart device puis relancer la surveillance logs gateway
