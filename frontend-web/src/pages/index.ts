@@ -1,5 +1,6 @@
 export { AlertsPage } from './AlertsPage';
 export { AdminUsersPage } from './AdminUsersPage';
+export { GetStartedPage } from './GetStartedPage';
 export { AutoPiSettingsPage } from './AutoPiSettingsPage';
 export { DashboardPage } from './DashboardPage';
 export { DeviceOverviewPage } from './DeviceOverviewPage';

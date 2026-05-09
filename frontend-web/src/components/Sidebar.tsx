@@ -18,6 +18,9 @@ export function Sidebar() {
       <nav>
         <div className="nav-section">
           <div className="nav-list">
+            <NavLink to="/get-started" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+              {t('sidebar.getStarted')}
+            </NavLink>
             <NavLink to="/overview" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
               {t('sidebar.overview')}
             </NavLink>

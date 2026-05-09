@@ -12,6 +12,7 @@ import {
   DtcPage,
   ForgotPasswordPage,
   GeofencesPage,
+  GetStartedPage,
   LoginPage,
   LocationsPage,
   RegisterPage,
@@ -32,7 +33,15 @@ export const router = createBrowserRouter([
         path: '/',
         element: <AppLayout />,
         children: [
-          { index: true, element: <Navigate to="/overview" replace /> },
+          { index: true, element: <Navigate to="/get-started" replace /> },
+          {
+            path: 'get-started',
+            element: (
+              <RequireRole allowedRoles={['user', 'admin']}>
+                <GetStartedPage />
+              </RequireRole>
+            ),
+          },
           {
             path: 'overview',
             element: (

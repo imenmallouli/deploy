@@ -26,7 +26,7 @@ export function RequireRole({ allowedRoles, children }: RequireRoleProps) {
       return <Navigate to="/login" replace state={{ from: location.pathname }} />;
     }
 
-    return <Navigate to="/overview" replace />;
+    return <Navigate to="/get-started" replace />;
   }
 
   return children;
