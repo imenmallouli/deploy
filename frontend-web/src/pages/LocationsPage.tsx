@@ -53,6 +53,17 @@ function formatDateTime(value?: string | null) {
   return `${String(parsed.getDate()).padStart(2, '0')}/${String(parsed.getMonth() + 1).padStart(2, '0')}/${parsed.getFullYear()} ${String(parsed.getHours()).padStart(2, '0')}:${String(parsed.getMinutes()).padStart(2, '0')}`;
 }
 
+function formatRelativeTime(value?: string | null) {
+  if (!value) return '-';
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) return value;
+
+  const deltaSeconds = Math.max(0, Math.round((Date.now() - parsed) / 1000));
+  if (deltaSeconds < 60) return `il y a ${deltaSeconds} s`;
+  if (deltaSeconds < 3600) return `il y a ${Math.round(deltaSeconds / 60)} min`;
+  return `il y a ${Math.round(deltaSeconds / 3600)} h`;
+}
+
 function isFreshTimestamp(value?: string | null, thresholdMs = 5 * 60 * 1000) {
   if (!value) return false;
   const parsed = Date.parse(value);
@@ -194,6 +205,19 @@ export function LocationsPage() {
     return dongleRows.find((row) => row.position) ?? dongleRows[0];
   }, [dongleRows]);
 
+  const selectedDongleStatusLabel = selectedDongle?.isConnected ? 'Connecte' : 'Hors ligne';
+  const selectedDongleSyncLabel = formatRelativeTime(selectedDongle?.lastSeen);
+  const selectedDonglePositionLabel = selectedDongle?.position
+    ? `${selectedDongle.position.latitude.toFixed(5)}, ${selectedDongle.position.longitude.toFixed(5)}`
+    : 'indisponible';
+  const selectedDongleVehicleLabel = selectedDongle
+    ? `${selectedDongle.vehicle.make} ${selectedDongle.vehicle.model}`
+    : 'Aucun dongle';
+  const selectedDonglePlateLabel = selectedDongle?.vehicle.license_plate ?? '-';
+  const selectedDongleSpeedLabel = selectedDongle?.position?.speed != null
+    ? `${Math.round(selectedDongle.position.speed)} km/h`
+    : '-';
+
   useEffect(() => {
     if (!navigator.geolocation) return;
     const watchId = navigator.geolocation.watchPosition(
@@ -255,19 +279,30 @@ export function LocationsPage() {
       }
     }
 
-    const showDongleLocation = Boolean(selectedDongle?.isConnected && selectedDongle?.position);
+    // Always show the last known dongle position when available, even if currently offline.
+    const showDongleLocation = Boolean(selectedDongle?.position);
     if (showDongleLocation && selectedDongle?.position) {
       const { latitude: dLat, longitude: dLng } = selectedDongle.position;
+      const isOnline = Boolean(selectedDongle?.isConnected);
+      const strokeColor = '#15803d';
+      const fillColor = '#22c55e';
+      const popupText = isOnline ? 'Position dongle' : 'Derniere position dongle (hors ligne)';
       if (!dongleMarkerRef.current) {
         dongleMarkerRef.current = L.circleMarker([dLat, dLng], {
           radius: 7,
-          color: '#15803d',
-          fillColor: '#22c55e',
-          fillOpacity: 0.95,
+          color: strokeColor,
+          fillColor,
+          fillOpacity: isOnline ? 0.95 : 0.75,
           weight: 2,
-        }).addTo(map).bindPopup('Position dongle');
+        }).addTo(map).bindPopup(popupText);
       } else {
         dongleMarkerRef.current.setLatLng([dLat, dLng]);
+        dongleMarkerRef.current.setStyle({
+          color: strokeColor,
+          fillColor,
+          fillOpacity: isOnline ? 0.95 : 0.75,
+        });
+        dongleMarkerRef.current.bindPopup(popupText);
       }
     } else if (dongleMarkerRef.current) {
       map.removeLayer(dongleMarkerRef.current);
@@ -276,7 +311,7 @@ export function LocationsPage() {
 
     const bounds: Array<[number, number]> = [];
     if (myPosition) bounds.push([myPosition.latitude, myPosition.longitude]);
-    if (showDongleLocation && selectedDongle?.position) {
+    if (selectedDongle?.position) {
       bounds.push([selectedDongle.position.latitude, selectedDongle.position.longitude]);
     }
     if (bounds.length === 1) {
@@ -469,50 +504,58 @@ export function LocationsPage() {
         </div>
       )}
 
-      <div className="panel map-panel">
+      <div className="panel map-panel locations-map-panel">
         <div className="panel-title-row">
           <h3>Locations map</h3>
           <button className="btn-link" type="button" onClick={handleRefresh}>Refresh</button>
         </div>
-        <div style={{ position: 'relative' }}>
-          <div title="Locations map" className="fleet-map compact" ref={mapNodeRef} />
-          <div
-            style={{
-              position: 'absolute',
-              top: 12,
-              right: 12,
-              background: 'rgba(255,255,255,0.93)',
-              border: '1px solid #b8cfee',
-              borderRadius: 10,
-              padding: '8px 10px',
-              fontSize: 12,
-              lineHeight: 1.4,
-              color: '#0f2f57',
-              minWidth: 220,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <span style={{ width: 10, height: 10, borderRadius: 10, background: '#3b82f6', display: 'inline-block' }} />
-              <span>Ma position</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <span style={{ width: 10, height: 10, borderRadius: 10, background: '#22c55e', display: 'inline-block' }} />
-              <span>Position dongle (connecte)</span>
-            </div>
+        <div className="locations-map-shell">
+          <div title="Locations map" className="fleet-map compact locations-hero-map" ref={mapNodeRef} />
+          <div className="locations-overlay-card locations-overlay-bottom-left locations-overlay-main">
             {!selectedDongle ? (
-              <div>Aucun dongle disponible.</div>
+              <div>
+                <strong>Aucun dongle detecte</strong>
+              </div>
             ) : selectedDongle.isConnected ? (
               <div>
-                <strong>Dongle connecte:</strong>{' '}
-                {selectedDongle.position
-                  ? `${selectedDongle.position.latitude.toFixed(5)}, ${selectedDongle.position.longitude.toFixed(5)}`
-                  : 'position indisponible'}
+                <div className="locations-status locations-status-online">Dongle connecte</div>
+                <div className="locations-status-grid">
+                  <span>Vehicule</span>
+                  <strong>{selectedDongleVehicleLabel}</strong>
+                  <span>Plaque</span>
+                  <strong>{selectedDonglePlateLabel}</strong>
+                  <span>Position</span>
+                  <strong>{selectedDonglePositionLabel}</strong>
+                  <span>Sync</span>
+                  <strong>{selectedDongleSyncLabel}</strong>
+                </div>
               </div>
             ) : (
               <div>
-                <strong>Derniere connexion:</strong> {formatDateTime(selectedDongle.lastSeen)}
+                <div className="locations-status locations-status-offline">Dongle non connecte</div>
+                <div className="locations-status-grid">
+                  <span>Vehicule</span>
+                  <strong>{selectedDongleVehicleLabel}</strong>
+                  <span>Derniere position</span>
+                  <strong>{selectedDonglePositionLabel}</strong>
+                  <span>Derniere synchro</span>
+                  <strong>{selectedDongleSyncLabel}</strong>
+                  <span>Horodatage</span>
+                  <strong>{formatDateTime(selectedDongle.lastSeen)}</strong>
+                </div>
               </div>
             )}
+          </div>
+
+          <div className="locations-overlay-card locations-overlay-bottom-right locations-overlay-legend">
+            <div className="locations-legend-item">
+              <span className="locations-legend-dot locations-legend-dot-user" />
+              <span>Ma position</span>
+            </div>
+            <div className="locations-legend-item">
+              <span className="locations-legend-dot locations-legend-dot-dongle" />
+              <span>Dongle</span>
+            </div>
           </div>
         </div>
       </div>

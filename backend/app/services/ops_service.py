@@ -598,8 +598,10 @@ class OpsService:
         longitude: float,
         speed: float | None = None,
         user_id: int | None = None,
+        role: str = "user",
     ):
-        if user_id is not None:
+        # Allow admin service accounts (MQTT gateway) to write positions for all vehicles.
+        if user_id is not None and role != "admin":
             allowed_vehicle_ids = OpsService._allowed_vehicle_ids(user_id)
             if vehicle_id not in allowed_vehicle_ids:
                 return
@@ -620,10 +622,10 @@ class OpsService:
         )
 
     @staticmethod
-    async def get_vehicle_positions(user_id: int | None = None):
+    async def get_vehicle_positions(user_id: int | None = None, role: str = "user"):
         db = get_mongo_db()
         query: dict = {}
-        if user_id is not None:
+        if user_id is not None and role != "admin":
             allowed_vehicle_ids = OpsService._allowed_vehicle_ids(user_id)
             if not allowed_vehicle_ids:
                 return {"status": "success", "items": []}

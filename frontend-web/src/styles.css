@@ -403,6 +403,142 @@ h2 {
   margin-top: 12px;
 }
 
+.locations-map-panel {
+  overflow: hidden;
+}
+
+.locations-map-shell {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+}
+
+.locations-hero-map {
+  min-height: 700px;
+  border-radius: 0;
+}
+
+.locations-overlay-card {
+  position: absolute;
+  z-index: 1100;
+  background: rgba(30, 30, 33, 0.9);
+  color: #f8fafc;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.26);
+  backdrop-filter: blur(3px);
+}
+
+.locations-overlay-top-left {
+  top: 16px;
+  left: 16px;
+}
+
+.locations-overlay-bottom-left {
+  left: 16px;
+  bottom: 16px;
+}
+
+.locations-overlay-bottom-right {
+  right: 16px;
+  bottom: 16px;
+}
+
+.locations-overlay-compact {
+  padding: 12px 14px;
+  min-width: 280px;
+}
+
+.locations-overlay-main {
+  padding: 8px 12px;
+  min-width: 210px;
+}
+
+.locations-overlay-legend {
+  padding: 10px 12px;
+  min-width: 168px;
+}
+
+.locations-overlay-top-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.locations-metric-value {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #f8fafc;
+}
+
+.locations-metric-label {
+  margin-top: 3px;
+  color: #cbd5e1;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.locations-status {
+  margin-bottom: 5px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.locations-status-online {
+  color: #22c55e;
+}
+
+.locations-status-offline {
+  color: #f59e0b;
+}
+
+.locations-status-grid {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 3px 10px;
+  font-size: 11px;
+}
+
+.locations-status-grid span {
+  color: #cbd5e1;
+}
+
+.locations-status-grid strong {
+  color: #f8fafc;
+}
+
+.locations-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.locations-legend-item + .locations-legend-item {
+  margin-top: 6px;
+}
+
+.locations-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.locations-legend-dot-user {
+  background: #3b82f6;
+}
+
+.locations-legend-dot-dongle {
+  background: #22c55e;
+}
+
+.locations-legend-dot-offline {
+  background: #94a3b8;
+}
+
 .table-shell {
   width: 100%;
   max-width: 100%;

@@ -115,6 +115,13 @@ function findMetricTimestamp(data: TelemetryHistoryResponse | undefined, metric:
   return points[points.length - 1]?.timestamp ?? null;
 }
 
+function isFreshTelemetryTimestamp(value?: string | null, thresholdMs = 2 * 60 * 1000) {
+  if (!value) return false;
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) return false;
+  return Date.now() - parsed <= thresholdMs;
+}
+
 function buildSystemStatuses(rows: DtcRow[], fuelLevel: number | null, predictedRisks: PredictedRisk[] = [], locale: 'fr' | 'en' = 'fr'): SystemStatus[] {
   const activeRows = rows.filter((row) => !row.resolved);
 
@@ -411,6 +418,7 @@ export function DtcPage() {
       metrics: ['speed', 'rpm', 'fuel_level', 'engine_temp', 'battery_voltage', 'engine_load', 'intake_temp', 'ambient_air_temp'],
     }) as Promise<TelemetryHistoryResponse>,
     enabled: selectedVehicleId !== null,
+    refetchInterval: 15000,
   });
 
   const aiRiskQuery = useQuery({
@@ -547,6 +555,14 @@ export function DtcPage() {
     ?? findMetricTimestamp(telemetryQuery.data, 'ambient_air_temp')
     ?? findMetricTimestamp(telemetryQuery.data, 'speed');
 
+  const isTelemetryLive = isFreshTelemetryTimestamp(telemetryTimestamp);
+  const liveSpeedValue = isTelemetryLive ? speedValue : 0;
+  const liveRpmValue = isTelemetryLive ? rpmValue : 0;
+  const liveTempValue = isTelemetryLive ? tempValue : 0;
+  const liveLoadValue = isTelemetryLive ? loadValue : 0;
+  const liveBatteryValue = isTelemetryLive ? batteryValue : 0;
+  const liveFuelValue = isTelemetryLive ? fuelValue : 0;
+
   const aiScoreValue = aiRiskQuery.data?.predicted_risk_score
     ?? aiRecommendationsQuery.data?.predicted_risk_score
     ?? aiInsightsQuery.data?.predicted_risk_score
@@ -557,7 +573,7 @@ export function DtcPage() {
     ?? null;
   const lastOccurrenceValue = lastOccurrence ?? telemetryTimestamp ?? null;
 
-  const curvePoints = (telemetryQuery.data?.data?.engine_temp ?? []).slice(-8);
+  const curvePoints = isTelemetryLive ? (telemetryQuery.data?.data?.engine_temp ?? []).slice(-8) : [];
   const aiPredictedRisks = aiInsightsQuery.data?.predicted_risks?.slice(0, 3) ?? [];
   const aiCards = aiRecommendationsQuery.data?.recommendations?.slice(0, 3) ?? [];
   const systemStatuses = buildSystemStatuses(rows, fuelValue, aiInsightsQuery.data?.predicted_risks ?? [], locale);
@@ -594,7 +610,7 @@ export function DtcPage() {
           </p>
         </div>
         <div className="dtc-top-actions">
-          <span className="dtc-live-pill">{telemetryTimestamp ? 'Live' : 'Offline'}</span>
+          <span className="dtc-live-pill">{isTelemetryLive ? 'Live' : 'Offline'}</span>
           <button
             type="button"
             className="dtc-action-btn"
@@ -665,8 +681,8 @@ export function DtcPage() {
         </article>
         <article className="dtc-kpi-card">
           <p className="dtc-kpi-label">{text.temp}</p>
-          <p className="dtc-kpi-value">{tempValue !== null ? formatMetric(tempValue, '°C') : '0°C'}</p>
-          <p className="dtc-kpi-note">{text.lastMeasure} {telemetryTimestamp ? `· ${formatShortDate(telemetryTimestamp)}` : ''}</p>
+          <p className="dtc-kpi-value">{formatMetric(liveTempValue, '°C')}</p>
+          <p className="dtc-kpi-note">{text.lastMeasure} {isTelemetryLive && telemetryTimestamp ? `· ${formatShortDate(telemetryTimestamp)}` : ''}</p>
         </article>
         <article className="dtc-kpi-card">
           <p className="dtc-kpi-label">{text.lastOccurrence}</p>
@@ -778,39 +794,39 @@ export function DtcPage() {
             <div className="dtc-sensor-list">
               <div className="dtc-sensor-row">
                 <span>{text.speed}</span>
-                <strong>{formatMetric(speedValue, ' km/h')}</strong>
+                <strong>{formatMetric(liveSpeedValue, ' km/h')}</strong>
               </div>
-              <div className="dtc-bar"><span style={{ width: `${Math.min(100, Math.max(0, speedValue ?? 0))}%` }} /></div>
+              <div className="dtc-bar"><span style={{ width: `${Math.min(100, Math.max(0, liveSpeedValue ?? 0))}%` }} /></div>
 
               <div className="dtc-sensor-row">
                 <span>{text.rpm}</span>
-                <strong>{formatMetric(rpmValue, ' tr/min')}</strong>
+                <strong>{formatMetric(liveRpmValue, ' tr/min')}</strong>
               </div>
-              <div className="dtc-bar"><span style={{ width: `${Math.min(100, Math.max(0, (rpmValue ?? 0) / 50))}%` }} /></div>
+              <div className="dtc-bar"><span style={{ width: `${Math.min(100, Math.max(0, (liveRpmValue ?? 0) / 50))}%` }} /></div>
 
               <div className="dtc-sensor-row">
                 <span>{text.temp}</span>
-                <strong>{formatMetric(tempValue, ' °C')}</strong>
+                <strong>{formatMetric(liveTempValue, ' °C')}</strong>
               </div>
-              <div className="dtc-bar"><span style={{ width: `${Math.min(100, Math.max(0, tempValue ?? 0))}%` }} /></div>
+              <div className="dtc-bar"><span style={{ width: `${Math.min(100, Math.max(0, liveTempValue ?? 0))}%` }} /></div>
 
               <div className="dtc-sensor-row">
                 <span>{text.load}</span>
-                <strong>{formatMetric(loadValue, '%')}</strong>
+                <strong>{formatMetric(liveLoadValue, '%')}</strong>
               </div>
-              <div className="dtc-bar"><span style={{ width: `${Math.min(100, Math.max(0, loadValue ?? 0))}%` }} /></div>
+              <div className="dtc-bar"><span style={{ width: `${Math.min(100, Math.max(0, liveLoadValue ?? 0))}%` }} /></div>
 
               <div className="dtc-sensor-row">
                 <span>{text.battery}</span>
-                <strong>{formatMetric(batteryValue, ' V', 1)}</strong>
+                <strong>{formatMetric(liveBatteryValue, ' V', 1)}</strong>
               </div>
-              <div className="dtc-bar"><span style={{ width: `${Math.min(100, Math.max(0, (batteryValue ?? 0) * 6.25))}%` }} /></div>
+              <div className="dtc-bar"><span style={{ width: `${Math.min(100, Math.max(0, (liveBatteryValue ?? 0) * 6.25))}%` }} /></div>
 
               <div className="dtc-sensor-row">
                 <span>{text.remainingFuel}</span>
-                <strong>{formatMetric(fuelValue, '%')}</strong>
+                <strong>{formatMetric(liveFuelValue, '%')}</strong>
               </div>
-              <div className="dtc-bar"><span style={{ width: `${Math.min(100, Math.max(0, fuelValue ?? 0))}%` }} /></div>
+              <div className="dtc-bar"><span style={{ width: `${Math.min(100, Math.max(0, liveFuelValue ?? 0))}%` }} /></div>
             </div>
           )}
         </aside>
