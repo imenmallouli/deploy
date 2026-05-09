@@ -85,7 +85,10 @@ async def check_geofences(payload: GeofenceCheckRequest, context: dict = Depends
 
 @router.get("/geofences/vehicle-positions")
 async def get_vehicle_positions(context: dict = Depends(get_current_context)):
-    return await OpsService.get_vehicle_positions(user_id=context["user_id"])
+    return await OpsService.get_vehicle_positions(
+        user_id=context["user_id"],
+        role=context.get("role", "user"),
+    )
 
 
 @router.post("/geofences/vehicle-positions")
@@ -96,6 +99,7 @@ async def save_vehicle_position(payload: VehiclePositionSave, context: dict = De
         longitude=payload.longitude,
         speed=payload.speed,
         user_id=context["user_id"],
+        role=context.get("role", "user"),
     )
     # Trigger transition detection in backend service.
     await OpsService.check_geofences(

@@ -26,6 +26,27 @@ services:
       mailpit:
         condition: service_started
 
+  mqtt-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: adp-mqtt-gateway
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: >
+      python /app/scripts/mqtt_gateway.py
+      --mqtt-host ${ADP_AUTOPI_MQTT_HOST:-mqtt}
+      --mqtt-port ${ADP_AUTOPI_MQTT_PORT:-1883}
+      --qos ${ADP_AUTOPI_QOS:-1}
+      --base-url ${ADP_BACKEND_BASE_URL:-http://backend:8000}
+      --autopi-device-id ${ADP_AUTOPI_DEVICE_ID:-autopi-device}
+      --email ${ADP_AUTOPI_EMAIL}
+      --password ${ADP_AUTOPI_PASSWORD}
+    depends_on:
+      - mqtt
+      - backend
+
   mqtt:
     image: eclipse-mosquitto:2
     container_name: adp-mqtt

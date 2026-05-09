@@ -27,6 +27,8 @@ import argparse
 import importlib
 import json
 import math
+import os
+import re
 import time
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -78,8 +80,39 @@ _OBD_TELEMETRY_MAP = {
     "obd.ambiant_air_temperature": "ambient_air_temp",
 }
 
+_GENERIC_TELEMETRY_FALLBACK_KEYS = {
+    "speed": ["speed", "sog", "speed_over_ground"],
+    "track_altitude": ["track_altitude", "altitude", "alt", "elevation"],
+    "course_over_ground": ["course_over_ground", "course", "cog", "heading"],
+    "satellites_used": ["satellites_used", "satellites", "sats", "nsat", "satellites_used_gps"],
+    "glonass_satellites_used": ["glonass_satellites_used", "glonass_satellites", "glonass", "satellites_used_glonass"],
+    "temp_cpu": ["temp_cpu", "cpu_temp", "temperature_cpu", "cpu_temperature"],
+    "cpu": ["cpu", "cpu_usage", "cpu_load"],
+    "gpu": ["gpu", "gpu_usage", "gpu_load", "gpu_temp"],
+}
+
 # @t prefixes that indicate a DTC fault code record
-_DTC_TYPE_PREFIXES = ("obd.dtc", "obd.fault", "obd.trouble", "obd.get_dtc")
+_DTC_TYPE_PREFIXES = (
+    "obd.dtc",
+    "obd.fault",
+    "obd.trouble",
+    "obd.get_dtc",
+    "obd.diagnostic",
+    "obd.mode03",
+    "obd.mode_03",
+    "obd.error",
+)
+
+_DTC_HINT_KEYWORDS = (
+    "dtc",
+    "trouble",
+    "fault",
+    "mode03",
+    "mode_03",
+    "diagnostic",
+    "get_dtc",
+    "error_code",
+)
 
 # @t prefixes that indicate the payload contains raw DTC codes list
 _DTC_CODES_KEY = "codes"  # AutoPi may return {"codes": ["P0300", ...], "@t": "obd.dtc", ...}
@@ -236,6 +269,16 @@ class ApiClient:
     def post_iot_log(self, payload: dict):
         return self._post_with_retry("/api/v1/dtc/iot/logs", payload)
 
+    def post_vehicle_position(self, vehicle_id: int, latitude: float, longitude: float, speed: float | None = None):
+        payload = {"vehicle_id": vehicle_id, "latitude": latitude, "longitude": longitude}
+        if speed is not None:
+            payload["speed"] = speed
+        try:
+            return self._post_with_retry("/api/v1/geofences/vehicle-positions", payload)
+        except Exception as exc:
+            print(f"[API] post_vehicle_position failed: {exc}")
+            return {}
+
 
 class MqttGateway:
     """
@@ -251,13 +294,26 @@ class MqttGateway:
 
     # AutoPi native topic subscriptions
     AUTOPI_TOPICS = [
-        "#",
+        # Plain AutoPi topics
         "obd/#",
         "spm/bat",
         "track/pos",
         "acc/xyz",
         "reactor",
         "rpi/temp",
+        # Device-prefixed variants often used by AutoPi Cloud / broker integrations
+        "+/obd/#",
+        "+/spm/bat",
+        "+/track/pos",
+        "+/acc/xyz",
+        "+/reactor",
+        "+/rpi/temp",
+        "devices/+/obd/#",
+        "devices/+/spm/bat",
+        "devices/+/track/pos",
+        "devices/+/acc/xyz",
+        "devices/+/reactor",
+        "devices/+/rpi/temp",
     ]
 
     def __init__(
@@ -300,20 +356,106 @@ class MqttGateway:
     def on_disconnect(self, client, userdata, disconnect_flags, reason_code, properties=None):
         print(f"[MQTT] Disconnected (code={reason_code})")
 
+    @staticmethod
+    def _fix_js_object(s: str) -> str:
+        """Convert JavaScript object notation (unquoted keys/values) to valid JSON.
+
+        AutoPi devices sometimes emit payloads like:
+          {@@t:track.pos,@@ts:2026-05-08T10:00:00Z,loc:{lat:34.7,lon:10.7,sog:61}}
+        which are not valid JSON.  This method adds the required double-quotes.
+        """
+        # Step 1 – quote unquoted keys (tokens right after { or ,)
+        s = re.sub(r'(?<=[{,])(\s*)(@?[A-Za-z_][A-Za-z0-9_@.]*)(\s*:)', r'\1"\2"\3', s)
+
+        # Step 2 – quote unquoted string values (after :, not a digit/bool/null/nested structure)
+        def _quote_val(m: re.Match) -> str:
+            val = m.group(1).strip()
+            end = m.group(2)
+            if re.match(r'^-?\d+(\.\d+)?([eE][+-]?\d+)?$', val):
+                return f': {val}{end}'
+            if val in ('true', 'false', 'null'):
+                return f': {val}{end}'
+            return f': "{val}"{end}'
+
+        s = re.sub(r':\s*([^"\[{][^,}\]]*?)(\s*[,}\]])', _quote_val, s)
+
+        # Step 3 – quote unquoted barewords inside arrays, e.g. [P0300,P0420]
+        # Keep numbers/booleans/null as-is.
+        def _quote_array_token(m: re.Match) -> str:
+            lead = m.group(1)
+            token = m.group(2).strip()
+            tail = m.group(3)
+            if re.match(r'^-?\d+(\.\d+)?([eE][+-]?\d+)?$', token):
+                return f"{lead}{token}{tail}"
+            if token in ('true', 'false', 'null'):
+                return f"{lead}{token}{tail}"
+            return f'{lead}"{token}"{tail}'
+
+        s = re.sub(r'([\[,])\s*([A-Za-z_@][A-Za-z0-9_@.:-]*)\s*([,\]])', _quote_array_token, s)
+        return s
+
+    @staticmethod
+    def _salvage_malformed_payload(topic: str, raw: str) -> dict[str, Any] | None:
+        """Best-effort parser for malformed AutoPi payloads.
+
+        Handles common broken DTC payloads like:
+          {@t:obd.dtc,@ts:2026-05-08T21:30:00Z,codes:[P0300,P0420]}
+        """
+        text = (raw or "").strip()
+        topic_l = (topic or "").lower()
+
+        is_dtc_like = any(k in topic_l for k in ("dtc", "fault", "trouble", "mode03", "mode_03"))
+        if not is_dtc_like and "obd.dtc" not in text.lower():
+            return None
+
+        codes = [c.upper() for c in re.findall(r"\b[PCBU][0-9A-Fa-f]{4}\b", text)]
+        if not codes:
+            return None
+
+        ts_match = re.search(r"@ts\s*:\s*([^,}]+)", text)
+        t_match = re.search(r"@t\s*:\s*([^,}]+)", text)
+        ts_raw = ts_match.group(1).strip() if ts_match else ""
+        t_raw = t_match.group(1).strip() if t_match else "obd.dtc"
+
+        return {
+            "@t": t_raw.strip('"\''),
+            "@ts": ts_raw.strip('"\'') or datetime.now(timezone.utc).isoformat(),
+            "codes": list(dict.fromkeys(codes)),
+        }
+
     def on_message(self, client, userdata, msg):
         topic = msg.topic
 
+        # Ignore empty payloads (e.g. retained-message deletions)
+        if not msg.payload:
+            return
+
         try:
             raw = msg.payload.decode("utf-8")
-            payload = json.loads(raw)
+            try:
+                payload = json.loads(raw)
+            except json.JSONDecodeError:
+                # Fallback: device sent JavaScript object notation (unquoted keys/values)
+                fixed = MqttGateway._fix_js_object(raw)
+                try:
+                    payload = json.loads(fixed)
+                    if self.verbose:
+                        print(f"[MQTT] Fixed JS-object notation on {topic}: {fixed[:120]}")
+                except json.JSONDecodeError as exc:
+                    salvaged = MqttGateway._salvage_malformed_payload(topic, raw)
+                    if salvaged is not None:
+                        payload = salvaged
+                        print(f"[MQTT] Salvaged malformed payload on {topic}: {str(salvaged)[:180]}")
+                    else:
+                        print(f"[MQTT] Invalid JSON on {topic}: {exc}  raw={msg.payload[:120]}  fixed={fixed[:180]}")
+                        return
+
             # AutoPi sometimes sends an array of objects
             if isinstance(payload, list):
                 for item in payload:
                     self._dispatch(topic, item)
             else:
                 self._dispatch(topic, payload)
-        except json.JSONDecodeError as exc:
-            print(f"[MQTT] Invalid JSON on {topic}: {exc}  raw={msg.payload[:120]}")
         except Exception as exc:
             print(f"[FORWARD] Error topic={topic}: {exc}")
 
@@ -408,10 +550,30 @@ class MqttGateway:
         t = (raw_type or "").strip().lower()
         if not t:
             return ""
-        if t.startswith("obd."):
+        if t.startswith(("obd.", "track.", "acc.", "event.", "spm.", "rpi.")):
             return t
+        if t in {"pos", "track_pos", "track.position", "position", "gps_pos"}:
+            return "track.pos"
+        if t in {"rpi_temp", "cpu_temp", "temp_cpu"}:
+            return "rpi.temp"
         # AutoPi often sends _type like "rpm", "coolant_temp", "engine_load"
         return f"obd.{t}"
+
+    def _extract_generic_telemetry_fields(self, payload: dict) -> dict[str, Any]:
+        fields: dict[str, Any] = {}
+        nested_containers = ("loc", "gps", "position", "data", "result", "value")
+
+        for metric, keys in _GENERIC_TELEMETRY_FALLBACK_KEYS.items():
+            value = self._extract_value(payload, keys)
+            if value is None:
+                for container_key in nested_containers:
+                    value = self._extract_nested_value(payload, container_key, keys)
+                    if value is not None:
+                        break
+            if value is not None:
+                fields[metric] = value
+
+        return fields
 
     def _infer_type_from_topic_payload(self, topic: str, payload: dict) -> str:
         """Infer telemetry type when @t is missing in AutoPi payload."""
@@ -507,6 +669,16 @@ class MqttGateway:
             self._forward_telemetry({field: value}, ts, topic, resolved_vehicle_id, resolved_device_id)
             return
 
+        # --- DTC fault codes (format-detection first, before generic obd.* fallback) ---
+        dtc_like_type = any(at.startswith(prefix) for prefix in _DTC_TYPE_PREFIXES) or any(
+            keyword in at for keyword in _DTC_HINT_KEYWORDS
+        )
+        dtc_like_topic = any(keyword in canonical_topic.lower() for keyword in ("dtc", "trouble", "fault", "mode03", "mode_03"))
+        extracted_dtc_entries = self._extract_dtc_entries(payload)
+        if extracted_dtc_entries and (dtc_like_type or dtc_like_topic):
+            self._handle_autopi_dtc(payload, ts, topic, resolved_vehicle_id, resolved_device_id, extracted_codes=extracted_dtc_entries)
+            return
+
         # --- Generic obd.* PID: try to map by field name ---
         if at.startswith("obd.") and not any(at.startswith(p) for p in _DTC_TYPE_PREFIXES):
             pid_name = at[4:]  # strip "obd."
@@ -542,30 +714,46 @@ class MqttGateway:
         # --- GPS position ---
         if at == "track.pos" or canonical_topic == "track/pos":
             loc = payload.get("loc", {})
-            sog_value = payload.get("sog")
+            if not isinstance(loc, dict):
+                loc = {}
+            sog_value = self._extract_value(payload, ["sog", "speed_over_ground", "speed"])
+            if sog_value is None and isinstance(loc, dict):
+                sog_value = loc.get("sog") or loc.get("speed")
+
+            # Extract latitude / longitude from loc sub-object or top-level keys
+            lat = (loc.get("lat") or loc.get("latitude")
+                   or self._extract_value(payload, ["lat", "latitude"]))
+            lon = (loc.get("lon") or loc.get("lng") or loc.get("longitude")
+                   or self._extract_value(payload, ["lon", "lng", "longitude"]))
+
             self._forward_telemetry(
                 {
                     "speed": sog_value,
-                    "track_altitude": self._extract_nested_value(payload, "loc", ["alt", "altitude"]),
-                    "course_over_ground": self._extract_value(payload, ["course_over_ground", "course", "cog", "heading"]),
-                    "satellites_used": self._extract_value(payload, ["satellites_used", "satellites", "sats", "nsat"]),
-                    "glonass_satellites_used": self._extract_value(payload, ["glonass_satellites_used", "glonass_satellites", "glonass"]),
+                    "track_altitude": self._extract_value(payload, ["track_altitude", "alt", "altitude", "elevation"])
+                    or self._extract_nested_value(payload, "loc", ["alt", "altitude", "elevation"]),
+                    "course_over_ground": self._extract_value(payload, ["course_over_ground", "course", "cog", "heading"])
+                    or self._extract_nested_value(payload, "loc", ["course_over_ground", "course", "cog", "heading"]),
+                    "satellites_used": self._extract_value(payload, ["satellites_used", "satellites", "sats", "nsat", "satellites_used_gps"])
+                    or self._extract_nested_value(payload, "loc", ["satellites_used", "satellites", "sats", "nsat"]),
+                    "glonass_satellites_used": self._extract_value(payload, ["glonass_satellites_used", "glonass_satellites", "glonass", "satellites_used_glonass"])
+                    or self._extract_nested_value(payload, "loc", ["glonass_satellites_used", "glonass_satellites", "glonass"]),
                 },
                 ts,
                 topic,
                 resolved_vehicle_id,
                 resolved_device_id,
             )
-            self._forward_event(
-                event_type="gps",
-                level="info",
-                message=f"lat={loc.get('lat')} lon={loc.get('lon')} sog={payload.get('sog')}",
-                metadata=payload,
-                ts=ts,
-                topic=topic,
-                vehicle_id=resolved_vehicle_id,
-                device_id=resolved_device_id,
-            )
+
+            # Save GPS coordinates to vehicle_positions so the Locations map updates
+            if lat is not None and lon is not None:
+                try:
+                    lat_f = float(lat)
+                    lon_f = float(lon)
+                    speed_f = float(sog_value) if sog_value is not None else None
+                    self.api_client.post_vehicle_position(resolved_vehicle_id, lat_f, lon_f, speed_f)
+                    print(f"[GPS] position saved vehicle_id={resolved_vehicle_id} lat={lat_f} lon={lon_f} speed={speed_f}")
+                except (TypeError, ValueError) as exc:
+                    print(f"[GPS] position parse error: {exc}")
             return
 
         # --- Accelerometer ---
@@ -623,6 +811,14 @@ class MqttGateway:
             )
             return
 
+        # --- Generic fallback for non-standard AutoPi payload/topic naming ---
+        generic_fields = self._extract_generic_telemetry_fields(payload)
+        if generic_fields:
+            self._forward_telemetry(generic_fields, ts, topic, resolved_vehicle_id, resolved_device_id)
+            if self.verbose:
+                print(f"[MQTT] Generic telemetry fallback matched topic={topic} fields={list(generic_fields.keys())}")
+            return
+
         # --- Unknown ---
         if self.verbose:
             print(f"[MQTT] Unrecognised @t={at!r} topic={topic}  payload={str(payload)[:120]}")
@@ -650,12 +846,20 @@ class MqttGateway:
 
         return cleaned
 
-    def _handle_autopi_dtc(self, payload: dict, ts: str, topic: str, vehicle_id: int, device_id: str | None):
+    def _handle_autopi_dtc(
+        self,
+        payload: dict,
+        ts: str,
+        topic: str,
+        vehicle_id: int,
+        device_id: str | None,
+        extracted_codes: list[dict[str, Any]] | None = None,
+    ):
         """Forward AutoPi DTC data to POST /api/v1/dtc.
 
         AutoPi may send a single code or a list under the 'codes' key.
         """
-        extracted_codes = self._extract_dtc_entries(payload)
+        extracted_codes = extracted_codes if extracted_codes is not None else self._extract_dtc_entries(payload)
 
         if not extracted_codes:
             self.api_client.post_iot_log(
@@ -708,12 +912,14 @@ class MqttGateway:
         - {"code": "P0300"}
         """
 
+        dtc_code_pattern = re.compile(r"^[PCBU][0-9A-F]{4}$", re.IGNORECASE)
+
         def normalize_entry(item: Any, *, default_category: str | None = None) -> dict[str, Any] | None:
             if item is None:
                 return None
             if isinstance(item, str):
                 code = item.strip().upper()
-                return {"code": code, "category": default_category} if code else None
+                return {"code": code, "category": default_category} if dtc_code_pattern.fullmatch(code) else None
             if isinstance(item, dict):
                 code = str(
                     item.get("code")
@@ -722,7 +928,7 @@ class MqttGateway:
                     or item.get("value")
                     or ""
                 ).strip().upper()
-                if not code:
+                if not code or not dtc_code_pattern.fullmatch(code):
                     return None
                 return {
                     "code": code,
@@ -771,6 +977,15 @@ class MqttGateway:
             normalized = normalize_entry(payload)
             if normalized:
                 candidates.append(normalized)
+
+        # Fallback: extract DTC-like tokens from free text payload fragments.
+        if not candidates:
+            text_keys = ("message", "description", "result", "data", "value", "response", "raw", "text")
+            raw_texts = [str(payload.get(key) or "") for key in text_keys]
+            raw_texts.append(json.dumps(payload, ensure_ascii=False))
+            for text in raw_texts:
+                for code in re.findall(r"\b[PCBU][0-9A-Fa-f]{4}\b", text):
+                    candidates.append({"code": code.upper()})
 
         deduped: list[dict[str, Any]] = []
         seen: set[tuple[str, str | None]] = set()
@@ -961,7 +1176,32 @@ def parse_args():
 
     parser.add_argument("--verbose", action="store_true", help="Log unrecognised topics and skipped messages")
 
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    # Override with environment variables when args were not explicitly set.
+    # This lets docker-compose pass config via env vars without listing every flag.
+    if args.mqtt_host == "broker.emqx.io" and os.environ.get("ADP_AUTOPI_MQTT_HOST"):
+        args.mqtt_host = os.environ["ADP_AUTOPI_MQTT_HOST"]
+    if args.mqtt_port == 1883 and os.environ.get("ADP_AUTOPI_MQTT_PORT"):
+        try:
+            args.mqtt_port = int(os.environ["ADP_AUTOPI_MQTT_PORT"])
+        except ValueError:
+            pass
+    if not args.mqtt_username and os.environ.get("ADP_AUTOPI_MQTT_USERNAME"):
+        args.mqtt_username = os.environ["ADP_AUTOPI_MQTT_USERNAME"]
+    if not args.mqtt_password and os.environ.get("ADP_AUTOPI_MQTT_PASSWORD"):
+        args.mqtt_password = os.environ["ADP_AUTOPI_MQTT_PASSWORD"]
+    if args.autopi_device_id == "autopi-device" and os.environ.get("ADP_AUTOPI_DEVICE_ID"):
+        args.autopi_device_id = os.environ["ADP_AUTOPI_DEVICE_ID"]
+    if args.vehicle_id is None and os.environ.get("ADP_AUTOPI_FALLBACK_VEHICLE_ID"):
+        try:
+            args.vehicle_id = int(os.environ["ADP_AUTOPI_FALLBACK_VEHICLE_ID"])
+        except ValueError:
+            pass
+    if not args.verbose and os.environ.get("ADP_AUTOPI_VERBOSE", "").lower() in ("1", "true", "yes"):
+        args.verbose = True
+
+    return args
 
 
 def main():

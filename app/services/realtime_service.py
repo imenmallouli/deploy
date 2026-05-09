@@ -11,7 +11,6 @@ from app.services.user_service import UserService
 
 class RealtimeService:
     FRESHNESS_WINDOW = timedelta(minutes=2)
-    DIRECT_ONLY_FIELDS = {"temp_cpu", "cpu", "gpu"}
     METRIC_FIELDS = [
         "speed",
         "rpm",
@@ -79,35 +78,38 @@ class RealtimeService:
     @staticmethod
     async def _build_latest_metrics_snapshot(db, vehicle_id: int, latest_doc: dict) -> dict:
         latest_ts = RealtimeService._normalize_timestamp(latest_doc.get("ts"))
-
-        projection = {"ts": 1}
-        for field in RealtimeService.METRIC_FIELDS:
-            projection[field] = 1
-
-        cursor = db.telemetry_data.find(
-            {"vehicle_id": vehicle_id},
-            projection=projection,
-            sort=[("ts", -1)],
-            limit=2000,
-        )
-        docs = await cursor.to_list(length=2000)
-
         snapshot = {"ts": latest_ts or latest_doc.get("ts")}
+
+        # Start with latest doc values.
         for field in RealtimeService.METRIC_FIELDS:
-            if field in RealtimeService.DIRECT_ONLY_FIELDS:
-                snapshot[field] = latest_doc.get(field)
-            else:
-                snapshot[field] = None
+            snapshot[field] = latest_doc.get(field)
 
-        for doc in docs:
-            for field in RealtimeService.METRIC_FIELDS:
-                if field in RealtimeService.DIRECT_ONLY_FIELDS:
-                    continue
-                if snapshot[field] is None and doc.get(field) is not None:
-                    snapshot[field] = doc.get(field)
+        # AutoPi often publishes one PID per message. Merge recent docs from
+        # the freshness window to build a complete, still-real-time snapshot.
+        if latest_ts is None:
+            return snapshot
 
-            if all(snapshot[field] is not None for field in RealtimeService.METRIC_FIELDS):
-                break
+        window_start = latest_ts - RealtimeService.FRESHNESS_WINDOW
+        cursor = db.telemetry_data.find(
+            {
+                "vehicle_id": vehicle_id,
+                "ts": {
+                    "$gte": window_start,
+                    "$lte": latest_ts,
+                },
+            },
+            projection={"ts": 1, **{field: 1 for field in RealtimeService.METRIC_FIELDS}},
+        ).sort("ts", -1)
+
+        docs = await cursor.to_list(length=200)
+        for field in RealtimeService.METRIC_FIELDS:
+            if snapshot.get(field) is not None:
+                continue
+            for doc in docs:
+                value = doc.get(field)
+                if value is not None:
+                    snapshot[field] = value
+                    break
 
         return snapshot
 
