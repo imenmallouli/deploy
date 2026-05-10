@@ -14,6 +14,7 @@ import {
   listLocations,
   listVehicles,
   setupGeofenceMonitoring,
+  updateGeofence,
   updateLocation,
 } from '../lib/api/endpoints';
 
@@ -69,6 +70,7 @@ export function GeofencesPage() {
   const [setupError, setSetupError] = useState('');
   const [setupFeedback, setSetupFeedback] = useState('');
   const [editLocationId, setEditLocationId] = useState<string | null>(null);
+  const [editGeofenceId, setEditGeofenceId] = useState<string | null>(null);
   const [editLocationName, setEditLocationName] = useState('');
   const [editLocationNotes, setEditLocationNotes] = useState('');
   const [editLocationEmail, setEditLocationEmail] = useState('');
@@ -325,11 +327,28 @@ export function GeofencesPage() {
   });
 
   const updateLocationMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: Partial<LocationItem> }) => updateLocation(id, payload),
+    mutationFn: async ({
+      locationId,
+      geofenceId,
+      payload,
+    }: {
+      locationId: string;
+      geofenceId: string;
+      payload: Partial<LocationItem>;
+    }) => {
+      await updateGeofence(geofenceId, {
+        name: payload.name,
+        on_enter: payload.onEnter,
+        on_exit: payload.onExit,
+      });
+      return updateLocation(locationId, payload);
+    },
     onSuccess: () => {
       setEditLocationId(null);
+      setEditGeofenceId(null);
       setLocationActionError('');
-      setLocationActionFeedback('Location updated successfully.');
+      setLocationActionFeedback('Geofence and location updated successfully.');
+      queryClient.invalidateQueries({ queryKey: ['geofences'] });
       queryClient.invalidateQueries({ queryKey: ['locations', 'geofences-page'] });
     },
     onError: (error) => {
@@ -339,10 +358,14 @@ export function GeofencesPage() {
   });
 
   const deleteLocationMutation = useMutation({
-    mutationFn: deleteLocation,
+    mutationFn: async ({ locationId, geofenceId }: { locationId: string; geofenceId: string }) => {
+      await deleteGeofence(geofenceId);
+      return deleteLocation(locationId);
+    },
     onSuccess: () => {
       setLocationActionError('');
-      setLocationActionFeedback('Location deleted successfully.');
+      setLocationActionFeedback('Geofence and location deleted successfully.');
+      queryClient.invalidateQueries({ queryKey: ['geofences'] });
       queryClient.invalidateQueries({ queryKey: ['locations', 'geofences-page'] });
     },
     onError: (error) => {
@@ -526,7 +549,12 @@ export function GeofencesPage() {
   const isMonitoringFormValid = Boolean(selectedGeofenceId) && selectedVehicles.length > 0;
 
   const startEditLocation = (item: LocationItem) => {
+    const matchedGeofence = geofences.find(
+      (g) => g.name.trim().toLowerCase() === (item.name ?? '').trim().toLowerCase()
+    );
+
     setEditLocationId(item.id);
+    setEditGeofenceId(matchedGeofence?.id ?? null);
     setEditLocationName(item.name ?? '');
     setEditLocationNotes(item.notes ?? '');
     setEditLocationEmail(item.contactEmail ?? '');
@@ -540,6 +568,11 @@ export function GeofencesPage() {
 
   const handleUpdateLocation = () => {
     if (!editLocationId) return;
+    if (!editGeofenceId) {
+      setLocationActionFeedback('');
+      setLocationActionError('No matching geofence found for this row.');
+      return;
+    }
     if (!editLocationName.trim()) {
       setLocationActionFeedback('');
       setLocationActionError('Location name is required.');
@@ -547,7 +580,8 @@ export function GeofencesPage() {
     }
 
     updateLocationMutation.mutate({
-      id: editLocationId,
+      locationId: editLocationId,
+      geofenceId: editGeofenceId,
       payload: {
         name: editLocationName.trim(),
         notes: editLocationNotes.trim() || undefined,
@@ -561,8 +595,17 @@ export function GeofencesPage() {
   };
 
   const handleDeleteLocation = (item: LocationItem) => {
-    if (!window.confirm(`Delete location "${item.name}" ?`)) return;
-    deleteLocationMutation.mutate(item.id);
+    const matchedGeofence = geofences.find(
+      (g) => g.name.trim().toLowerCase() === (item.name ?? '').trim().toLowerCase()
+    );
+    if (!matchedGeofence) {
+      setLocationActionFeedback('');
+      setLocationActionError('No matching geofence found for this row.');
+      return;
+    }
+
+    if (!window.confirm(`Delete geofence and location "${item.name}" ?`)) return;
+    deleteLocationMutation.mutate({ locationId: item.id, geofenceId: matchedGeofence.id });
   };
 
   return (
@@ -588,6 +631,7 @@ export function GeofencesPage() {
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setEditLocationId(null);
+              setEditGeofenceId(null);
               setLocationActionError('');
             }
           }}
@@ -595,7 +639,10 @@ export function GeofencesPage() {
           <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 980, padding: 24 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ margin: 0 }}>Update location</h3>
-              <button className="btn-link" type="button" onClick={() => setEditLocationId(null)}>Close</button>
+              <button className="btn-link" type="button" onClick={() => {
+                setEditLocationId(null);
+                setEditGeofenceId(null);
+              }}>Close</button>
             </div>
             <div className="toolbar-row" style={{ marginBottom: 10 }}>
               <input className="toolbar-input" placeholder="Name" value={editLocationName} onChange={(e) => setEditLocationName(e.target.value)} />
@@ -620,7 +667,10 @@ export function GeofencesPage() {
             </div>
             {locationActionError && <p className="form-error">{locationActionError}</p>}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <button className="btn-secondary" type="button" onClick={() => setEditLocationId(null)}>Cancel</button>
+              <button className="btn-secondary" type="button" onClick={() => {
+                setEditLocationId(null);
+                setEditGeofenceId(null);
+              }}>Cancel</button>
               <button className="btn-primary" type="button" onClick={handleUpdateLocation} disabled={updateLocationMutation.isPending}>
                 {updateLocationMutation.isPending ? 'Saving...' : 'Save'}
               </button>
