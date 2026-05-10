@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { createVehicle, deleteVehicle, listAlertsByVehicle, listIotLogs, listVehicles, updateVehicle } from '../lib/api/endpoints';
+import { createVehicle, listAlertsByVehicle, listIotLogs, listVehicles, updateVehicle } from '../lib/api/endpoints';
 import { getRole } from '../lib/auth/session';
 import { useI18n } from '../lib/i18n';
 
@@ -91,9 +91,6 @@ export function VehiclesPage() {
         saving: 'Sauvegarde...',
         save: 'Sauvegarder',
         currentFleet: 'FLOTTE ACTUELLE',
-        deleting: 'Suppression...',
-        delete: 'Supprimer',
-        deleteConfirm: 'Supprimer ce vehicule?',
         loadingVehicles: 'Chargement des vehicules...',
         noVehicles: 'Aucun vehicule disponible.',
         viewDetails: 'Voir details',
@@ -128,9 +125,6 @@ export function VehiclesPage() {
         saving: 'Saving...',
         save: 'Save',
         currentFleet: 'CURRENT FLEET',
-        deleting: 'Deleting...',
-        delete: 'Delete',
-        deleteConfirm: 'Delete this vehicle?',
         loadingVehicles: 'Loading vehicles...',
         noVehicles: 'No vehicles available.',
         viewDetails: 'View details',
@@ -165,7 +159,6 @@ export function VehiclesPage() {
   const [updateYear, setUpdateYear] = useState('');
   const [updateDongleId, setUpdateDongleId] = useState('');
   const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null);
-  const [hasManualSelection, setHasManualSelection] = useState(false);
 
   const vehiclesQuery = useQuery({
     queryKey: ['vehicles'],
@@ -208,11 +201,6 @@ export function VehiclesPage() {
       setCreateYear('');
       setCreateDongleId('');
     },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: deleteVehicle,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['vehicles'] }),
   });
 
   const updateMutation = useMutation({
@@ -265,7 +253,6 @@ export function VehiclesPage() {
   useEffect(() => {
     if (vehicles.length === 0) {
       setSelectedVehicleId(null);
-      setHasManualSelection(false);
       return;
     }
     // Keep detail navigation usable by default with first vehicle selected.
@@ -533,7 +520,6 @@ export function VehiclesPage() {
                 className="toolbar-input"
                 value={selectedVehicleId ?? ''}
                 onChange={(e) => {
-                  setHasManualSelection(true);
                   setSelectedVehicleId(e.target.value === '' ? null : Number(e.target.value));
                 }}
                 style={{ minWidth: 220 }}
@@ -553,18 +539,6 @@ export function VehiclesPage() {
                     onClick={onOpenUpdateModal}
                   >
                     {updateMutation.isPending ? text.updating : text.update}
-                  </button>
-                  <button
-                    className="btn-danger"
-                    type="button"
-                    disabled={!selectedVehicleId || !hasManualSelection || deleteMutation.isPending}
-                    onClick={() => {
-                      if (!selectedVehicleId) return;
-                      if (!window.confirm(text.deleteConfirm)) return;
-                      deleteMutation.mutate(selectedVehicleId);
-                    }}
-                  >
-                    {deleteMutation.isPending ? text.deleting : text.delete}
                   </button>
                 </>
               ) : null}
