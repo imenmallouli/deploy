@@ -5,13 +5,30 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import 'leaflet-draw';
 import {
+  createLocation,
   createGeofence,
   deleteGeofence,
+  deleteLocation,
   listGeofenceVehiclePositions,
   listGeofences,
+  listLocations,
   listVehicles,
   setupGeofenceMonitoring,
+  updateLocation,
 } from '../lib/api/endpoints';
+
+type LocationItem = {
+  id: string;
+  name: string;
+  notes?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  address?: string;
+  onEnter?: string;
+  onExit?: string;
+  latitude?: number;
+  longitude?: number;
+};
 
 function getErrorMessage(error: unknown, fallback = 'Operation failed. Please try again.') {
   const data = (error as { response?: { data?: { message?: string; detail?: string } } })?.response?.data;
@@ -35,6 +52,12 @@ export function GeofencesPage() {
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [zoneName, setZoneName] = useState('');
+  const [zoneNotes, setZoneNotes] = useState('');
+  const [zoneContactEmail, setZoneContactEmail] = useState('');
+  const [zoneContactPhone, setZoneContactPhone] = useState('');
+  const [zoneAddress, setZoneAddress] = useState('');
+  const [zoneOnEnter, setZoneOnEnter] = useState('');
+  const [zoneOnExit, setZoneOnExit] = useState('');
   const [drawnPolygon, setDrawnPolygon] = useState<number[][]>([]);
   const [createError, setCreateError] = useState('');
   const [createFeedback, setCreateFeedback] = useState('');
@@ -45,6 +68,16 @@ export function GeofencesPage() {
   const [selectedVehicles, setSelectedVehicles] = useState<number[]>([]);
   const [setupError, setSetupError] = useState('');
   const [setupFeedback, setSetupFeedback] = useState('');
+  const [editLocationId, setEditLocationId] = useState<string | null>(null);
+  const [editLocationName, setEditLocationName] = useState('');
+  const [editLocationNotes, setEditLocationNotes] = useState('');
+  const [editLocationEmail, setEditLocationEmail] = useState('');
+  const [editLocationPhone, setEditLocationPhone] = useState('');
+  const [editLocationAddress, setEditLocationAddress] = useState('');
+  const [editLocationOnEnter, setEditLocationOnEnter] = useState('');
+  const [editLocationOnExit, setEditLocationOnExit] = useState('');
+  const [locationActionError, setLocationActionError] = useState('');
+  const [locationActionFeedback, setLocationActionFeedback] = useState('');
 
   const geofencesQuery = useQuery({
     queryKey: ['geofences'],
@@ -54,6 +87,11 @@ export function GeofencesPage() {
   const vehiclesQuery = useQuery({
     queryKey: ['vehicles'],
     queryFn: listVehicles,
+  });
+
+  const locationsQuery = useQuery({
+    queryKey: ['locations', 'geofences-page'],
+    queryFn: () => listLocations(),
   });
 
   const vehiclePositionsQuery = useQuery({
@@ -235,14 +273,28 @@ export function GeofencesPage() {
   }, [vehiclePositionsQuery.data, vehiclesQuery.data]);
 
   const createMutation = useMutation({
-    mutationFn: createGeofence,
+    mutationFn: async (payload: {
+      geofence: { name: string; polygon: number[][]; enabled: boolean; on_enter?: string; on_exit?: string };
+      location: { name: string; notes?: string; contactEmail?: string; contactPhone?: string; address?: string; onEnter?: string; onExit?: string; latitude?: number; longitude?: number };
+    }) => {
+      const geofenceResult = await createGeofence(payload.geofence);
+      await createLocation(payload.location);
+      return geofenceResult;
+    },
     onSuccess: () => {
       setZoneName('');
+      setZoneNotes('');
+      setZoneContactEmail('');
+      setZoneContactPhone('');
+      setZoneAddress('');
+      setZoneOnEnter('');
+      setZoneOnExit('');
       setDrawnPolygon([]);
       if (modalDrawLayerRef.current) modalDrawLayerRef.current.clearLayers();
       setCreateError('');
       setCreateFeedback('Geocloture creee avec succes.');
       queryClient.invalidateQueries({ queryKey: ['geofences'] });
+      queryClient.invalidateQueries({ queryKey: ['locations', 'geofences-page'] });
       setTimeout(() => setCreateFeedback(''), 3000);
     },
     onError: (error) => {
@@ -272,6 +324,33 @@ export function GeofencesPage() {
     },
   });
 
+  const updateLocationMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: Partial<LocationItem> }) => updateLocation(id, payload),
+    onSuccess: () => {
+      setEditLocationId(null);
+      setLocationActionError('');
+      setLocationActionFeedback('Location updated successfully.');
+      queryClient.invalidateQueries({ queryKey: ['locations', 'geofences-page'] });
+    },
+    onError: (error) => {
+      setLocationActionFeedback('');
+      setLocationActionError(getErrorMessage(error));
+    },
+  });
+
+  const deleteLocationMutation = useMutation({
+    mutationFn: deleteLocation,
+    onSuccess: () => {
+      setLocationActionError('');
+      setLocationActionFeedback('Location deleted successfully.');
+      queryClient.invalidateQueries({ queryKey: ['locations', 'geofences-page'] });
+    },
+    onError: (error) => {
+      setLocationActionFeedback('');
+      setLocationActionError(getErrorMessage(error));
+    },
+  });
+
   const extractDrawnPolygons = (): number[][] => {
     const drawLayer = modalDrawLayerRef.current;
     if (!drawLayer) return [];
@@ -298,10 +377,28 @@ export function GeofencesPage() {
       return;
     }
 
+    const centerLat = polygon.reduce((sum, point) => sum + point[0], 0) / polygon.length;
+    const centerLng = polygon.reduce((sum, point) => sum + point[1], 0) / polygon.length;
+
     createMutation.mutate({
-      name: zoneName.trim(),
-      polygon: polygon,
-      enabled: true,
+      geofence: {
+        name: zoneName.trim(),
+        polygon,
+        enabled: true,
+        on_enter: zoneOnEnter || undefined,
+        on_exit: zoneOnExit || undefined,
+      },
+      location: {
+        name: zoneName.trim(),
+        notes: zoneNotes.trim() || undefined,
+        contactEmail: zoneContactEmail.trim() || undefined,
+        contactPhone: zoneContactPhone.trim() || undefined,
+        address: zoneAddress.trim() || undefined,
+        onEnter: zoneOnEnter || undefined,
+        onExit: zoneOnExit || undefined,
+        latitude: Number.isFinite(centerLat) ? centerLat : undefined,
+        longitude: Number.isFinite(centerLng) ? centerLng : undefined,
+      },
     });
   };
 
@@ -423,14 +520,114 @@ export function GeofencesPage() {
 
   const geofences = geofencesQuery.data?.items ?? [];
   const vehicles = vehiclesQuery.data?.items ?? [];
+  const locations = locationsQuery.data?.items ?? [];
   const polygonForCreate = drawnPolygon.length > 0 ? drawnPolygon : extractDrawnPolygons();
   const isCreateFormValid = zoneName.trim().length > 0 && polygonForCreate.length >= 3;
   const isMonitoringFormValid = Boolean(selectedGeofenceId) && selectedVehicles.length > 0;
+
+  const startEditLocation = (item: LocationItem) => {
+    setEditLocationId(item.id);
+    setEditLocationName(item.name ?? '');
+    setEditLocationNotes(item.notes ?? '');
+    setEditLocationEmail(item.contactEmail ?? '');
+    setEditLocationPhone(item.contactPhone ?? '');
+    setEditLocationAddress(item.address ?? '');
+    setEditLocationOnEnter(item.onEnter ?? '');
+    setEditLocationOnExit(item.onExit ?? '');
+    setLocationActionError('');
+    setLocationActionFeedback('');
+  };
+
+  const handleUpdateLocation = () => {
+    if (!editLocationId) return;
+    if (!editLocationName.trim()) {
+      setLocationActionFeedback('');
+      setLocationActionError('Location name is required.');
+      return;
+    }
+
+    updateLocationMutation.mutate({
+      id: editLocationId,
+      payload: {
+        name: editLocationName.trim(),
+        notes: editLocationNotes.trim() || undefined,
+        contactEmail: editLocationEmail.trim() || undefined,
+        contactPhone: editLocationPhone.trim() || undefined,
+        address: editLocationAddress.trim() || undefined,
+        onEnter: editLocationOnEnter.trim() || undefined,
+        onExit: editLocationOnExit.trim() || undefined,
+      },
+    });
+  };
+
+  const handleDeleteLocation = (item: LocationItem) => {
+    if (!window.confirm(`Delete location "${item.name}" ?`)) return;
+    deleteLocationMutation.mutate(item.id);
+  };
 
   return (
     <section>
       <h2>Geofences</h2>
       <p className="subtitle">Dessinez une zone sur la carte — une alerte in-app sera déclenchée automatiquement à chaque sortie de zone.</p>
+
+      {editLocationId && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: 20,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setEditLocationId(null);
+              setLocationActionError('');
+            }
+          }}
+        >
+          <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 980, padding: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0 }}>Update location</h3>
+              <button className="btn-link" type="button" onClick={() => setEditLocationId(null)}>Close</button>
+            </div>
+            <div className="toolbar-row" style={{ marginBottom: 10 }}>
+              <input className="toolbar-input" placeholder="Name" value={editLocationName} onChange={(e) => setEditLocationName(e.target.value)} />
+              <input className="toolbar-input" placeholder="Notes" value={editLocationNotes} onChange={(e) => setEditLocationNotes(e.target.value)} />
+              <input className="toolbar-input" placeholder="Contact email" value={editLocationEmail} onChange={(e) => setEditLocationEmail(e.target.value)} />
+              <input className="toolbar-input" placeholder="Contact phone" value={editLocationPhone} onChange={(e) => setEditLocationPhone(e.target.value)} />
+            </div>
+            <div className="toolbar-row" style={{ marginBottom: 16 }}>
+              <input className="toolbar-input" placeholder="Address" value={editLocationAddress} onChange={(e) => setEditLocationAddress(e.target.value)} />
+              <select className="toolbar-input" value={editLocationOnEnter} onChange={(e) => setEditLocationOnEnter(e.target.value)}>
+                <option value="">On enter alert level</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="critical">Critical</option>
+              </select>
+              <select className="toolbar-input" value={editLocationOnExit} onChange={(e) => setEditLocationOnExit(e.target.value)}>
+                <option value="">On exit alert level</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="critical">Critical</option>
+              </select>
+            </div>
+            {locationActionError && <p className="form-error">{locationActionError}</p>}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button className="btn-secondary" type="button" onClick={() => setEditLocationId(null)}>Cancel</button>
+              <button className="btn-primary" type="button" onClick={handleUpdateLocation} disabled={updateLocationMutation.isPending}>
+                {updateLocationMutation.isPending ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MAIN PAGE MAP */}
       <div className="panel table-shell" style={{ marginBottom: 16 }}>
@@ -497,6 +694,12 @@ export function GeofencesPage() {
                 onClick={() => {
                   setShowCreateModal(false);
                   setZoneName('');
+                  setZoneNotes('');
+                  setZoneContactEmail('');
+                  setZoneContactPhone('');
+                  setZoneAddress('');
+                  setZoneOnEnter('');
+                  setZoneOnExit('');
                   setDrawnPolygon([]);
                   setCreateError('');
                 }}
@@ -546,16 +749,62 @@ Create a geofence</h3>
 
                 <div style={{ marginTop: 14 }}>
                   <label style={{ display: 'block', marginBottom: 8, fontWeight: 500, fontSize: 14 }}>
-                    Zone name
+                    Name
                   </label>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
                     <input
                       className="toolbar-input"
-                      placeholder="Ex: Main Depot"
+                      placeholder="Name"
                       value={zoneName}
                       onChange={(e) => setZoneName(e.target.value)}
                       style={{ flex: 1 }}
                     />
+                  </div>
+                  <div className="toolbar-row" style={{ flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                    <input
+                      className="toolbar-input"
+                      placeholder="Notes"
+                      value={zoneNotes}
+                      onChange={(e) => setZoneNotes(e.target.value)}
+                      style={{ flex: '1 1 220px' }}
+                    />
+                    <input
+                      className="toolbar-input"
+                      placeholder="Contact email"
+                      value={zoneContactEmail}
+                      onChange={(e) => setZoneContactEmail(e.target.value)}
+                      style={{ flex: '1 1 220px' }}
+                    />
+                    <input
+                      className="toolbar-input"
+                      placeholder="Contact phone"
+                      value={zoneContactPhone}
+                      onChange={(e) => setZoneContactPhone(e.target.value)}
+                      style={{ flex: '1 1 220px' }}
+                    />
+                  </div>
+                  <div className="toolbar-row" style={{ flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                    <input
+                      className="toolbar-input"
+                      placeholder="Address"
+                      value={zoneAddress}
+                      onChange={(e) => setZoneAddress(e.target.value)}
+                      style={{ flex: '2 1 280px' }}
+                    />
+                    <select className="toolbar-input" value={zoneOnEnter} onChange={(e) => setZoneOnEnter(e.target.value)} style={{ flex: '1 1 180px' }}>
+                      <option value="">On enter alert level</option>
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="critical">Critical</option>
+                    </select>
+                    <select className="toolbar-input" value={zoneOnExit} onChange={(e) => setZoneOnExit(e.target.value)} style={{ flex: '1 1 180px' }}>
+                      <option value="">On exit alert level</option>
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="critical">Critical</option>
+                    </select>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
                     <button
                       className="btn-primary"
                       onClick={handleCreateGeofence}
@@ -653,6 +902,12 @@ Create a geofence</h3>
                 onClick={() => {
                   setShowCreateModal(false);
                   setZoneName('');
+                  setZoneNotes('');
+                  setZoneContactEmail('');
+                  setZoneContactPhone('');
+                  setZoneAddress('');
+                  setZoneOnEnter('');
+                  setZoneOnExit('');
                   setDrawnPolygon([]);
                   setCreateError('');
                 }}
@@ -665,6 +920,66 @@ Create a geofence</h3>
       )}
 
       {createFeedback && <p className="muted-note" style={{ marginBottom: 16 }}>{createFeedback}</p>}
+
+      <div className="panel table-shell">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div />
+          <button
+            className="btn-link"
+            type="button"
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['locations', 'geofences-page'] })}
+          >
+            Refresh
+          </button>
+        </div>
+
+        {locationActionError && <p className="form-error">{locationActionError}</p>}
+
+        <table className="vehicles-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Notes</th>
+              <th>Contact Email</th>
+              <th>Contact Phone</th>
+              <th>Address</th>
+              <th>On Enter</th>
+              <th>On Exit</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {locations.length === 0 && (
+              <tr>
+                <td colSpan={8} className="empty-cell">No locations to display</td>
+              </tr>
+            )}
+            {locations.map((item) => (
+              <tr key={item.id}>
+                <td>{item.name}</td>
+                <td>{item.notes ?? '-'}</td>
+                <td>{item.contactEmail ?? '-'}</td>
+                <td>{item.contactPhone ?? '-'}</td>
+                <td>{item.address ?? (item.latitude != null && item.longitude != null ? `${item.latitude}, ${item.longitude}` : '-')}</td>
+                <td>{item.onEnter ?? '-'}</td>
+                <td>{item.onExit ?? '-'}</td>
+                <td style={{ whiteSpace: 'nowrap' }}>
+                  <button className="btn-link" type="button" onClick={() => startEditLocation(item)}>Update</button>
+                  <button
+                    className="btn-link"
+                    type="button"
+                    style={{ color: 'var(--danger, #dc3545)', marginLeft: 8 }}
+                    onClick={() => handleDeleteLocation(item)}
+                    disabled={deleteLocationMutation.isPending}
+                  >
+                    {deleteLocationMutation.isPending ? 'Deleting...' : 'Delete'}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

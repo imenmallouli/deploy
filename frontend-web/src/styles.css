@@ -405,17 +405,27 @@ h2 {
 
 .locations-map-panel {
   overflow: hidden;
+  min-height: calc(100vh - 140px);
+  display: flex;
+  flex-direction: column;
 }
 
 .locations-map-shell {
   position: relative;
   overflow: hidden;
   border-radius: 18px;
+  flex: 1;
+  min-height: 0;
 }
 
 .locations-hero-map {
-  min-height: 700px;
+  height: 100%;
+  min-height: 100%;
   border-radius: 0;
+}
+
+.fleet-map.locations-hero-map {
+  min-height: calc(100vh - 180px);
 }
 
 .locations-overlay-card {
