@@ -494,16 +494,16 @@ export function DtcPage() {
   const fromDate = dateFilter ? new Date(dateFilter) : null;
   const hasValidDateRange = !fromDate || !Number.isNaN(fromDate.getTime());
 
-  const dtcItemsSource = useMemo(() => {
-    const byVehicleItems = dtcQuery.data?.items ?? [];
-    if (byVehicleItems.length > 0) return byVehicleItems;
-    return recentDtcQuery.data?.items ?? [];
-  }, [dtcQuery.data, recentDtcQuery.data]);
+  const dtcItemsSource = useMemo(() => dtcQuery.data?.items ?? [], [dtcQuery.data]);
 
   const rows = useMemo<DtcRow[]>(() => {
     const items = dtcItemsSource;
 
     return items
+      .filter((item) => {
+        if (selectedVehicleId === null) return false;
+        return Number(item.vehicle_id) === selectedVehicleId;
+      })
       .filter((item) => {
         const codeValue = String(item.code ?? item.dtc_code ?? '').toLowerCase();
         const descValue = String(item.description ?? '').toLowerCase();
@@ -527,7 +527,7 @@ export function DtcPage() {
         lastOccurrence: (item as { last_occurrence?: string; created_at?: string }).last_occurrence ?? item.created_at ?? '-',
         count: (item as { occurrence_count?: number }).occurrence_count ?? 1,
       }));
-  }, [dtcItemsSource, hasValidDateRange, fromDate, search]);
+  }, [dtcItemsSource, hasValidDateRange, fromDate, search, selectedVehicleId]);
 
   const selectedVehicle = useMemo(
     () => vehiclesQuery.data?.items?.find((vehicle) => vehicle.id === selectedVehicleId) ?? null,
