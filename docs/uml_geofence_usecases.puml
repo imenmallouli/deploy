@@ -1,0 +1,44 @@
+@startuml Gestion Geofence - Cas d'Utilisation
+left to right direction
+
+actor Utilisateur
+actor Admin
+actor "Système GPS" as GPS
+
+Utilisateur <|-- Admin
+
+rectangle "Module Geofence" {
+	usecase "S'authentifier" as AUTH
+	usecase "Consulter la liste\ndes géofences" as LIST
+	usecase "Ajouter une\ngéofence" as ADD
+	usecase "Modifier une\ngéofence" as UPDATE
+	usecase "Supprimer une\ngéofence" as DELETE
+	usecase "Consulter la position\ndu véhicule" as POS
+	usecase "Vérifier la position d'un véhicule\npar rapport aux géofences" as CHECK
+	usecase "Configurer le monitoring\nd'une géofence" as MONITOR
+	usecase "Détecter une sortie\nde géofence" as EXIT
+	usecase "Envoyer une notification\nde sortie" as NOTIFY
+}
+
+Utilisateur --> AUTH
+Utilisateur --> LIST
+Utilisateur --> ADD
+Utilisateur --> UPDATE
+Utilisateur --> DELETE
+Utilisateur --> POS
+Utilisateur --> CHECK
+
+Admin --> MONITOR
+
+GPS --> EXIT
+
+CHECK .> AUTH : <<include>>
+ADD .> AUTH : <<include>>
+UPDATE .> AUTH : <<include>>
+DELETE .> AUTH : <<include>>
+MONITOR .> AUTH : <<include>>
+
+EXIT .> CHECK : <<extend>>
+NOTIFY .> EXIT : <<extend>>\n[si sortie détectée et monitoring configuré]
+
+@enduml
