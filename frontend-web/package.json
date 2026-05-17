@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "i18n:check": "node scripts/auto-translate-free.mjs --check",
+    "i18n:auto:fr": "node scripts/auto-translate-free.mjs --source en --target fr",
+    "i18n:auto:en": "node scripts/auto-translate-free.mjs --source fr --target en"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.21",

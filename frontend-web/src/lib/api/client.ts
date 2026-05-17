@@ -3,7 +3,15 @@ import { clearSession, getAccessToken } from '../auth/session';
 
 const envApiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
 const browserHost = typeof window !== 'undefined' ? window.location.hostname : '127.0.0.1';
-const fallbackApiBaseUrl = `http://${browserHost}:8000`;
+
+function formatHostForUrl(host: string): string {
+  if (host.includes(':') && !host.startsWith('[')) {
+    return `[${host}]`;
+  }
+  return host;
+}
+
+const fallbackApiBaseUrl = `http://${formatHostForUrl(browserHost)}:8000`;
 const API_BASE_URL = envApiBaseUrl && envApiBaseUrl.length > 0 ? envApiBaseUrl : fallbackApiBaseUrl;
 
 export const apiClient = axios.create({

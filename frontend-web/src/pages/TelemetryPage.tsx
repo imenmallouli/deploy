@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getTelemetryHistory, listVehicles } from '../lib/api/endpoints';
 import { getAccessToken } from '../lib/auth/session';
+import { useI18n } from '../lib/i18n';
 
 type TelemetryHistoryResponse = {
   status?: string;
@@ -148,10 +149,10 @@ function extractNumeric(v: unknown): number | null {
   return Number.isNaN(n) ? null : n;
 }
 
-function SpeedRpmChart({ rows }: { rows: MergedTelemetryRow[] }) {
+function SpeedRpmChart({ rows, locale }: { rows: MergedTelemetryRow[]; locale: 'fr' | 'en' }) {
   const pts = rows.slice(-40);
   if (pts.length < 2) {
-    return <p className="tl-no-data">Not enough data to render the chart.</p>;
+    return <p className="tl-no-data">{locale === 'fr' ? 'Pas assez de donnees pour afficher le graphique.' : 'Not enough data to display the chart.'}</p>;
   }
 
   const W = 540, H = 190, PL = 34, PR = 10, PT = 10, PB = 28;
@@ -231,6 +232,202 @@ function TlHealthBar({ label, value, raw, color }: { label: string; value: numbe
 // ─── main component ──────────────────────────────────────────────────────────
 
 export function TelemetryPage() {
+  const { locale } = useI18n();
+
+  const metricLabels = locale === 'fr'
+    ? {
+        speed: 'Vitesse',
+        rpm: 'Regime',
+        fuel_level: 'Carburant',
+        engine_temp: 'Temp. moteur',
+        battery_voltage: 'Tension batterie',
+        battery_charge_level: 'Charge batterie',
+        nominal_voltage: 'Tension nominale',
+        engine_load: 'Charge moteur',
+        ambient_air_temp: 'Temp. ambiante',
+        intake_temp: 'Temp. admission',
+        odometer: 'Kilometrage',
+        track_altitude: 'Altitude',
+        course_over_ground: 'Cap',
+        satellites_used: 'Satellites',
+        glonass_satellites_used: 'GLONASS',
+        temp_cpu: 'Temp. CPU',
+        cpu: 'CPU',
+        gpu: 'GPU',
+      }
+    : {
+        speed: 'Speed',
+        rpm: 'RPM',
+        fuel_level: 'Fuel level',
+        engine_temp: 'Engine temp.',
+        battery_voltage: 'Battery voltage',
+        battery_charge_level: 'Battery charge',
+        nominal_voltage: 'Nominal voltage',
+        engine_load: 'Engine load',
+        ambient_air_temp: 'Ambient temp.',
+        intake_temp: 'Intake temp.',
+        odometer: 'Odometer',
+        track_altitude: 'Altitude',
+        course_over_ground: 'Heading',
+        satellites_used: 'Satellites',
+        glonass_satellites_used: 'GLONASS',
+        temp_cpu: 'CPU temp.',
+        cpu: 'CPU',
+        gpu: 'GPU',
+      };
+
+  const text = locale === 'fr'
+    ? {
+        wsError: 'Erreur WebSocket',
+        invalidRealtimeMessage: 'Message temps reel invalide',
+        lastSyncSeconds: (v: number) => `Derniere sync il y a ${v} s`,
+        lastSyncMinutes: (v: number) => `Derniere sync il y a ${v} min`,
+        lastSyncHours: (v: number) => `Derniere sync il y a ${v} h`,
+        cloudWaiting: 'Connecte cloud, en attente de donnees...',
+        noRealtimeData: 'Aucune donnee temps reel',
+        loadingVehicles: 'Chargement des vehicules...',
+        loadVehiclesError: 'Impossible de charger les vehicules.',
+        noVehicles: 'Aucun vehicule dans la base. Les panneaux de telemetrie s\'affichent avec des donnees vides.',
+        noVehicleOption: 'Aucun vehicule',
+        realtime: 'Temps reel',
+        today: 'Aujourd\'hui',
+        export: 'Exporter',
+        telemetryNoVehicle: 'Telemetrie - Aucun vehicule',
+        telemetryTitle: 'Telemetrie',
+        noVehicleSelected: 'Aucun vehicule selectionne · Aucune donnee temps reel',
+        batteryCharge: 'Niveau charge batterie',
+        nominalVoltage: 'Tension nominale',
+        low: 'faible',
+        stable: 'stable',
+        altitude: 'Altitude',
+        heading: 'cap',
+        satellitesUsed: 'Satellites utilises',
+        signalLow: 'signal faible',
+        signalOk: 'signal ok',
+        alert: 'Alerte',
+        speedRpmLast30: 'Vitesse & RPM - dernieres 30 min',
+        realtimeEvery10s: 'Donnees en temps reel toutes les 10 secondes',
+        speedLegend: 'Vitesse',
+        rpmLegend: 'RPM /100',
+        systemHealth: 'Sante systeme',
+        realtimeIndicators: 'Indicateurs temps reel',
+        speed: 'Vitesse',
+        rpm: 'Regime',
+        fuel: 'Carburant',
+        engineTemp: 'Temp. moteur',
+        battery: 'Batterie',
+        engineLoad: 'Charge moteur',
+        ambientTemp: 'Temp. ambiante',
+        intakeTemp: 'Temp. admission',
+        totalMileage: 'Kilometrage total',
+        recentEvents: 'Evenements recents',
+        tripLogs: 'Alertes et logs du trajet',
+        noRecentEvent: 'Aucun evenement recent.',
+        event: 'Evenement',
+        critical: 'Critique',
+        warning: 'Avertiss.',
+        dongleSync: 'Synchronisation dongle',
+        connectionActive: 'Connexion active - signal',
+        strong: 'fort',
+        system: 'Systeme',
+        tripStats: 'Statistiques du trajet',
+        currentSession: 'Session en cours',
+        distance: 'Distance parcourue',
+        tripDuration: 'Duree trajet',
+        avgSpeed: 'Vitesse moyenne',
+        maxSpeed: 'Vitesse max',
+        fuelConsumption: 'Conso. carburant',
+        estimatedCo2: 'CO2 estime',
+        triggeredAlerts: 'Alertes declenchees',
+        drivingScore: 'Score conduite',
+        telemetryHistory: 'Historique telemetrie',
+        interval: 'Intervalle',
+        loadingTelemetryHistory: 'Chargement de l\'historique telemetrie...',
+        loadTelemetryHistoryError: 'Impossible de charger l\'historique telemetrie.',
+        noTelemetryData: 'Aucune donnee telemetrie.',
+        realtimeStream: 'Flux temps reel',
+        connected: 'Connecte',
+        disconnected: 'Deconnecte',
+        dataEveryMinute: 'donnees toutes les minutes',
+        noRealtimeRow: 'Aucune donnee temps reel.',
+        hour: 'Heure',
+      }
+    : {
+        wsError: 'WebSocket error',
+        invalidRealtimeMessage: 'Invalid realtime message',
+        lastSyncSeconds: (v: number) => `Last sync ${v}s ago`,
+        lastSyncMinutes: (v: number) => `Last sync ${v} min ago`,
+        lastSyncHours: (v: number) => `Last sync ${v}h ago`,
+        cloudWaiting: 'Cloud connected, waiting for data...',
+        noRealtimeData: 'No realtime data',
+        loadingVehicles: 'Loading vehicles...',
+        loadVehiclesError: 'Unable to load vehicles.',
+        noVehicles: 'No vehicles in database. Telemetry panels are shown with empty data.',
+        noVehicleOption: 'No vehicle',
+        realtime: 'Realtime',
+        today: 'Today',
+        export: 'Export',
+        telemetryNoVehicle: 'Telemetry - No vehicle',
+        telemetryTitle: 'Telemetry',
+        noVehicleSelected: 'No vehicle selected · No realtime data',
+        batteryCharge: 'Battery charge level',
+        nominalVoltage: 'Nominal voltage',
+        low: 'low',
+        stable: 'stable',
+        altitude: 'Altitude',
+        heading: 'heading',
+        satellitesUsed: 'Satellites used',
+        signalLow: 'weak signal',
+        signalOk: 'good signal',
+        alert: 'Alert',
+        speedRpmLast30: 'Speed & RPM - last 30 min',
+        realtimeEvery10s: 'Realtime data every 10 seconds',
+        speedLegend: 'Speed',
+        rpmLegend: 'RPM /100',
+        systemHealth: 'System health',
+        realtimeIndicators: 'Realtime indicators',
+        speed: 'Speed',
+        rpm: 'RPM',
+        fuel: 'Fuel',
+        engineTemp: 'Engine temp.',
+        battery: 'Battery',
+        engineLoad: 'Engine load',
+        ambientTemp: 'Ambient temp.',
+        intakeTemp: 'Intake temp.',
+        totalMileage: 'Total mileage',
+        recentEvents: 'Recent events',
+        tripLogs: 'Trip alerts and logs',
+        noRecentEvent: 'No recent event.',
+        event: 'Event',
+        critical: 'Critical',
+        warning: 'Warning',
+        dongleSync: 'Dongle sync',
+        connectionActive: 'Connection active - signal',
+        strong: 'strong',
+        system: 'System',
+        tripStats: 'Trip statistics',
+        currentSession: 'Current session',
+        distance: 'Distance traveled',
+        tripDuration: 'Trip duration',
+        avgSpeed: 'Average speed',
+        maxSpeed: 'Max speed',
+        fuelConsumption: 'Fuel consumption',
+        estimatedCo2: 'Estimated CO2',
+        triggeredAlerts: 'Triggered alerts',
+        drivingScore: 'Driving score',
+        telemetryHistory: 'Telemetry history',
+        interval: 'Interval',
+        loadingTelemetryHistory: 'Loading telemetry history...',
+        loadTelemetryHistoryError: 'Unable to load telemetry history.',
+        noTelemetryData: 'No telemetry data.',
+        realtimeStream: 'Realtime stream',
+        connected: 'Connected',
+        disconnected: 'Disconnected',
+        dataEveryMinute: 'data every minute',
+        noRealtimeRow: 'No realtime data.',
+        hour: 'Time',
+      };
+
   const [vehicleId, setVehicleId] = useState<number | null>(null);
   const interval = '5m';
   const metricsList = [
@@ -397,7 +594,7 @@ export function TelemetryPage() {
       };
 
       ws.onerror = () => {
-        setLiveError('Erreur WebSocket');
+        setLiveError(text.wsError);
       };
 
       ws.onclose = () => {
@@ -425,7 +622,7 @@ export function TelemetryPage() {
           }
           setLiveEvents((prev) => [payload, ...prev].slice(0, 20));
         } catch {
-          setLiveError('Message temps réel invalide');
+          setLiveError(text.invalidRealtimeMessage);
         }
       };
     }
@@ -442,7 +639,7 @@ export function TelemetryPage() {
       }
       wsRef.current?.close();
     };
-  }, [vehicleId, wsUrl, hasVehicles]);
+  }, [vehicleId, wsUrl, hasVehicles, text.invalidRealtimeMessage, text.wsError]);
 
   // Periodically re-evaluate liveRows so the freshness check can clear the
   // realtime table even if no new WebSocket messages arrive (car is off).
@@ -524,11 +721,11 @@ export function TelemetryPage() {
   const lastSyncLabel = latestLiveRow
     ? (() => {
         const delta = Math.round((Date.now() - new Date(latestLiveRow.timestamp).getTime()) / 1000);
-        if (delta < 60)   return `Dernière sync il y a ${delta} s`;
-        if (delta < 3600) return `Dernière sync il y a ${Math.round(delta / 60)} min`;
-        return `Dernière sync il y a ${Math.round(delta / 3600)} h`;
+        if (delta < 60) return text.lastSyncSeconds(delta);
+        if (delta < 3600) return text.lastSyncMinutes(Math.round(delta / 60));
+        return text.lastSyncHours(Math.round(delta / 3600));
       })()
-    : (liveConnected ? 'Connecté cloud, en attente de données...' : 'Aucune donnée temps réel');
+    : (liveConnected ? text.cloudWaiting : text.noRealtimeData);
 
   const driveScore = maxSpeedVal > 0
     ? Math.max(50, Math.round(100 - allAlerts.length * 5 - (maxSpeedVal > 120 ? 15 : 0)))
@@ -536,9 +733,9 @@ export function TelemetryPage() {
 
   return (
     <div className="tl-page">
-      {vehiclesQuery.isLoading && <p className="tl-muted">Loading vehicles...</p>}
-      {vehiclesQuery.isError && <p className="tl-muted">Unable to load vehicles.</p>}
-      {!vehiclesQuery.isLoading && !vehiclesQuery.isError && !hasVehicles && <p className="tl-muted">No vehicles in the database. Telemetry panels are shown with empty data.</p>}
+      {vehiclesQuery.isLoading && <p className="tl-muted">{text.loadingVehicles}</p>}
+      {vehiclesQuery.isError && <p className="tl-muted">{text.loadVehiclesError}</p>}
+      {!vehiclesQuery.isLoading && !vehiclesQuery.isError && !hasVehicles && <p className="tl-muted">{text.noVehicles}</p>}
 
       {
         <>
@@ -547,22 +744,22 @@ export function TelemetryPage() {
             <div className="tl-header-left">
               <h2 className="tl-title">
                 {hasVehicles
-                  ? `Télémétrie — ${currentVehicle?.make?.toUpperCase() ?? ''} ${currentVehicle?.model ?? ''} ${currentVehicle?.year ?? ''}`
-                  : 'Télémétrie — Aucun véhicule'}
+                  ? `${text.telemetryTitle} - ${currentVehicle?.make?.toUpperCase() ?? ''} ${currentVehicle?.model ?? ''} ${currentVehicle?.year ?? ''}`
+                  : text.telemetryNoVehicle}
               </h2>
               <p className="tl-sub">
                 {hasVehicles
                   ? `VIN ${currentVehicle?.vin ?? ''} · Dongle ${currentVehicle?.dongle_id ?? ''} · ${lastSyncLabel}`
-                  : 'Aucun véhicule sélectionné · Aucune donnée temps réel'}
+                  : text.noVehicleSelected}
               </p>
             </div>
             <div className="tl-header-right">
               <div className="tl-header-actions">
                 <span className={`tl-live-badge${liveConnected ? ' tl-live-on' : ''}`}>
                   <span className="tl-live-dot" />
-                  Live
+                  {text.realtime}
                 </span>
-                <span className="tl-ghost-badge">Aujourd'hui</span>
+                <span className="tl-ghost-badge">{text.today}</span>
                 <button
                   type="button"
                   className="tl-export-btn"
@@ -580,7 +777,7 @@ export function TelemetryPage() {
                     a.click();
                   }}
                 >
-                  Exporter
+                  {text.export}
                 </button>
               </div>
               {hasVehicles ? (
@@ -597,7 +794,7 @@ export function TelemetryPage() {
                 </select>
               ) : (
                 <select className="tl-vehicle-select" value="" disabled>
-                  <option value="">Aucun véhicule</option>
+                  <option value="">{text.noVehicleOption}</option>
                 </select>
               )}
             </div>
@@ -606,42 +803,42 @@ export function TelemetryPage() {
           {/* ── KPI CARDS ── */}
           <div className="tl-kpi-row tl-kpi-row-compact">
             <div className="tl-kpi-card tl-kpi-card-compact">
-              <span className="tl-kpi-label">Niveau charge batterie</span>
+              <span className="tl-kpi-label">{text.batteryCharge}</span>
               <span className="tl-kpi-val">{currentBatteryChargeLevel != null ? Math.round(currentBatteryChargeLevel) : 0}</span>
               <span className="tl-kpi-unit">%</span>
               {currentBatteryChargeLevel != null && (
                 <span className={`tl-kpi-trend ${currentBatteryChargeLevel < 20 ? 'tl-trend-danger' : 'tl-trend-up'}`}>
-                  {currentBatteryChargeLevel < 20 ? '▼ faible' : '▲ ok'}
+                  {currentBatteryChargeLevel < 20 ? `▼ ${text.low}` : '▲ ok'}
                 </span>
               )}
             </div>
             <div className="tl-kpi-card tl-kpi-card-compact">
-              <span className="tl-kpi-label">Tension nominale</span>
+              <span className="tl-kpi-label">{text.nominalVoltage}</span>
               <span className="tl-kpi-val">{currentNominalVoltage != null ? currentNominalVoltage.toFixed(1) : '0'}</span>
               <span className="tl-kpi-unit">V</span>
               {currentNominalVoltage != null && (
                 <span className={`tl-kpi-trend ${currentNominalVoltage < 12 ? 'tl-trend-warn' : 'tl-trend-up'}`}>
-                  {currentNominalVoltage < 12 ? '▲ basse' : '▲ stable'}
+                  {currentNominalVoltage < 12 ? `▲ ${text.low}` : `▲ ${text.stable}`}
                 </span>
               )}
             </div>
             <div className="tl-kpi-card tl-kpi-card-compact">
-              <span className="tl-kpi-label">Altitude</span>
+              <span className="tl-kpi-label">{text.altitude}</span>
               <span className="tl-kpi-val">{currentTrackAltitude != null ? Math.round(currentTrackAltitude) : '—'}</span>
               <span className="tl-kpi-unit">m</span>
               {currentTrackAltitude != null && (
                 <span className="tl-kpi-trend tl-trend-up">
-                  {`▲ cap ${currentCourseOverGround != null ? Math.round(currentCourseOverGround) : 0}°`}
+                  {`▲ ${text.heading} ${currentCourseOverGround != null ? Math.round(currentCourseOverGround) : 0}°`}
                 </span>
               )}
             </div>
             <div className="tl-kpi-card tl-kpi-card-compact">
-              <span className="tl-kpi-label">Satellites utilisés</span>
+              <span className="tl-kpi-label">{text.satellitesUsed}</span>
               <span className="tl-kpi-val">{currentSatellitesUsed != null ? Math.round(currentSatellitesUsed) : '—'}</span>
               <span className="tl-kpi-unit">sat</span>
               {currentSatellitesUsed != null && (
                 <span className={`tl-kpi-trend ${currentSatellitesUsed < 4 ? 'tl-trend-warn' : 'tl-trend-up'}`}>
-                  {currentGlonassSatellitesUsed != null ? `▲ GLONASS ${Math.round(currentGlonassSatellitesUsed)}` : currentSatellitesUsed < 4 ? '▲ signal faible' : '▲ signal ok'}
+                  {currentGlonassSatellitesUsed != null ? `▲ GLONASS ${Math.round(currentGlonassSatellitesUsed)}` : currentSatellitesUsed < 4 ? `▲ ${text.signalLow}` : `▲ ${text.signalOk}`}
                 </span>
               )}
             </div>
@@ -652,7 +849,7 @@ export function TelemetryPage() {
             <div className="tl-alert-banner">
               <span className="tl-alert-dot" />
               <div className="tl-alert-body">
-                <strong className="tl-alert-title">Alerte — {latestAlert.type?.toLowerCase()}</strong>
+                <strong className="tl-alert-title">{text.alert} - {latestAlert.type?.toLowerCase()}</strong>
                 <p className="tl-alert-msg">{latestAlert.message}</p>
               </div>
               <span className="tl-alert-time">{latestAlert.time ? latestAlert.time.slice(11, 19) : ''}</span>
@@ -664,38 +861,38 @@ export function TelemetryPage() {
             <div className="tl-chart-panel">
               <div className="tl-chart-top">
                 <div>
-                  <h3 className="tl-panel-title">Vitesse & RPM — dernières 30 min</h3>
-                  <p className="tl-panel-sub">Données en temps réel toutes les 10 secondes</p>
+                  <h3 className="tl-panel-title">{text.speedRpmLast30}</h3>
+                  <p className="tl-panel-sub">{text.realtimeEvery10s}</p>
                 </div>
                 <div className="tl-chart-legend">
-                  <span className="tl-leg tl-leg-speed">— Vitesse</span>
-                  <span className="tl-leg tl-leg-rpm">— RPM /100</span>
+                  <span className="tl-leg tl-leg-speed">- {text.speedLegend}</span>
+                  <span className="tl-leg tl-leg-rpm">- {text.rpmLegend}</span>
                 </div>
               </div>
-              <SpeedRpmChart rows={displayedRows} />
+              <SpeedRpmChart rows={displayedRows} locale={locale} />
             </div>
 
             <div className="tl-health-panel">
               <div className="tl-health-top">
-                <span className="tl-panel-title">Santé système</span>
-                <span className="tl-panel-sub">Indicateurs temps réel</span>
+                <span className="tl-panel-title">{text.systemHealth}</span>
+                <span className="tl-panel-sub">{text.realtimeIndicators}</span>
               </div>
               <div className="tl-hbars">
-                <TlHealthBar label="Vitesse"         value={Math.min(100, (currentSpeed / 180) * 100)}                  unit="km/h" raw={`${Math.round(currentSpeed)} km/h`}                    color="blue" />
-                <TlHealthBar label="Régime"          value={Math.min(100, (currentRpm / 7000) * 100)}                   unit="tr/min" raw={`${currentRpm.toLocaleString('fr-FR')} tr/min`}     color="blue" />
-                <TlHealthBar label="Carburant"       value={currentFuelLevel}                                            unit="%" raw={`${Math.round(currentFuelLevel)}%`}                      color={currentFuelLevel > 0 && currentFuelLevel < 20 ? 'red' : currentFuelLevel < 50 ? 'orange' : 'green'} />
-                <TlHealthBar label="Temp. moteur"    value={Math.min(100, (currentEngineTemp / 120) * 100)}             unit="°C" raw={`${Math.round(currentEngineTemp)}°C`}                  color={currentEngineTemp > 100 ? 'red' : currentEngineTemp > 85 ? 'orange' : 'green'} />
-                <TlHealthBar label="Batterie"        value={batteryPct}                                                  unit="V" raw={`${currentBattery.toFixed(1)}V`}                        color={currentBattery < 11.5 ? 'red' : currentBattery < 12.0 ? 'orange' : 'green'} />
-                <TlHealthBar label="Charge moteur"   value={currentEngineLoad}                                           unit="%" raw={`${Math.round(currentEngineLoad)}%`}                    color={currentEngineLoad > 85 ? 'orange' : 'green'} />
+                <TlHealthBar label={text.speed}       value={Math.min(100, (currentSpeed / 180) * 100)}                  unit="km/h" raw={`${Math.round(currentSpeed)} km/h`}                    color="blue" />
+                <TlHealthBar label={text.rpm}         value={Math.min(100, (currentRpm / 7000) * 100)}                   unit={locale === 'fr' ? 'tr/min' : 'rpm'} raw={`${currentRpm.toLocaleString(locale === 'fr' ? 'fr-FR' : 'en-US')} ${locale === 'fr' ? 'tr/min' : 'rpm'}`}     color="blue" />
+                <TlHealthBar label={text.fuel}        value={currentFuelLevel}                                            unit="%" raw={`${Math.round(currentFuelLevel)}%`}                      color={currentFuelLevel > 0 && currentFuelLevel < 20 ? 'red' : currentFuelLevel < 50 ? 'orange' : 'green'} />
+                <TlHealthBar label={text.engineTemp}  value={Math.min(100, (currentEngineTemp / 120) * 100)}             unit="°C" raw={`${Math.round(currentEngineTemp)}°C`}                  color={currentEngineTemp > 100 ? 'red' : currentEngineTemp > 85 ? 'orange' : 'green'} />
+                <TlHealthBar label={text.battery}     value={batteryPct}                                                  unit="V" raw={`${currentBattery.toFixed(1)}V`}                        color={currentBattery < 11.5 ? 'red' : currentBattery < 12.0 ? 'orange' : 'green'} />
+                <TlHealthBar label={text.engineLoad}  value={currentEngineLoad}                                           unit="%" raw={`${Math.round(currentEngineLoad)}%`}                    color={currentEngineLoad > 85 ? 'orange' : 'green'} />
                 <TlHealthBar
-                  label="Temp. ambiante"
+                  label={text.ambientTemp}
                   value={currentAmbientTemp != null ? Math.min(100, ((currentAmbientTemp + 20) / 60) * 100) : 0}
                   unit="°C"
                   raw={currentAmbientTemp != null ? `${Math.round(currentAmbientTemp)}°C` : '—'}
                   color="blue"
                 />
                 <TlHealthBar
-                  label="Temp. admission"
+                  label={text.intakeTemp}
                   value={currentIntakeTemp != null ? Math.min(100, (currentIntakeTemp / 55) * 100) : 0}
                   unit="°C"
                   raw={currentIntakeTemp != null ? `${Math.round(currentIntakeTemp)}°C` : '—'}
@@ -724,7 +921,7 @@ export function TelemetryPage() {
                 />
               </div>
               <div style={{ marginTop: 12, paddingTop: 8, borderTop: '1px solid #e5e7eb', fontSize: 12, color: '#666' }}>
-                <strong>Kilométrage total:</strong> {currentOdometer.toLocaleString('fr-FR')} km
+                <strong>{text.totalMileage}:</strong> {currentOdometer.toLocaleString(locale === 'fr' ? 'fr-FR' : 'en-US')} km
               </div>
             </div>
           </div>
@@ -733,23 +930,23 @@ export function TelemetryPage() {
           <div className="tl-lower">
             <div className="tl-events-panel">
               <div className="tl-panel-hrow">
-                <span className="tl-panel-title">Événements récents</span>
-                <span className="tl-panel-sub">Alertes et logs du trajet</span>
+                <span className="tl-panel-title">{text.recentEvents}</span>
+                <span className="tl-panel-sub">{text.tripLogs}</span>
               </div>
               {allAlerts.slice(0, 5).length === 0 && !liveConnected ? (
-                <p className="tl-empty">Aucun événement récent.</p>
+                <p className="tl-empty">{text.noRecentEvent}</p>
               ) : (
                 <>
                   {allAlerts.slice(0, 5).map((ev, i) => (
                     <div key={i} className="tl-ev-row">
                       <span className={`tl-ev-dot tl-ev-${(ev.severity ?? 'info').toLowerCase()}`} />
                       <div className="tl-ev-body">
-                        <strong className="tl-ev-title">{ev.type ?? 'Événement'}</strong>
+                        <strong className="tl-ev-title">{ev.type ?? text.event}</strong>
                         <p className="tl-ev-msg">{ev.message ?? ''}</p>
                         <span className="tl-ev-time">{ev.time ? ev.time.slice(11, 19) : ''}</span>
                       </div>
                       <span className={`tl-ev-badge tl-ev-badge-${(ev.severity ?? 'info').toLowerCase()}`}>
-                        {ev.severity === 'critical' ? 'Critique' : ev.severity === 'warning' ? 'Avertiss.' : 'Info'}
+                        {ev.severity === 'critical' ? text.critical : ev.severity === 'warning' ? text.warning : 'Info'}
                       </span>
                     </div>
                   ))}
@@ -757,10 +954,10 @@ export function TelemetryPage() {
                     <div className="tl-ev-row">
                       <span className="tl-ev-dot tl-ev-system" />
                       <div className="tl-ev-body">
-                        <strong className="tl-ev-title">Synchronisation dongle</strong>
-                        <p className="tl-ev-msg">Connexion active — signal {liveError ? 'faible' : 'fort'}</p>
+                        <strong className="tl-ev-title">{text.dongleSync}</strong>
+                        <p className="tl-ev-msg">{text.connectionActive} {liveError ? text.low : text.strong}</p>
                       </div>
-                      <span className="tl-ev-badge tl-ev-badge-system">Système</span>
+                      <span className="tl-ev-badge tl-ev-badge-system">{text.system}</span>
                     </div>
                   )}
                 </>
@@ -769,40 +966,40 @@ export function TelemetryPage() {
 
             <div className="tl-stats-panel">
               <div className="tl-panel-hrow">
-                <span className="tl-panel-title">Statistiques du trajet</span>
-                <span className="tl-panel-sub">Session en cours</span>
+                <span className="tl-panel-title">{text.tripStats}</span>
+                <span className="tl-panel-sub">{text.currentSession}</span>
               </div>
               <div className="tl-stats-grid">
                 <div className="tl-stat-cell">
-                  <span className="tl-stat-label">Distance parcourue</span>
+                  <span className="tl-stat-label">{text.distance}</span>
                   <span className="tl-stat-val">{distance.toFixed(1)} km</span>
                 </div>
                 <div className="tl-stat-cell">
-                  <span className="tl-stat-label">Durée trajet</span>
+                  <span className="tl-stat-label">{text.tripDuration}</span>
                   <span className="tl-stat-val">{durationMin > 0 ? durationLabel : '0 min'}</span>
                 </div>
                 <div className="tl-stat-cell">
-                  <span className="tl-stat-label">Vitesse moyenne</span>
+                  <span className="tl-stat-label">{text.avgSpeed}</span>
                   <span className="tl-stat-val">{`${Math.round(avgSpeed)} km/h`}</span>
                 </div>
                 <div className="tl-stat-cell">
-                  <span className="tl-stat-label">Vitesse max</span>
+                  <span className="tl-stat-label">{text.maxSpeed}</span>
                   <span className="tl-stat-val">{`${Math.round(maxSpeedVal)} km/h`}</span>
                 </div>
                 <div className="tl-stat-cell">
-                  <span className="tl-stat-label">Conso. carburant</span>
+                  <span className="tl-stat-label">{text.fuelConsumption}</span>
                   <span className="tl-stat-val">{`${(fuelConsumed / Math.max(distance / 100, 0.01)).toFixed(1)} L/100`}</span>
                 </div>
                 <div className="tl-stat-cell">
-                  <span className="tl-stat-label">CO₂ estimé</span>
+                  <span className="tl-stat-label">{text.estimatedCo2}</span>
                   <span className="tl-stat-val">{`${co2Estimate.toFixed(1)} kg`}</span>
                 </div>
                 <div className="tl-stat-cell">
-                  <span className="tl-stat-label">Alertes déclenchées</span>
+                  <span className="tl-stat-label">{text.triggeredAlerts}</span>
                   <span className="tl-stat-val tl-stat-alert">{allAlerts.length}</span>
                 </div>
                 <div className="tl-stat-cell">
-                  <span className="tl-stat-label">Score conduite</span>
+                  <span className="tl-stat-label">{text.drivingScore}</span>
                   <span className="tl-stat-val tl-stat-score">{`${driveScore} / 100`}</span>
                 </div>
               </div>
@@ -812,23 +1009,23 @@ export function TelemetryPage() {
           {/* ── HISTORIQUE TABLE ── */}
           <div className="tl-table-panel">
             <div className="tl-panel-hrow">
-              <span className="tl-panel-title">Historique télémétrie</span>
-              <span className="tl-panel-sub">Véhicule ID {vehicleId ?? '--'} · Intervalle {interval}</span>
+              <span className="tl-panel-title">{text.telemetryHistory}</span>
+              <span className="tl-panel-sub">Vehicle ID {vehicleId ?? '--'} · {text.interval} {interval}</span>
             </div>
-            {telemetryQuery.isLoading && <p className="tl-muted">Loading telemetry history...</p>}
-            {telemetryQuery.isError && <p className="tl-muted">Unable to load telemetry history.</p>}
+            {telemetryQuery.isLoading && <p className="tl-muted">{text.loadingTelemetryHistory}</p>}
+            {telemetryQuery.isError && <p className="tl-muted">{text.loadTelemetryHistoryError}</p>}
             {!telemetryQuery.isLoading && !telemetryQuery.isError && (
               <div className="table-shell table-shell-y">
                 <table className="tl-table">
                   <thead>
                     <tr>
                       <th>Date</th>
-                      {tableMetrics.map((m) => <th key={m}>{m}</th>)}
+                      {tableMetrics.map((m) => <th key={m}>{metricLabels[m as keyof typeof metricLabels] ?? m}</th>)}
                     </tr>
                   </thead>
                   <tbody>
                     {displayedRows.length === 0 && (
-                      <tr><td colSpan={tableMetrics.length + 1} className="empty-cell">No telemetry data.</td></tr>
+                      <tr><td colSpan={tableMetrics.length + 1} className="empty-cell">{text.noTelemetryData}</td></tr>
                     )}
                     {displayedRows.map((row) => (
                       <tr key={row.timestamp}>
@@ -847,9 +1044,9 @@ export function TelemetryPage() {
           {/* ── FLUX TEMPS RÉEL TABLE ── */}
           <div className="tl-table-panel">
             <div className="tl-panel-hrow">
-              <span className="tl-panel-title">Flux temps réel</span>
+              <span className="tl-panel-title">{text.realtimeStream}</span>
               <span className={`tl-panel-sub${liveConnected ? ' tl-sub-live' : ''}`}>
-                {liveConnected ? '● Connecté' : '○ Déconnecté'} — données toutes les minutes
+                {liveConnected ? `● ${text.connected}` : `○ ${text.disconnected}`} - {text.dataEveryMinute}
                 {liveError ? ` · ${liveError}` : ''}
               </span>
             </div>
@@ -857,13 +1054,13 @@ export function TelemetryPage() {
               <table className="tl-table">
                 <thead>
                   <tr>
-                    <th>Heure</th>
-                    {tableMetrics.map((m) => <th key={`rt-${m}`}>{m}</th>)}
+                    <th>{text.hour}</th>
+                    {tableMetrics.map((m) => <th key={`rt-${m}`}>{metricLabels[m as keyof typeof metricLabels] ?? m}</th>)}
                   </tr>
                 </thead>
                 <tbody>
                   {liveTableRows.length === 0 && (
-                    <tr><td colSpan={tableMetrics.length + 1} className="empty-cell">Aucune donnée temps réel.</td></tr>
+                    <tr><td colSpan={tableMetrics.length + 1} className="empty-cell">{text.noRealtimeRow}</td></tr>
                   )}
                   {liveTableRows.map((row, idx) => (
                     <tr key={`${row.timestamp}-${idx}`}>

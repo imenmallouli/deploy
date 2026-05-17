@@ -2,10 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { createGroup, deleteGroup, listGroups, listVehicles, updateGroup } from '../lib/api/endpoints';
+import { useI18n } from '../lib/i18n';
 
-function getErrorMessage(error: unknown) {
+function getErrorMessage(error: unknown, locale: 'fr' | 'en' = 'en') {
   const data = (error as { response?: { data?: { message?: string; detail?: string } } })?.response?.data;
-  return data?.message ?? data?.detail ?? 'Request failed. Please try again.';
+  return data?.message ?? data?.detail ?? (locale === 'fr' ? 'Echec de la requete. Veuillez reessayer.' : 'Request failed. Please try again.');
 }
 
 type GroupItem = { id: string; name: string; vehicle_count?: number };
@@ -19,6 +20,42 @@ function EditGroupModal({
   onClose: () => void;
   onUpdated: () => void;
 }) {
+  const { locale } = useI18n();
+  const text = locale === 'fr'
+    ? {
+        requiredName: 'Le nom est requis.',
+        title: 'Modifier le groupe',
+        name: 'Nom',
+        searchVehicle: 'Rechercher un vehicule',
+        loadingVehicles: 'Chargement des vehicules...',
+        noVehicles: 'Aucun vehicule trouve',
+        vehicles: 'Vehicules',
+        cancel: 'Annuler',
+        saving: 'Sauvegarde...',
+        update: 'Mettre a jour',
+        colName: 'Nom',
+        colVin: 'VIN',
+        colMake: 'Marque',
+        colModel: 'Modele',
+        colYear: 'Annee',
+      }
+    : {
+        requiredName: 'Name is required.',
+        title: 'Edit group',
+        name: 'Name',
+        searchVehicle: 'Search for vehicle',
+        loadingVehicles: 'Loading vehicles...',
+        noVehicles: 'No vehicles found',
+        vehicles: 'Vehicles',
+        cancel: 'Cancel',
+        saving: 'Saving...',
+        update: 'Update',
+        colName: 'Name',
+        colVin: 'VIN',
+        colMake: 'Make',
+        colModel: 'Model',
+        colYear: 'Year',
+      };
   const [editName, setEditName] = useState(group.name);
   const [vehicleSearch, setVehicleSearch] = useState('');
   const [modalError, setModalError] = useState('');
@@ -38,11 +75,11 @@ function EditGroupModal({
   const updateMutation = useMutation({
     mutationFn: () => updateGroup(group.id, { name: editName.trim() }),
     onSuccess: () => { onUpdated(); onClose(); },
-    onError: (error) => setModalError(getErrorMessage(error)),
+    onError: (error) => setModalError(getErrorMessage(error, locale)),
   });
 
   const handleUpdate = () => {
-    if (!editName.trim()) { setModalError('Name is required.'); return; }
+    if (!editName.trim()) { setModalError(text.requiredName); return; }
     setModalError('');
     updateMutation.mutate();
   };
@@ -64,7 +101,7 @@ function EditGroupModal({
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 22 }}>✏️</span>
-            <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Edit group</h3>
+            <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{text.title}</h3>
           </div>
           <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#888', lineHeight: 1 }}>✕</button>
         </div>
@@ -72,7 +109,7 @@ function EditGroupModal({
         {/* Name field */}
         <div style={{ marginBottom: 20 }}>
           <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>
-            Name <span style={{ color: 'red' }}>*</span>
+            {text.name} <span style={{ color: 'red' }}>*</span>
           </label>
           <input
             className="toolbar-input"
@@ -88,7 +125,7 @@ function EditGroupModal({
         <div style={{ marginBottom: 12 }}>
           <input
             className="toolbar-input"
-            placeholder="Search for vehicle"
+            placeholder={text.searchVehicle}
             value={vehicleSearch}
             onChange={(e) => setVehicleSearch(e.target.value)}
             style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', fontSize: 14 }}
@@ -99,19 +136,19 @@ function EditGroupModal({
         <table className="vehicles-table" style={{ marginBottom: 12 }}>
           <thead>
             <tr>
-              <th>Name</th>
-              <th>VIN</th>
-              <th>Make</th>
-              <th>Model</th>
-              <th>Year</th>
+              <th>{text.colName}</th>
+              <th>{text.colVin}</th>
+              <th>{text.colMake}</th>
+              <th>{text.colModel}</th>
+              <th>{text.colYear}</th>
             </tr>
           </thead>
           <tbody>
             {vehiclesQuery.isLoading && (
-              <tr><td colSpan={5} className="empty-cell">Loading vehicles...</td></tr>
+              <tr><td colSpan={5} className="empty-cell">{text.loadingVehicles}</td></tr>
             )}
             {!vehiclesQuery.isLoading && filtered.length === 0 && (
-              <tr><td colSpan={5} className="empty-cell">No vehicles found</td></tr>
+              <tr><td colSpan={5} className="empty-cell">{text.noVehicles}</td></tr>
             )}
             {filtered.map((v) => (
               <tr key={v.id}>
@@ -128,20 +165,20 @@ function EditGroupModal({
             ))}
           </tbody>
         </table>
-        <p style={{ margin: '0 0 16px', color: '#888', fontSize: 13 }}>Vehicles: {allVehicles.length}</p>
+        <p style={{ margin: '0 0 16px', color: '#888', fontSize: 13 }}>{text.vehicles}: {allVehicles.length}</p>
 
         {modalError && <p className="form-error" style={{ marginBottom: 12 }}>{modalError}</p>}
 
         {/* Footer */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-          <button className="btn-link" type="button" onClick={onClose}>Cancel</button>
+          <button className="btn-link" type="button" onClick={onClose}>{text.cancel}</button>
           <button
             className="btn-primary"
             type="button"
             disabled={updateMutation.isPending}
             onClick={handleUpdate}
           >
-            {updateMutation.isPending ? 'Saving...' : 'Update'}
+            {updateMutation.isPending ? text.saving : text.update}
           </button>
         </div>
       </div>
@@ -150,6 +187,44 @@ function EditGroupModal({
 }
 
 export function GroupsPage() {
+  const { locale } = useI18n();
+  const text = locale === 'fr'
+    ? {
+        requiredName: 'Le nom est requis.',
+        created: 'Groupe cree avec succes.',
+        updated: 'Groupe mis a jour avec succes.',
+        title: 'Groupes',
+        searchGroups: 'Rechercher des groupes',
+        search: 'Chercher',
+        newGroupName: 'Nouveau nom de groupe',
+        creating: 'Creation...',
+        create: 'Creer',
+        colName: 'Nom',
+        colVehicles: 'Vehicules',
+        colDelete: 'Supprimer',
+        noData: 'Aucune donnee a afficher',
+        clickToEdit: 'Cliquer pour modifier',
+        delete: 'Supprimer',
+        confirmDeleteGroup: 'Supprimer le groupe',
+      }
+    : {
+        requiredName: 'Name is required.',
+        created: 'Group created successfully.',
+        updated: 'Group updated successfully.',
+        title: 'Groups',
+        searchGroups: 'Search for groups',
+        search: 'Search',
+        newGroupName: 'New group name',
+        creating: 'Creating...',
+        create: 'Create',
+        colName: 'Name',
+        colVehicles: 'Vehicles',
+        colDelete: 'Delete',
+        noData: 'No data to display',
+        clickToEdit: 'Click to edit',
+        delete: 'Delete',
+        confirmDeleteGroup: 'Delete group',
+      };
   const queryClient = useQueryClient();
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -164,12 +239,12 @@ export function GroupsPage() {
     onSuccess: () => {
       setName('');
       setCreateError('');
-      setCreateSuccess('Group created successfully.');
+      setCreateSuccess(text.created);
       queryClient.invalidateQueries({ queryKey: ['groups'] });
     },
     onError: (error) => {
       setCreateSuccess('');
-      setCreateError(getErrorMessage(error));
+      setCreateError(getErrorMessage(error, locale));
     },
   });
   const deleteMutation = useMutation({
@@ -186,21 +261,21 @@ export function GroupsPage() {
 
   const handleCreate = () => {
     setCreateSuccess('');
-    if (!name.trim()) { setCreateError('Name is required.'); return; }
+    if (!name.trim()) { setCreateError(text.requiredName); return; }
     setCreateError('');
     createMutation.mutate({ name: name.trim() });
   };
 
   return (
     <section>
-      <h2>Groups</h2>
+      <h2>{text.title}</h2>
 
       {editGroup && (
         <EditGroupModal
           group={editGroup}
           onClose={() => setEditGroup(null)}
           onUpdated={() => {
-            setCreateSuccess('Group updated successfully.');
+            setCreateSuccess(text.updated);
             queryClient.invalidateQueries({ queryKey: ['groups'] });
           }}
         />
@@ -208,11 +283,11 @@ export function GroupsPage() {
 
       <div className="panel table-shell">
         <div className="toolbar-row">
-          <input className="toolbar-input" placeholder="Search for groups" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={handleSearchKeyDown} />
-          <button className="btn-link" type="button" onClick={handleSearch}>Search</button>
-          <input className="toolbar-input" placeholder="New group name" value={name} onChange={(e) => setName(e.target.value)} />
+          <input className="toolbar-input" placeholder={text.searchGroups} value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={handleSearchKeyDown} />
+          <button className="btn-link" type="button" onClick={handleSearch}>{text.search}</button>
+          <input className="toolbar-input" placeholder={text.newGroupName} value={name} onChange={(e) => setName(e.target.value)} />
           <button className="btn-primary" type="button" onClick={handleCreate} disabled={createMutation.isPending}>
-            {createMutation.isPending ? 'Creating...' : 'Create'}
+            {createMutation.isPending ? text.creating : text.create}
           </button>
         </div>
 
@@ -222,14 +297,14 @@ export function GroupsPage() {
         <table className="vehicles-table">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Vehicles</th>
-              <th>Delete</th>
+              <th>{text.colName}</th>
+              <th>{text.colVehicles}</th>
+              <th>{text.colDelete}</th>
             </tr>
           </thead>
           <tbody>
             {items.length === 0 && (
-              <tr><td colSpan={3} className="empty-cell">No data to display</td></tr>
+              <tr><td colSpan={3} className="empty-cell">{text.noData}</td></tr>
             )}
             {items.map((item) => (
               <tr key={item.id}>
@@ -237,7 +312,7 @@ export function GroupsPage() {
                   <span
                     style={{ cursor: 'pointer', textDecoration: 'underline', color: 'var(--primary, #2563eb)' }}
                     onClick={() => { setEditGroup(item); setCreateSuccess(''); setCreateError(''); }}
-                    title="Click to edit"
+                    title={text.clickToEdit}
                   >
                     {item.name}
                   </span>
@@ -249,9 +324,9 @@ export function GroupsPage() {
                     type="button"
                     style={{ color: 'var(--danger, #dc3545)' }}
                     disabled={deleteMutation.isPending}
-                    onClick={() => { if (window.confirm(`Delete group "${item.name}"?`)) deleteMutation.mutate(item.id); }}
+                    onClick={() => { if (window.confirm(`${text.confirmDeleteGroup} "${item.name}"?`)) deleteMutation.mutate(item.id); }}
                   >
-                    Delete
+                    {text.delete}
                   </button>
                 </td>
               </tr>

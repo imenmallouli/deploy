@@ -2285,22 +2285,31 @@ h2 {
   border: 1px solid #334155;
   border-radius: 10px;
   padding: 10px;
-  background: rgba(186, 202, 240, 0.55);
-  color: #9fc8f1;
+  background: #ffffff;
+  color: #0f172a;
 }
 
 .auth-form input::placeholder {
-  color: #010812;
+  color: #94a3b8;
 }
 
 .auth-form input.auth-input-white {
   background: #fcfafa;
   border-color: #cbd5e1;
-  color: #e9ebf0;
+  color: #0f172a;
 }
 
 .auth-form input.auth-input-white::placeholder {
-  color: #6b7280;
+  color: #64748b;
+}
+
+.auth-form input.auth-input-white:-webkit-autofill,
+.auth-form input.auth-input-white:-webkit-autofill:hover,
+.auth-form input.auth-input-white:-webkit-autofill:focus,
+.auth-form input.auth-input-white:-webkit-autofill:active {
+  -webkit-text-fill-color: #0f172a;
+  box-shadow: 0 0 0 1000px #fcfafa inset;
+  transition: background-color 9999s ease-out 0s;
 }
 
 .auth-form button {

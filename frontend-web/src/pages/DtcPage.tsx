@@ -52,9 +52,9 @@ type SystemStatus = {
   detail: string;
 };
 
-function getErrorMessage(error: unknown) {
+function getErrorMessage(error: unknown, locale: 'fr' | 'en' = 'en') {
   const data = (error as { response?: { data?: { message?: string; detail?: string } } })?.response?.data;
-  return data?.message ?? data?.detail ?? 'Request failed.';
+  return data?.message ?? data?.detail ?? (locale === 'fr' ? 'Echec de la requete.' : 'Request failed.');
 }
 
 function parseBackendDate(value?: string | null) {
@@ -81,9 +81,9 @@ function formatShortDate(value?: string | null) {
   return `${String(parsed.getDate()).padStart(2, '0')}/${String(parsed.getMonth() + 1).padStart(2, '0')} ${String(parsed.getHours()).padStart(2, '0')}:${String(parsed.getMinutes()).padStart(2, '0')}`;
 }
 
-function formatMetric(value: number | null | undefined, suffix = '', maximumFractionDigits = 0) {
+function formatMetric(value: number | null | undefined, suffix = '', maximumFractionDigits = 0, locale: 'fr' | 'en' = 'fr') {
   if (value === null || value === undefined || Number.isNaN(value)) return `0${suffix}`;
-  return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits }).format(value)}${suffix}`;
+  return `${new Intl.NumberFormat(locale === 'fr' ? 'fr-FR' : 'en-US', { maximumFractionDigits }).format(value)}${suffix}`;
 }
 
 function normalizeDtcCode(row: { code?: string; dtc_code?: string }) {
@@ -122,10 +122,59 @@ function isFreshTelemetryTimestamp(value?: string | null, thresholdMs = 2 * 60 *
   return Date.now() - parsed <= thresholdMs;
 }
 
-function buildSystemStatuses(rows: DtcRow[], fuelLevel: number | null, predictedRisks: PredictedRisk[] = [], locale: 'fr' | 'en' = 'fr'): SystemStatus[] {
+function translateDtcDescription(description: string | undefined, locale: 'fr' | 'en' = 'en'): string {
+  if (!description) return '';
+  if (locale === 'en') return description;
+  
+  const translations: Record<string, string> = {
+    'Fuel rail/system pressure too low': 'Pression carburant trop basse',
+    'Fuel rail/system pressure too high': 'Pression carburant trop haute',
+    'Engine over-temperature condition': 'Température moteur trop élevée',
+    'System voltage low': 'Tension système faible',
+    'Random/multiple cylinder misfire detected': 'Raté moteur aléatoire/multi-cylindre détecté',
+    'Cylinder 1 misfire detected': 'Raté cylindre 1 détecté',
+    'Oxygen sensor circuit malfunction': 'Dysfonctionnement circuit sonde O2',
+    'Oxygen sensor heater circuit malfunction': 'Dysfonctionnement circuit chauffage sonde O2',
+    'EGR system malfunction': 'Dysfonctionnement système EGR',
+    'Evaporative emission system leak': 'Fuite système évaporation carburant',
+    'Evaporative emission system pressure control': 'Contrôle pression système évaporation',
+    'Catalyst system efficiency below threshold': 'Efficacité catalyseur en dessous du seuil',
+    'Catalyst temperature too low': 'Température catalyseur trop basse',
+  };
+  
+  return translations[description] ?? description;
+}
+
+function translateAiRecommendation(message: string | undefined, locale: 'fr' | 'en' = 'en'): string {
+  if (!message) return '';
+  if (locale === 'en') return message;
+  
+  const translations: Record<string, string> = {
+    'Investigate and resolve P0217': 'Enquêter et résoudre P0217',
+    'Investigate and resolve': 'Enquêter et résoudre',
+    'Check battery and alternator': 'Vérifier batterie et alternateur',
+    'Check engine temperature sensor': 'Vérifier capteur température moteur',
+    'Check fuel pressure': 'Vérifier pression carburant',
+    'Check oxygen sensor': 'Vérifier sonde O2',
+    'Check EGR system': 'Vérifier système EGR',
+    'Check evaporative system': 'Vérifier système évaporation',
+    'Check catalyst system': 'Vérifier système catalytique',
+    'Immediate action required': 'Action immédiate requise',
+    'Schedule maintenance': 'Planifier maintenance',
+    'Monitor closely': 'À surveiller de près',
+  };
+  
+  for (const [en, fr] of Object.entries(translations)) {
+    if (message.includes(en)) return message.replace(en, fr);
+  }
+  
+  return message;
+}
+
+function buildSystemStatuses(rows: DtcRow[], fuelLevel: number | null, predictedRisks: PredictedRisk[] = [], locale: 'fr' | 'en' = 'fr', t?: (key: string) => string): SystemStatus[] {
   const activeRows = rows.filter((row) => !row.resolved);
 
-  const evaluate = (label: string, patterns: RegExp[], riskTypes: string[] = []) => {
+  const evaluate = (i18nKey: string, patterns: RegExp[], riskTypes: string[] = []) => {
     const matchedRow = activeRows.find((row) => patterns.some((pattern) => pattern.test(normalizeDtcCode(row))));
     const matchedRisk = predictedRisks.find((risk) => riskTypes.includes(String(risk.type ?? '').toLowerCase()));
     const rowTone = matchedRow ? severityToTone(matchedRow.severity) : 'ok';
@@ -137,25 +186,27 @@ function buildSystemStatuses(rows: DtcRow[], fuelLevel: number | null, predicted
         ? 'warn'
         : 'ok';
 
-    const detail = matchedRow?.description
-      ?? matchedRisk?.message
-      ?? (locale === 'fr' ? 'Aucun probleme detecte' : 'No issue detected');
+    const label = t ? t(i18nKey) : (i18nKey.split('.').pop() ?? i18nKey);
+    const rawDetail = matchedRow?.description ?? matchedRisk?.message;
+    const detail = rawDetail 
+      ? translateDtcDescription(rawDetail, locale)
+      : (t ? t('dtc.status.ok') : (locale === 'fr' ? 'Aucun probleme detecte' : 'No issue detected'));
 
     return { key: label.toLowerCase(), label, status, detail } as SystemStatus;
   };
 
-  const fuelStatus = evaluate('Carburant', [/^P017/, /^P008/, /^P019/, /^P023/, /^P025/], ['fuel']);
+  const fuelStatus = evaluate('dtc.obd.fuel', [/^P017/, /^P008/, /^P019/, /^P023/, /^P025/], ['fuel']);
   if (fuelStatus.status === 'ok' && fuelLevel !== null && fuelLevel < 15) {
     fuelStatus.status = 'warn';
-    fuelStatus.detail = locale === 'fr' ? 'Niveau carburant faible' : 'Low fuel level';
+    fuelStatus.detail = t ? t('dtc.status.lowFuel') : (locale === 'fr' ? 'Niveau carburant faible' : 'Low fuel level');
   }
 
   return [
-    evaluate(locale === 'fr' ? 'Catalyseur' : 'Catalyst', [/^P042/, /^P043/], ['exhaust', 'catalyst']),
-    evaluate(locale === 'fr' ? 'Sonde O2' : 'O2 sensor', [/^P013/, /^P014/, /^P015/, /^P016/], ['oxygen_sensor']),
-    evaluate(locale === 'fr' ? 'Systeme EGR' : 'EGR system', [/^P040/], ['egr']),
-    evaluate(locale === 'fr' ? 'Evaporation carb.' : 'Fuel evaporation', [/^P044/, /^P045/, /^P046/], ['evap']),
-    evaluate(locale === 'fr' ? 'Allumage' : 'Ignition', [/^P03/], ['ignition', 'misfire']),
+    evaluate('dtc.obd.catalyst', [/^P042/, /^P043/], ['exhaust', 'catalyst']),
+    evaluate('dtc.obd.o2Sensor', [/^P013/, /^P014/, /^P015/, /^P016/], ['oxygen_sensor']),
+    evaluate('dtc.obd.egrSystem', [/^P040/], ['egr']),
+    evaluate('dtc.obd.evaporation', [/^P044/, /^P045/, /^P046/], ['evap']),
+    evaluate('dtc.obd.ignition', [/^P03/], ['ignition', 'misfire']),
     fuelStatus,
   ];
 }
@@ -235,7 +286,7 @@ function DtcTrendChart({ points, locale }: { points: TelemetryPoint[]; locale: '
 }
 
 export function DtcPage() {
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   const text = locale === 'fr'
     ? {
         scanDone: 'Scan complet termine et donnees actualisees.',
@@ -277,13 +328,14 @@ export function DtcPage() {
         clear: 'Effacer',
         total: 'total',
         sensors: 'Capteurs en temps reel',
-        liveData: 'Donnees live du bus OBD',
+        liveData: 'Donnees en direct du bus OBD',
         noTelemetry: 'Aucune telemetrie disponible pour ce vehicule.',
         speed: 'Vitesse vehicule',
         rpm: 'Regime moteur (RPM)',
         temp: 'Temp. moteur',
         load: 'Charge moteur',
         battery: 'Tension batterie',
+        rpmUnit: ' tr/min',
         remainingFuel: 'Carburant restant',
         tempCurve: 'Courbe temperature moteur',
         tempHistory: 'Historique reel des dernieres mesures de temperature',
@@ -292,13 +344,21 @@ export function DtcPage() {
         noHistory: 'Aucun historique DTC disponible.',
         noDesc: 'Description indisponible',
         occurrences: 'Occurrences',
-        aiDiag: 'AI Diagnostic',
+        aiDiag: 'Diagnostic IA',
         smartReco: 'Recommandations intelligentes',
         loadingAi: 'Chargement du diagnostic IA...',
         aiSummary: 'Resume IA',
         riskDetected: 'Risque detecte',
         noDetail: 'Detail indisponible',
         noAiReco: 'Aucune recommandation IA disponible pour ce vehicule.',
+        aiScore: 'Score IA',
+        loading: 'chargement',
+        live: 'En direct',
+        offline: 'Hors ligne',
+        scanInProgress: 'Scan...',
+        refresh: 'Rafraichir',
+        stateActive: 'actif',
+        stateResolved: 'resolu',
       }
     : {
         scanDone: 'Full scan completed and data refreshed.',
@@ -347,6 +407,7 @@ export function DtcPage() {
         temp: 'Engine temp.',
         load: 'Engine load',
         battery: 'Battery voltage',
+        rpmUnit: ' rpm',
         remainingFuel: 'Remaining fuel',
         tempCurve: 'Engine temperature curve',
         tempHistory: 'Recent historical engine temperature values',
@@ -362,6 +423,14 @@ export function DtcPage() {
         riskDetected: 'Detected risk',
         noDetail: 'Detail unavailable',
         noAiReco: 'No AI recommendation available for this vehicle.',
+        aiScore: 'AI score',
+        loading: 'loading',
+        live: 'Live',
+        offline: 'Offline',
+        scanInProgress: 'Scan...',
+        refresh: 'Refresh',
+        stateActive: 'active',
+        stateResolved: 'resolved',
       };
   const queryClient = useQueryClient();
   const [searchInput, setSearchInput] = useState('');
@@ -457,7 +526,7 @@ export function DtcPage() {
     },
     onError: (error) => {
       setActionMessage('');
-      setActionError(getErrorMessage(error));
+      setActionError(getErrorMessage(error, locale));
     },
   });
 
@@ -469,7 +538,7 @@ export function DtcPage() {
     },
     onError: (error) => {
       setActionMessage('');
-      setActionError(getErrorMessage(error));
+      setActionError(getErrorMessage(error, locale));
     },
   });
 
@@ -487,7 +556,7 @@ export function DtcPage() {
     },
     onError: (error) => {
       setActionMessage('');
-      setActionError(getErrorMessage(error));
+      setActionError(getErrorMessage(error, locale));
     },
   });
 
@@ -538,9 +607,21 @@ export function DtcPage() {
   const criticalCount = rows.filter((item) => String(item.severity ?? '').toLowerCase() === 'critical').length;
   const warningCount = rows.filter((item) => String(item.severity ?? '').toLowerCase() === 'warning').length;
   const lastOccurrence = rows[0]?.lastOccurrence ?? null;
-  const vehicleStatusLabel = selectedVehicle?.status
-    ? `${selectedVehicle.status.charAt(0).toUpperCase()}${selectedVehicle.status.slice(1).toLowerCase()}`
-    : (locale === 'fr' ? 'Actif' : 'Active');
+  const vehicleStatusLabel = (() => {
+    const status = String(selectedVehicle?.status ?? '').toLowerCase();
+    if (locale === 'fr') {
+      if (status === 'critical') return 'Critique';
+      if (status === 'warning') return 'Maintenance';
+      if (status === 'healthy' || status === 'active') return 'Actif';
+      if (status === 'pending') return 'En attente';
+      return 'Actif';
+    }
+    if (status === 'critical') return 'Critical';
+    if (status === 'warning') return 'Maintenance';
+    if (status === 'healthy' || status === 'active') return 'Active';
+    if (status === 'pending') return 'Pending';
+    return 'Active';
+  })();
 
   const speedValue = findMetricValue(telemetryQuery.data, 'speed');
   const rpmValue = findMetricValue(telemetryQuery.data, 'rpm');
@@ -576,7 +657,7 @@ export function DtcPage() {
   const curvePoints = isTelemetryLive ? (telemetryQuery.data?.data?.engine_temp ?? []).slice(-8) : [];
   const aiPredictedRisks = aiInsightsQuery.data?.predicted_risks?.slice(0, 3) ?? [];
   const aiCards = aiRecommendationsQuery.data?.recommendations?.slice(0, 3) ?? [];
-  const systemStatuses = buildSystemStatuses(rows, fuelValue, aiInsightsQuery.data?.predicted_risks ?? [], locale);
+  const systemStatuses = buildSystemStatuses(rows, fuelValue, aiInsightsQuery.data?.predicted_risks ?? [], locale, t);
   const recentHistory = rows.slice(0, 3);
 
   const handleSearch = () => {
@@ -610,7 +691,7 @@ export function DtcPage() {
           </p>
         </div>
         <div className="dtc-top-actions">
-          <span className="dtc-live-pill">{isTelemetryLive ? 'Live' : 'Offline'}</span>
+          <span className="dtc-live-pill">{isTelemetryLive ? text.live : text.offline}</span>
           <button
             type="button"
             className="dtc-action-btn"
@@ -624,7 +705,7 @@ export function DtcPage() {
             onClick={() => pingMutation.mutate()}
             disabled={pingMutation.isPending}
           >
-            {pingMutation.isPending ? 'Scan...' : text.fullScan}
+            {pingMutation.isPending ? text.scanInProgress : text.fullScan}
           </button>
         </div>
       </div>
@@ -648,7 +729,7 @@ export function DtcPage() {
         </div>
 
         <div className="dtc-strip-secondary dtc-strip-sep">
-          <strong>{formatMetric(selectedVehicle?.mileage ?? null, ' km')}</strong>
+          <strong>{formatMetric(selectedVehicle?.mileage ?? null, ' km', 0, locale)}</strong>
           <span>{text.kmTotal}</span>
         </div>
 
@@ -675,13 +756,13 @@ export function DtcPage() {
           <p className="dtc-kpi-note">{criticalCount} {text.criticalLabel} · {warningCount} {text.warningLabel}</p>
         </article>
         <article className="dtc-kpi-card">
-          <p className="dtc-kpi-label">Score IA</p>
-          <p className="dtc-kpi-value">{aiScoreValue !== null ? formatMetric(aiScoreValue, '/100') : '0/100'}</p>
-          <p className="dtc-kpi-note">{aiSeverityLabel ?? (aiRiskQuery.isError ? getErrorMessage(aiRiskQuery.error) : text.pendingAi)}</p>
+          <p className="dtc-kpi-label">{text.aiScore}</p>
+          <p className="dtc-kpi-value">{aiScoreValue !== null ? formatMetric(aiScoreValue, '/100', 0, locale) : '0/100'}</p>
+          <p className="dtc-kpi-note">{aiSeverityLabel ?? (aiRiskQuery.isError ? getErrorMessage(aiRiskQuery.error, locale) : text.pendingAi)}</p>
         </article>
         <article className="dtc-kpi-card">
           <p className="dtc-kpi-label">{text.temp}</p>
-          <p className="dtc-kpi-value">{formatMetric(liveTempValue, '°C')}</p>
+          <p className="dtc-kpi-value">{formatMetric(liveTempValue, '°C', 0, locale)}</p>
           <p className="dtc-kpi-note">{text.lastMeasure} {isTelemetryLive && telemetryTimestamp ? `· ${formatShortDate(telemetryTimestamp)}` : ''}</p>
         </article>
         <article className="dtc-kpi-card">
@@ -765,12 +846,12 @@ export function DtcPage() {
                 {rows.map((item, index) => (
                   <tr key={`${item.code ?? item.dtc_code}-${index}`}>
                     <td>{item.code ?? item.dtc_code ?? '-'}</td>
-                    <td>{item.description ?? '-'}</td>
+                    <td>{translateDtcDescription(item.description, locale) ?? '-'}</td>
                     <td>{item.vehicle_id}</td>
                     <td>{item.firstOccurrence}</td>
                     <td>{item.lastOccurrence}</td>
                     <td>{item.count}</td>
-                    <td>{item.resolved ? 'resolved' : 'active'}</td>
+                    <td>{item.resolved ? text.stateResolved : text.stateActive}</td>
                   </tr>
                 ))}
               </tbody>
@@ -781,7 +862,7 @@ export function DtcPage() {
           {actionError && <p className="form-error">{actionError}</p>}
           {actionMessage && <p className="muted-note">{actionMessage}</p>}
           {(historyMutation.data || historyMutation.isPending) && (
-            <pre className="json-preview">{JSON.stringify(historyMutation.data ?? { status: 'loading' }, null, 2)}</pre>
+            <pre className="json-preview">{JSON.stringify(historyMutation.data ?? { status: text.loading }, null, 2)}</pre>
           )}
         </div>
 
@@ -794,37 +875,37 @@ export function DtcPage() {
             <div className="dtc-sensor-list">
               <div className="dtc-sensor-row">
                 <span>{text.speed}</span>
-                <strong>{formatMetric(liveSpeedValue, ' km/h')}</strong>
+                <strong>{formatMetric(liveSpeedValue, ' km/h', 0, locale)}</strong>
               </div>
               <div className="dtc-bar"><span style={{ width: `${Math.min(100, Math.max(0, liveSpeedValue ?? 0))}%` }} /></div>
 
               <div className="dtc-sensor-row">
                 <span>{text.rpm}</span>
-                <strong>{formatMetric(liveRpmValue, ' tr/min')}</strong>
+                <strong>{formatMetric(liveRpmValue, text.rpmUnit, 0, locale)}</strong>
               </div>
               <div className="dtc-bar"><span style={{ width: `${Math.min(100, Math.max(0, (liveRpmValue ?? 0) / 50))}%` }} /></div>
 
               <div className="dtc-sensor-row">
                 <span>{text.temp}</span>
-                <strong>{formatMetric(liveTempValue, ' °C')}</strong>
+                <strong>{formatMetric(liveTempValue, ' °C', 0, locale)}</strong>
               </div>
               <div className="dtc-bar"><span style={{ width: `${Math.min(100, Math.max(0, liveTempValue ?? 0))}%` }} /></div>
 
               <div className="dtc-sensor-row">
                 <span>{text.load}</span>
-                <strong>{formatMetric(liveLoadValue, '%')}</strong>
+                <strong>{formatMetric(liveLoadValue, '%', 0, locale)}</strong>
               </div>
               <div className="dtc-bar"><span style={{ width: `${Math.min(100, Math.max(0, liveLoadValue ?? 0))}%` }} /></div>
 
               <div className="dtc-sensor-row">
                 <span>{text.battery}</span>
-                <strong>{formatMetric(liveBatteryValue, ' V', 1)}</strong>
+                <strong>{formatMetric(liveBatteryValue, ' V', 1, locale)}</strong>
               </div>
               <div className="dtc-bar"><span style={{ width: `${Math.min(100, Math.max(0, (liveBatteryValue ?? 0) * 6.25))}%` }} /></div>
 
               <div className="dtc-sensor-row">
                 <span>{text.remainingFuel}</span>
-                <strong>{formatMetric(liveFuelValue, '%')}</strong>
+                <strong>{formatMetric(liveFuelValue, '%', 0, locale)}</strong>
               </div>
               <div className="dtc-bar"><span style={{ width: `${Math.min(100, Math.max(0, liveFuelValue ?? 0))}%` }} /></div>
             </div>
@@ -873,7 +954,7 @@ export function DtcPage() {
                     <span className={`dtc-maintenance-dot dtc-maintenance-dot-${tone}`} />
                     <div className="dtc-maintenance-copy">
                       <strong>{normalizeDtcCode(item) || 'DTC'}</strong>
-                      <span>{item.description ?? text.noDesc}</span>
+                      <span>{translateDtcDescription(item.description, locale) || text.noDesc}</span>
                       <span className="dtc-history-meta">{formatShortDate(item.lastOccurrence)} · {text.occurrences}: {item.count}</span>
                     </div>
                     <span className={`dtc-status-pill dtc-status-pill-${tone}`}>{toneLabel(tone, locale)}</span>
@@ -900,11 +981,11 @@ export function DtcPage() {
                 queryClient.invalidateQueries({ queryKey: ['dtc-ai-insights', selectedVehicleId] });
               }}
             >
-              Refresh
+              {text.refresh}
             </button>
           </div>
           {aiInsightsQuery.isError || aiRecommendationsQuery.isError ? (
-            <p className="form-error">{getErrorMessage(aiInsightsQuery.error ?? aiRecommendationsQuery.error)}</p>
+            <p className="form-error">{getErrorMessage(aiInsightsQuery.error ?? aiRecommendationsQuery.error, locale)}</p>
           ) : aiInsightsQuery.isLoading || aiRecommendationsQuery.isLoading ? (
             <p className="muted-note">{text.loadingAi}</p>
           ) : (
@@ -919,14 +1000,14 @@ export function DtcPage() {
               {aiCards.map((item, index) => (
                 <article key={`${item.title}-${index}`} className="dtc-ai-item">
                   <strong>{item.title}</strong>
-                  <p>{item.message}</p>
+                  <p>{translateAiRecommendation(item.message, locale)}</p>
                 </article>
               ))}
 
               {!aiCards.length && aiPredictedRisks.map((item, index) => (
                 <article key={`${item.type}-${index}`} className="dtc-ai-item">
                   <strong>{item.type ?? text.riskDetected}</strong>
-                  <p>{item.message ?? text.noDetail}</p>
+                  <p>{translateAiRecommendation(item.message, locale) ?? text.noDetail}</p>
                 </article>
               ))}
 

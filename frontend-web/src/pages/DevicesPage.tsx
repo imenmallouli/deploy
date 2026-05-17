@@ -26,9 +26,9 @@ export function DevicesPage() {
   const { locale } = useI18n();
   const text = locale === 'fr'
     ? {
-        createFailed: 'Echec de creation du device',
+      createFailed: 'Echec de creation de l\'appareil',
         createSuccess: 'Appareil ajoute avec succes.',
-        deleteFailed: 'Echec de suppression du device',
+      deleteFailed: 'Echec de suppression de l\'appareil',
         deleteSuccess: 'Appareil supprime avec succes.',
         deleteConfirm: "Supprimer l'appareil",
         deleteIrreversible: 'Cette action est irreversible.',

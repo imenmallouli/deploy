@@ -3,9 +3,9 @@ import { useMemo, useState } from 'react';
 import { ackAlert, getAiRiskScore, listAlerts } from '../lib/api/endpoints';
 import { useI18n } from '../lib/i18n';
 
-function getErrorMessage(error: unknown) {
+function getErrorMessage(error: unknown, fallback = 'Request failed.') {
   const data = (error as { response?: { data?: { message?: string; detail?: string } } })?.response?.data;
-  return data?.message ?? data?.detail ?? 'Request failed.';
+  return data?.message ?? data?.detail ?? fallback;
 }
 
 function formatDate(value?: string | null) {
@@ -42,9 +42,60 @@ function formatRelative(value: string | null | undefined, t: (key: string) => st
   return t('time.daysAgo').replace('{value}', String(days));
 }
 
+function localizeAlertType(rawType: string | undefined, locale: 'fr' | 'en') {
+  const value = String(rawType ?? '').trim().toLowerCase();
+  const labelsFr: Record<string, string> = {
+    thermal_delta: 'ecart thermique',
+    fuel: 'carburant',
+    engine_load: 'charge moteur',
+    dtc: 'code defaut',
+    device_cpu_temp: 'temperature CPU',
+    cooling: 'refroidissement',
+  };
+  const labelsEn: Record<string, string> = {
+    thermal_delta: 'thermal delta',
+    fuel: 'fuel',
+    engine_load: 'engine load',
+    dtc: 'DTC code',
+    device_cpu_temp: 'CPU temperature',
+    cooling: 'cooling',
+  };
+
+  if (!value) return locale === 'fr' ? 'alerte' : 'alert';
+  const label = locale === 'fr' ? labelsFr[value] : labelsEn[value];
+  return label ?? value.replace(/_/g, ' ');
+}
+
+function localizeAlertMessage(rawMessage: string | undefined, locale: 'fr' | 'en') {
+  const message = String(rawMessage ?? '').trim();
+  if (!message || locale === 'en') return message;
+
+  const translations: Record<string, string> = {
+    'Engine over-temperature condition': 'Condition de surchauffe moteur',
+    'System voltage low': 'Tension systeme faible',
+    'Fuel rail/system pressure too low': 'Pression carburant trop basse',
+    'Random/multiple cylinder misfire detected': 'Rate moteur aleatoire/multi-cylindre detecte',
+    'Fuel level low': 'Niveau de carburant faible',
+    'High engine load': 'Charge moteur elevee',
+    'Engine cooling issue detected': 'Probleme de refroidissement moteur detecte',
+    'High CPU temperature detected': 'Temperature CPU elevee detectee',
+  };
+
+  return translations[message] ?? message;
+}
+
+function formatAlertTitle(
+  severity: string | null | undefined,
+  type: string | undefined,
+  locale: 'fr' | 'en',
+  t: (key: string) => string,
+) {
+  return `${severityBadge(severity, t).toUpperCase()} - ${localizeAlertType(type, locale)}`;
+}
+
 export function AlertsPage() {
   const queryClient = useQueryClient();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'critical' | 'warning' | 'resolved'>('all');
@@ -67,7 +118,7 @@ export function AlertsPage() {
     },
     onError: (error) => {
       setActionMessage('');
-      setActionError(getErrorMessage(error));
+      setActionError(getErrorMessage(error, t('alerts.requestFailed')));
     },
   });
 
@@ -165,8 +216,8 @@ export function AlertsPage() {
       .slice(0, 2)
       .map((item) => ({
         tone: 'critical' as const,
-        title: `${item.title || t('alerts.kpi.critical')} · V${item.vehicle_id}`,
-        message: item.message || 'Intervention rapide recommandee.',
+        title: `${formatAlertTitle(item.severity, item.type, locale, t)} · V${item.vehicle_id}`,
+        message: localizeAlertMessage(item.message, locale) || t('alerts.insights.quickAction'),
       }));
 
     const warningList = alerts
@@ -174,8 +225,8 @@ export function AlertsPage() {
       .slice(0, 1)
       .map((item) => ({
         tone: 'warning' as const,
-        title: `${item.title || t('alerts.kpi.warning')} · V${item.vehicle_id}`,
-        message: item.message || 'Surveillance conseillee.',
+        title: `${formatAlertTitle(item.severity, item.type, locale, t)} · V${item.vehicle_id}`,
+        message: localizeAlertMessage(item.message, locale) || t('alerts.insights.monitoringAdvised'),
       }));
 
     const stableInsight = {
@@ -185,7 +236,7 @@ export function AlertsPage() {
     };
 
     return [...criticalList, ...warningList, stableInsight].slice(0, 4);
-  }, [alerts, criticalVisible, t]);
+  }, [alerts, criticalVisible, locale, t]);
 
   const chartData = useMemo(() => {
     const days = Array.from({ length: 7 }, (_, index) => {
@@ -230,7 +281,7 @@ export function AlertsPage() {
       setActionMessage(t('alerts.message.refreshed'));
     }).catch((error) => {
       setActionMessage('');
-      setActionError(getErrorMessage(error));
+      setActionError(getErrorMessage(error, t('alerts.requestFailed')));
     });
   };
 
@@ -254,7 +305,7 @@ export function AlertsPage() {
       setActionMessage(`${ids.length} ${t('alerts.message.markedRead')}`);
       queryClient.invalidateQueries({ queryKey: ['alerts'] });
     } catch (error) {
-      setActionError(getErrorMessage(error));
+      setActionError(getErrorMessage(error, t('alerts.requestFailed')));
     }
   };
 
@@ -360,10 +411,10 @@ export function AlertsPage() {
                 <article key={alert.id} className={`ai-alert-row ${tone}`}>
                   <div className="ai-alert-row-main">
                     <div className="ai-alert-title-row">
-                      <h4>{alert.title || alert.type || t('alerts.item.defaultTitle')}</h4>
+                      <h4>{formatAlertTitle(alert.severity, alert.type, locale, t)}</h4>
                       <span className={`ai-severity-pill ${tone}`}>{severityBadge(alert.severity, t)}</span>
                     </div>
-                    <p className="ai-alert-message">{alert.message || t('alerts.item.noDetail')}</p>
+                    <p className="ai-alert-message">{localizeAlertMessage(alert.message, locale) || t('alerts.item.noDetail')}</p>
                     <div className="ai-alert-meta">
                       <span>{formatRelative(alert.created_at, t)}</span>
                       <span className="ai-vehicle-chip">{t('alerts.item.vehicle')} {alert.vehicle_id}</span>
@@ -408,28 +459,28 @@ export function AlertsPage() {
             <div className="ai-rules-list">
               <label className="ai-rule-item">
                 <div>
-                  <strong>Temperature moteur {'>'} 90C</strong>
+                  <strong>{t('alerts.rules.engineTempLabel')}</strong>
                   <p>{t('alerts.rules.engineTempDesc')}</p>
                 </div>
                 <input type="checkbox" checked={rules.engineTemp} onChange={() => toggleRule('engineTemp')} />
               </label>
               <label className="ai-rule-item">
                 <div>
-                  <strong>Code DTC detecte</strong>
+                  <strong>{t('alerts.rules.dtcLabel')}</strong>
                   <p>{t('alerts.rules.dtcDesc')}</p>
                 </div>
                 <input type="checkbox" checked={rules.dtcDetected} onChange={() => toggleRule('dtcDetected')} />
               </label>
               <label className="ai-rule-item">
                 <div>
-                  <strong>Carburant {'<'} 25%</strong>
+                  <strong>{t('alerts.rules.fuelLabel')}</strong>
                   <p>{t('alerts.rules.fuelDesc')}</p>
                 </div>
                 <input type="checkbox" checked={rules.lowFuel} onChange={() => toggleRule('lowFuel')} />
               </label>
               <label className="ai-rule-item">
                 <div>
-                  <strong>Rappel revision annuelle</strong>
+                  <strong>{t('alerts.rules.revisionLabel')}</strong>
                   <p>{t('alerts.rules.revisionDesc')}</p>
                 </div>
                 <input type="checkbox" checked={rules.revisionReminder} onChange={() => toggleRule('revisionReminder')} />
@@ -460,9 +511,9 @@ export function AlertsPage() {
               })}
             </div>
             <div className="ai-chart-legend">
-              <span><i className="critical" />Critiques</span>
-              <span><i className="warning" />Avertiss.</span>
-              <span><i className="info" />Info</span>
+              <span><i className="critical" />{t('alerts.chart.legend.critical')}</span>
+              <span><i className="warning" />{t('alerts.chart.legend.warning')}</span>
+              <span><i className="info" />{t('alerts.chart.legend.info')}</span>
             </div>
           </section>
         </aside>

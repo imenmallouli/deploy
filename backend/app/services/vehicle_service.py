@@ -114,6 +114,13 @@ class VehicleService:
                 vehicles = db.query(Vehicle).filter(Vehicle.fleet_id.in_(managed_fleet_ids)).order_by(Vehicle.id.desc()).all()
         elif role == "user":
             vehicles = db.query(Vehicle).filter(Vehicle.driver_id == user_id).order_by(Vehicle.id.desc()).all()
+            if not vehicles:
+                vehicles = (
+                    db.query(Vehicle)
+                    .filter(Vehicle.driver_id.is_(None))
+                    .order_by(Vehicle.id.desc())
+                    .all()
+                )
         else:
             return {"status": "error", "message": "Accès refusé", "count": 0, "items": []}
 

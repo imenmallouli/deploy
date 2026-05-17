@@ -102,6 +102,9 @@ export function VehiclesPage() {
         routeWithPoints: 'Route tracee avec',
         gpsPoints: 'points GPS du dongle.',
         routeAwaiting: 'Les trajets apparaitront ici des que des points GPS seront disponibles depuis le dongle.',
+        routeStart: 'Depart',
+        routeNow: 'Maintenant',
+        tripMapAria: 'Carte des trajets vehicule',
         adminOnlyVehicleActions: 'Creation / modification / suppression reservees a l\'admin.',
       }
     : {
@@ -136,7 +139,10 @@ export function VehiclesPage() {
         routeWithPoints: 'Route plotted with',
         gpsPoints: 'GPS points from dongle.',
         routeAwaiting: 'Trip routes will appear here once GPS points are available from the dongle.',
-          adminOnlyVehicleActions: 'Create / update / delete actions are admin-only.',
+        routeStart: 'Start',
+        routeNow: 'Now',
+        tripMapAria: 'Vehicle trip map',
+        adminOnlyVehicleActions: 'Create / update / delete actions are admin-only.',
       };
         const role = getRole() || 'user';
         const canManageVehicles = role === 'admin' || role === 'user';
@@ -312,7 +318,7 @@ export function VehiclesPage() {
       fillOpacity: 0.95,
       weight: 2,
     })
-      .bindPopup(`Start<br/>${new Date(startPoint.at).toLocaleString()}`)
+      .bindPopup(`${text.routeStart}<br/>${new Date(startPoint.at).toLocaleString()}`)
       .addTo(routeLayer);
 
     L.circleMarker([endPoint.lat, endPoint.lng], {
@@ -322,7 +328,7 @@ export function VehiclesPage() {
       fillOpacity: 0.95,
       weight: 2,
     })
-      .bindPopup(`Now<br/>${new Date(endPoint.at).toLocaleString()}`)
+      .bindPopup(`${text.routeNow}<br/>${new Date(endPoint.at).toLocaleString()}`)
       .addTo(routeLayer);
 
     if (latLngs.length === 1) {
@@ -563,7 +569,6 @@ export function VehiclesPage() {
                   </div>
                   <div className="fleet-vehicle-side">
                     <span className={statusMeta.className}>{statusMeta.label}</span>
-                    <span className="fleet-vehicle-mileage">{formatMileage(vehicle.mileage)} km</span>
                     <Link to={`/vehicles/${vehicle.id}`} className="fleet-view-details-btn">
                       {text.viewDetails}
                     </Link>
@@ -599,7 +604,7 @@ export function VehiclesPage() {
             <h3>{text.fleetTracking}</h3>
             <span className="muted-note">{selectedVehicle ? selectedVehicle.license_plate : text.noVehicleSelected}</span>
           </div>
-          <div ref={routeMapContainerRef} className="fleet-map" aria-label="Vehicle trip map" />
+          <div ref={routeMapContainerRef} className="fleet-map" aria-label={text.tripMapAria} />
           <p className="vehicles-map-note">
             {gpsRoutePoints.length > 1
               ? `${text.routeWithPoints} ${gpsRoutePoints.length} ${text.gpsPoints}`

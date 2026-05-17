@@ -11,27 +11,56 @@ import {
   getVehicle,
   listMaintenanceRecords,
 } from '../lib/api/endpoints';
+import { useI18n } from '../lib/i18n';
 
-function getErrorMessage(error: unknown): string {
+function getErrorMessage(error: unknown, locale: 'fr' | 'en'): string {
   const maybeAxiosError = error as { response?: { data?: { message?: string; detail?: string } }; message?: string };
-  const rawMessage = maybeAxiosError.response?.data?.message ?? maybeAxiosError.response?.data?.detail ?? maybeAxiosError.message ?? 'Request failed.';
+  const rawMessage = maybeAxiosError.response?.data?.message ?? maybeAxiosError.response?.data?.detail ?? maybeAxiosError.message ?? (locale === 'fr' ? 'Echec de la requete.' : 'Request failed.');
   if (
     rawMessage.includes('Model file not found')
     || rawMessage.includes('AI model not found')
     || rawMessage.includes('Modele IA introuvable')
   ) {
-    return 'AI model is not available yet. Run backend/scripts/train_alert_model.py and then click Refresh AI.';
+    return locale === 'fr'
+      ? "Le modele IA n'est pas encore disponible. Lancez backend/scripts/train_alert_model.py puis cliquez sur Rafraichir IA."
+      : 'AI model is not available yet. Run backend/scripts/train_alert_model.py and then click Refresh AI.';
   }
   return rawMessage;
 }
 
-function getStatusMeta(status?: string) {
+function getStatusMeta(status: string | undefined, locale: 'fr' | 'en') {
+  const labels = locale === 'fr'
+    ? { active: 'Actif', maintenance: 'Maintenance', critical: 'Critique', pending: 'En attente' }
+    : { active: 'Active', maintenance: 'Maintenance', critical: 'Critical', pending: 'Pending' };
   switch ((status ?? '').toLowerCase()) {
-    case 'healthy':  return { label: 'Active',      cls: 'vd-badge vd-badge-active' };
-    case 'warning':  return { label: 'Maintenance', cls: 'vd-badge vd-badge-warning' };
-    case 'critical': return { label: 'Critical',    cls: 'vd-badge vd-badge-critical' };
-    default:         return { label: 'Pending',     cls: 'vd-badge vd-badge-pending' };
+    case 'healthy':  return { label: labels.active, cls: 'vd-badge vd-badge-active' };
+    case 'warning':  return { label: labels.maintenance, cls: 'vd-badge vd-badge-warning' };
+    case 'critical': return { label: labels.critical, cls: 'vd-badge vd-badge-critical' };
+    default:         return { label: labels.pending, cls: 'vd-badge vd-badge-pending' };
   }
+}
+
+function formatRiskSeverity(value: string | undefined, locale: 'fr' | 'en') {
+  const normalized = (value ?? '').toLowerCase();
+  if (locale === 'fr') {
+    if (normalized === 'critical') return 'Critique';
+    if (normalized === 'warning') return 'Avertissement';
+    if (normalized === 'info') return 'Information';
+  }
+  if (normalized === 'critical') return 'Critical';
+  if (normalized === 'warning') return 'Warning';
+  if (normalized === 'info') return 'Info';
+  return value ?? '-';
+}
+
+function localizeAiMessage(message: string, locale: 'fr' | 'en') {
+  if (locale !== 'fr') return message;
+  return message
+    .replace('Investigate and resolve', 'Verifier et corriger')
+    .replace('System voltage low', 'Tension systeme basse')
+    .replace('Engine over-temperature condition', 'Condition de surchauffe moteur')
+    .replace('Fuel rail/system pressure too low', 'Pression carburant trop basse')
+    .replace('Random/multiple cylinder misfire detected', 'Rattes d allumage detectes');
 }
 
 function getRiskColor(severity?: string): string {
@@ -58,6 +87,7 @@ const INTERVENTION_TYPES = [
 type UrgencyLevel = 'routine' | 'attention' | 'critique';
 
 export function VehicleDetailsPage() {
+  const { locale } = useI18n();
   const { vehicleId } = useParams();
   const queryClient = useQueryClient();
   const id = Number(vehicleId);
@@ -108,7 +138,7 @@ export function VehicleDetailsPage() {
     mutationFn: createMaintenanceRecord,
     onSuccess: () => {
       setTaskError('');
-      setTaskSuccess("Fiche enregistrée. L'IA prend en compte cette intervention.");
+      setTaskSuccess(locale === 'fr' ? "Fiche enregistree. L'IA prend en compte cette intervention." : 'Record saved. AI now takes this intervention into account.');
       setTaskTypes([]);
       setTaskDtcInput('');
       setTaskDtcCodes([]);
@@ -123,7 +153,7 @@ export function VehicleDetailsPage() {
     },
     onError: (error: unknown) => {
       setTaskSuccess('');
-      setTaskError(getErrorMessage(error));
+      setTaskError(getErrorMessage(error, locale));
     },
   });
 
@@ -146,7 +176,7 @@ export function VehicleDetailsPage() {
   });
 
   const vehicle = vehicleQuery.data?.vehicle;
-  const statusMeta = getStatusMeta(vehicle?.status);
+  const statusMeta = getStatusMeta(vehicle?.status, locale);
   const riskSeverity = aiRiskQuery.data?.predicted_severity;
   const riskScore = aiRiskQuery.data?.predicted_risk_score;
   const riskColor = getRiskColor(riskSeverity);
@@ -160,7 +190,7 @@ export function VehicleDetailsPage() {
     setTaskSuccess('');
 
     if (taskTypes.length === 0) {
-      setTaskError("Sélectionnez au moins un type d'intervention.");
+      setTaskError(locale === 'fr' ? "Selectionnez au moins un type d'intervention." : 'Select at least one intervention type.');
       return;
     }
 
@@ -182,30 +212,30 @@ export function VehicleDetailsPage() {
     <section className="vd-page">
       {/* ── Page header ── */}
       <div className="vd-page-header">
-        <h2 className="vd-page-title">Vehicle Details</h2>
-        <p className="vd-page-sub">Technical card and assignment — vehicle #{vehicleId ?? '-'}</p>
+        <h2 className="vd-page-title">{locale === 'fr' ? 'Details vehicule' : 'Vehicle Details'}</h2>
+        <p className="vd-page-sub">{locale === 'fr' ? `Fiche technique et affectation — vehicule #${vehicleId ?? '-'}` : `Technical card and assignment — vehicle #${vehicleId ?? '-'}`}</p>
       </div>
 
       {/* ── Identity + Assignment cards ── */}
       <div className="vd-info-row">
         {/* Identity */}
         <div className="vd-card">
-          <p className="vd-card-label">Identity</p>
+          <p className="vd-card-label">{locale === 'fr' ? 'Identite' : 'Identity'}</p>
           <div className="vd-fields">
             <div className="vd-field">
               <span className="vd-field-key">VIN</span>
               <span className="vd-field-val">{vehicle?.vin ?? '-'}</span>
             </div>
             <div className="vd-field">
-              <span className="vd-field-key">Plate</span>
+              <span className="vd-field-key">{locale === 'fr' ? 'Plaque' : 'Plate'}</span>
               <span className="vd-field-val">{vehicle?.license_plate ?? '-'}</span>
             </div>
             <div className="vd-field">
-              <span className="vd-field-key">Make</span>
+              <span className="vd-field-key">{locale === 'fr' ? 'Marque' : 'Make'}</span>
               <span className="vd-field-val">{vehicle?.make ?? '-'} {vehicle?.model ?? ''}</span>
             </div>
             <div className="vd-field">
-              <span className="vd-field-key">Year</span>
+              <span className="vd-field-key">{locale === 'fr' ? 'Annee' : 'Year'}</span>
               <span className="vd-field-val">{vehicle?.year ?? '-'}</span>
             </div>
           </div>
@@ -213,21 +243,15 @@ export function VehicleDetailsPage() {
 
         {/* Assignment */}
         <div className="vd-card">
-          <p className="vd-card-label">Assignment</p>
+          <p className="vd-card-label">{locale === 'fr' ? 'Affectation' : 'Assignment'}</p>
           <div className="vd-fields">
             <div className="vd-field">
               <span className="vd-field-key">Dongle ID</span>
               <span className="vd-field-val">{vehicle?.dongle_id ?? '-'}</span>
             </div>
             <div className="vd-field">
-              <span className="vd-field-key">Status</span>
+              <span className="vd-field-key">{locale === 'fr' ? 'Statut' : 'Status'}</span>
               <span className={statusMeta.cls}>{statusMeta.label}</span>
-            </div>
-            <div className="vd-field">
-              <span className="vd-field-key">Mileage</span>
-              <span className="vd-field-val">
-                {vehicle?.mileage != null ? `${vehicle.mileage.toLocaleString()} km` : '-'}
-              </span>
             </div>
           </div>
         </div>
@@ -237,8 +261,8 @@ export function VehicleDetailsPage() {
       <div className="vd-card vd-ai-card-outer">
         <div className="vd-ai-header">
           <div>
-            <p className="vd-card-label">AI Diagnostic</p>
-            <p className="vd-ai-sub">Risk score, recommendations and insights for this vehicle</p>
+            <p className="vd-card-label">{locale === 'fr' ? 'Diagnostic IA' : 'AI Diagnostic'}</p>
+            <p className="vd-ai-sub">{locale === 'fr' ? 'Score de risque, recommandations et insights pour ce vehicule' : 'Risk score, recommendations and insights for this vehicle'}</p>
           </div>
           <button
             type="button"
@@ -249,17 +273,17 @@ export function VehicleDetailsPage() {
               queryClient.invalidateQueries({ queryKey: ['ai-insights', id] });
             }}
           >
-            ↺ Refresh AI
+            {locale === 'fr' ? '↺ Rafraichir IA' : '↺ Refresh AI'}
           </button>
         </div>
 
         <div className="vd-ai-cards">
           <div className="vd-ai-metric">
-            <p className="vd-metric-title">RISK SCORE</p>
+            <p className="vd-metric-title">{locale === 'fr' ? 'SCORE RISQUE' : 'RISK SCORE'}</p>
             {aiRiskQuery.isLoading ? (
-              <p className="vd-metric-loading">Loading...</p>
+              <p className="vd-metric-loading">{locale === 'fr' ? 'Chargement...' : 'Loading...'}</p>
             ) : aiRiskQuery.isError ? (
-              <p className="vd-metric-error">{getErrorMessage(aiRiskQuery.error)}</p>
+              <p className="vd-metric-error">{getErrorMessage(aiRiskQuery.error, locale)}</p>
             ) : (
               <>
                 <div className="vd-score-circle" style={{ borderColor: riskColor, color: riskColor }}>
@@ -267,7 +291,7 @@ export function VehicleDetailsPage() {
                   <span className="vd-score-denom">/100</span>
                 </div>
                 <p className="vd-metric-sub" style={{ color: riskColor }}>
-                  {riskSeverity ?? '-'}
+                  {formatRiskSeverity(riskSeverity, locale)}
                 </p>
               </>
             )}
@@ -276,37 +300,37 @@ export function VehicleDetailsPage() {
           <div className="vd-ai-metric">
             <p className="vd-metric-title">MAINTENANCE</p>
             {aiRecommendationsQuery.isLoading ? (
-              <p className="vd-metric-loading">Loading...</p>
+              <p className="vd-metric-loading">{locale === 'fr' ? 'Chargement...' : 'Loading...'}</p>
             ) : aiRecommendationsQuery.isError ? (
-              <p className="vd-metric-error">{getErrorMessage(aiRecommendationsQuery.error)}</p>
+              <p className="vd-metric-error">{getErrorMessage(aiRecommendationsQuery.error, locale)}</p>
             ) : aiRecommendationsQuery.data?.recommendations?.length ? (
               <ul className="vd-rec-list">
                 {aiRecommendationsQuery.data.recommendations.slice(0, 3).map((item, index) => (
                   <li key={`${item.title}-${index}`}>
                     <strong>{item.title}</strong>
-                    <span className="vd-rec-msg">{item.message}</span>
+                    <span className="vd-rec-msg">{localizeAiMessage(item.message, locale)}</span>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="vd-metric-sub">No recommendations.</p>
+              <p className="vd-metric-sub">{locale === 'fr' ? 'Aucune recommandation.' : 'No recommendations.'}</p>
             )}
           </div>
 
           <div className="vd-ai-metric">
-            <p className="vd-metric-title">AI INSIGHTS</p>
+            <p className="vd-metric-title">{locale === 'fr' ? 'INSIGHTS IA' : 'AI INSIGHTS'}</p>
             {aiInsightsQuery.isLoading ? (
-              <p className="vd-metric-loading">Loading...</p>
+              <p className="vd-metric-loading">{locale === 'fr' ? 'Chargement...' : 'Loading...'}</p>
             ) : aiInsightsQuery.isError ? (
-              <p className="vd-metric-error">{getErrorMessage(aiInsightsQuery.error)}</p>
+              <p className="vd-metric-error">{getErrorMessage(aiInsightsQuery.error, locale)}</p>
             ) : (
               <>
                 <p className="vd-insight-line">
-                  {aiInsightsQuery.data?.insights?.summary ?? 'No anomalies detected'}
+                  {aiInsightsQuery.data?.insights?.summary ?? (locale === 'fr' ? 'Aucune anomalie detectee' : 'No anomalies detected')}
                 </p>
                 {shouldShowNextAction && (
                   <p className="vd-insight-action">
-                    Next: {nextAction}
+                    {locale === 'fr' ? 'Prochaine action:' : 'Next:'} {nextAction}
                   </p>
                 )}
                 {aiInsightsQuery.data?.predicted_risks?.length ? (
@@ -314,7 +338,7 @@ export function VehicleDetailsPage() {
                     {aiInsightsQuery.data.predicted_risks.slice(0, 2).map((risk, index) => (
                       <li key={`${risk.type}-${index}`}>
                         <strong>{risk.type}</strong>
-                        <span className="vd-rec-msg">{risk.message}</span>
+                        <span className="vd-rec-msg">{localizeAiMessage(risk.message, locale)}</span>
                       </li>
                     ))}
                   </ul>
@@ -329,16 +353,18 @@ export function VehicleDetailsPage() {
       <div style={{ background: '#f6f8fb', border: '1px solid #b8cfee', borderRadius: 16, padding: 24, marginTop: 20 }}>
         {/* Header */}
         <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#4f6a90', letterSpacing: '.08em', textTransform: 'uppercase' }}>
-          🔧 FICHE D'INTERVENTION
+          {locale === 'fr' ? "🔧 FICHE D'INTERVENTION" : '🔧 INTERVENTION RECORD'}
         </p>
         <p style={{ margin: '0 0 20px', fontSize: 13, color: '#4a6b90' }}>
-          Enregistrez l'intervention réalisée. L'IA supprimera les alertes liées.
+          {locale === 'fr'
+            ? "Enregistrez l'intervention realisee. L'IA supprimera les alertes liees."
+            : 'Save completed intervention. AI will clear related alerts.'}
         </p>
 
         {/* TYPE D'INTERVENTION */}
         <div style={{ background: '#edf5ff', border: '1px solid #c8ddff', borderRadius: 12, padding: '16px 20px', marginBottom: 12 }}>
           <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 700, color: '#4f6a90', letterSpacing: '.08em', textTransform: 'uppercase' }}>
-            ⚙ TYPE D'INTERVENTION
+            {locale === 'fr' ? "⚙ TYPE D'INTERVENTION" : '⚙ INTERVENTION TYPE'}
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {INTERVENTION_TYPES.map((type) => {
@@ -402,7 +428,7 @@ export function VehicleDetailsPage() {
                 if (codes.length) { setTaskDtcCodes((prev) => [...new Set([...prev, ...codes])]); setTaskDtcInput(''); }
               }}
             >
-              + Ajouter
+              {locale === 'fr' ? '+ Ajouter' : '+ Add'}
             </button>
           </div>
           {taskDtcCodes.length > 0 && (
@@ -420,17 +446,17 @@ export function VehicleDetailsPage() {
         {/* DÉTAIL DE L'INTERVENTION */}
         <div style={{ background: '#edf5ff', border: '1px solid #c8ddff', borderRadius: 12, padding: '16px 20px', marginBottom: 12 }}>
           <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 700, color: '#4f6a90', letterSpacing: '.08em', textTransform: 'uppercase' }}>
-            📋 DÉTAIL DE L'INTERVENTION
+            {locale === 'fr' ? "📋 DETAIL DE L'INTERVENTION" : '📋 INTERVENTION DETAILS'}
           </p>
-          <p style={{ margin: '0 0 8px', fontSize: 13, color: '#4a6b90' }}>Description des travaux</p>
+          <p style={{ margin: '0 0 8px', fontSize: 13, color: '#4a6b90' }}>{locale === 'fr' ? 'Description des travaux' : 'Work description'}</p>
           <textarea
             rows={3}
-            placeholder="Ex: Vidange moteur avec huile 5W40, remplacement filtre à huile, nettoyage cache culbuteurs..."
+            placeholder={locale === 'fr' ? 'Ex: Vidange moteur avec huile 5W40, remplacement filtre a huile...' : 'Ex: Engine oil service with 5W40, oil filter replacement...'}
             value={taskNote}
             onChange={(e) => setTaskNote(e.target.value)}
             style={{ width: '100%', background: '#ffffff', border: '1px solid #b8cfee', borderRadius: 8, padding: '10px 14px', color: '#0f2f57', fontSize: 14, resize: 'vertical', boxSizing: 'border-box', outline: 'none' }}
           />
-          <p style={{ margin: '14px 0 8px', fontSize: 13, color: '#4a6b90' }}>Urgence / Criticité</p>
+          <p style={{ margin: '14px 0 8px', fontSize: 13, color: '#4a6b90' }}>{locale === 'fr' ? 'Urgence / Criticite' : 'Urgency / Criticality'}</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
             {([
               { key: 'routine'   as UrgencyLevel, label: '✓ Routine'    },
@@ -466,7 +492,7 @@ export function VehicleDetailsPage() {
               👤 TECHNICIEN
             </p>
             <input
-              placeholder="Nom du mécanicien"
+              placeholder={locale === 'fr' ? 'Nom du mecanicien' : 'Mechanic name'}
               value={taskTechnicien}
               onChange={(e) => setTaskTechnicien(e.target.value)}
               style={{ width: '100%', background: '#ffffff', border: '1px solid #b8cfee', borderRadius: 8, padding: '10px 14px', color: '#0f2f57', fontSize: 14, boxSizing: 'border-box', outline: 'none' }}
@@ -510,18 +536,18 @@ export function VehicleDetailsPage() {
             gap: 8,
           }}
         >
-          📋 {createTaskMutation.isPending ? 'Enregistrement...' : 'Enregistrer la fiche'}
+          📋 {createTaskMutation.isPending ? (locale === 'fr' ? 'Enregistrement...' : 'Saving...') : (locale === 'fr' ? 'Enregistrer la fiche' : 'Save record')}
         </button>
 
         {/* ── Saved Maintenance Tasks ── */}
         <div style={{ marginTop: 24 }}>
           <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 700, color: '#4f6a90', letterSpacing: '.08em', textTransform: 'uppercase' }}>
-            🗂 HISTORIQUE DES INTERVENTIONS
+            {locale === 'fr' ? '🗂 HISTORIQUE DES INTERVENTIONS' : '🗂 INTERVENTION HISTORY'}
           </p>
           {maintenanceQuery.isLoading ? (
-            <p className="vd-metric-loading">Chargement...</p>
+            <p className="vd-metric-loading">{locale === 'fr' ? 'Chargement...' : 'Loading...'}</p>
           ) : maintenanceItems.length === 0 ? (
-            <p style={{ color: '#4a6b90', fontSize: 13 }}>Aucune intervention enregistrée pour ce véhicule.</p>
+            <p style={{ color: '#4a6b90', fontSize: 13 }}>{locale === 'fr' ? 'Aucune intervention enregistree pour ce vehicule.' : 'No interventions recorded for this vehicle.'}</p>
           ) : (
             <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
               {maintenanceItems.map((item) => (
@@ -539,10 +565,10 @@ export function VehicleDetailsPage() {
                       type="button"
                       className="btn-link"
                       disabled={deleteTaskMutation.isPending}
-                      onClick={() => { if (window.confirm('Supprimer cette intervention ?')) { deleteTaskMutation.mutate(item.id); } }}
+                      onClick={() => { if (window.confirm(locale === 'fr' ? 'Supprimer cette intervention ?' : 'Delete this intervention?')) { deleteTaskMutation.mutate(item.id); } }}
                       style={{ fontSize: 12, color: '#f87171' }}
                     >
-                      Supprimer
+                      {locale === 'fr' ? 'Supprimer' : 'Delete'}
                     </button>
                   </div>
                   <span style={{ fontSize: 12, color: '#4a6b90' }}>
@@ -550,7 +576,7 @@ export function VehicleDetailsPage() {
                     {item.date_intervention ? ` • 📅 ${item.date_intervention}` : ''}
                   </span>
                   {!!item.resolved_dtc_codes?.length && (
-                    <span style={{ fontSize: 12, color: '#4a6b90' }}>DTC résolus : {item.resolved_dtc_codes.join(', ')}</span>
+                    <span style={{ fontSize: 12, color: '#4a6b90' }}>{locale === 'fr' ? 'DTC resolus :' : 'Resolved DTC:'} {item.resolved_dtc_codes.join(', ')}</span>
                   )}
                   {!!item.note && <span style={{ fontSize: 12, color: '#4a6b90' }}>{item.note}</span>}
                 </li>
@@ -568,7 +594,7 @@ export function VehicleDetailsPage() {
           onClick={() => deleteMutation.mutate()}
           disabled={deleteMutation.isPending}
         >
-          {deleteMutation.isPending ? 'Deleting…' : 'Delete Vehicle'}
+          {deleteMutation.isPending ? (locale === 'fr' ? 'Suppression…' : 'Deleting…') : (locale === 'fr' ? 'Supprimer vehicule' : 'Delete Vehicle')}
         </button>
       </div>
     </section>

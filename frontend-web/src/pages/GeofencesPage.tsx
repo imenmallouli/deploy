@@ -17,6 +17,7 @@ import {
   updateGeofence,
   updateLocation,
 } from '../lib/api/endpoints';
+import { useI18n } from '../lib/i18n';
 
 type LocationItem = {
   id: string;
@@ -37,6 +38,150 @@ function getErrorMessage(error: unknown, fallback = 'Operation failed. Please tr
 }
 
 export function GeofencesPage() {
+  const { locale } = useI18n();
+  const text = locale === 'fr'
+    ? {
+        title: 'Geofences',
+        subtitle: 'Dessinez une zone sur la carte - une alerte in-app sera declenchee automatiquement a chaque sortie de zone.',
+        operationFailed: 'Operation echouee. Veuillez reessayer.',
+        geolocDenied: 'Permission refusee. Veuillez autoriser la localisation dans les parametres du navigateur.',
+        geolocUnsupported: 'Geolocalisation non supportee par votre navigateur.',
+        geolocUnsupportedBrowser: 'La geolocalisation n\'est pas prise en charge par ce navigateur.',
+        mapLoading: 'La carte est en cours de chargement. Reessayez dans un instant.',
+        geolocUnavailable: 'Impossible de recuperer votre position. Verifiez le GPS/permissions puis reessayez.',
+        geolocDeniedShort: 'Permission refusee. Activez la localisation pour ce site dans les parametres du navigateur.',
+        geolocUnavailableShort: 'Impossible de recuperer votre position.',
+        selectGeofence: 'Selectionnez une geocloture.',
+        selectVehicles: 'Selectionnez au moins un vehicule.',
+        vehicleLabel: 'Vehicule',
+        myLocation: 'Ma localisation',
+        locating: 'Localisation...',
+        accuracy: 'Precision',
+        deleteGeofence: 'Supprimer',
+        thisGeofence: 'cette geocloture',
+        geofenceCreated: 'Geocloture creee avec succes.',
+        monitoringSaved: 'Monitoring sauvegarde avec succes.',
+        geofenceDeleted: 'Geocloture supprimee avec succes.',
+        geofenceLocationUpdated: 'Geocloture et localisation mises a jour avec succes.',
+        geofenceLocationDeleted: 'Geocloture et localisation supprimees avec succes.',
+        zoneNameRequired: 'Le nom de la zone est requis.',
+        drawZoneRequired: 'Dessinez une zone (carre/polygone) sur la carte.',
+        noMatchingGeofence: 'Aucune geocloture correspondante trouvee pour cette ligne.',
+        locationNameRequired: 'Le nom du lieu est requis.',
+        confirmDeleteBoth: 'Supprimer la geocloture et la localisation',
+        updateLocation: 'Modifier le lieu',
+        close: 'Fermer',
+        cancel: 'Annuler',
+        save: 'Enregistrer',
+        saving: 'Enregistrement...',
+        map: 'Carte',
+        newGeofence: 'Nouvelle geocloture',
+        createGeofence: 'Creer une geocloture',
+        createAZone: 'Creer une geocloture',
+        drawZone: 'Dessinez votre zone',
+        name: 'Nom',
+        notes: 'Notes',
+        contactEmail: 'Email de contact',
+        contactPhone: 'Telephone de contact',
+        address: 'Adresse',
+        onEnterAlertLevel: 'Niveau alerte entree',
+        onExitAlertLevel: 'Niveau alerte sortie',
+        low: 'Faible',
+        medium: 'Moyen',
+        critical: 'Critique',
+        createZone: 'Creer la zone',
+        creating: 'Creation...',
+        createHint: 'Saisissez le nom et dessinez la zone avant de creer.',
+        createHintTitle: 'Saisissez le nom + dessinez la zone d\'abord',
+        monitoringTitle: 'Monitoring - alertes in-app',
+        selectGeofencePlaceholder: 'Selectionnez une geocloture...',
+        monitoringEnable: 'Activer monitoring',
+        deleting: 'Suppression...',
+        deleteSelectedArea: 'Supprimer la zone selectionnee',
+        selectGeofenceFirst: 'Selectionnez une geocloture d\'abord',
+        selectGeofenceDeleteHint: 'Selectionnez une geocloture a supprimer',
+        monitoringHint: 'Selectionnez une zone pour activer le monitoring. Les alertes in-app sont declenchees automatiquement a chaque sortie de zone.',
+        monitoredVehicles: 'Vehicules surveilles',
+        notAvailable: 'N/A',
+        refresh: 'Rafraichir',
+        actions: 'Actions',
+        onEnter: 'A l\'entree',
+        onExit: 'A la sortie',
+        noLocations: 'Aucun lieu a afficher',
+        update: 'Modifier',
+        delete: 'Supprimer',
+      }
+    : {
+        title: 'Geofences',
+        subtitle: 'Draw a zone on the map - an in-app alert will be triggered automatically when a vehicle exits the zone.',
+        operationFailed: 'Operation failed. Please try again.',
+        geolocDenied: 'Permission denied. Please allow location access in browser settings.',
+        geolocUnsupported: 'Geolocation is not supported by your browser.',
+        geolocUnsupportedBrowser: 'Geolocation is not supported by this browser.',
+        mapLoading: 'Map is still loading. Please try again in a second.',
+        geolocUnavailable: 'Unable to retrieve your location. Check GPS/permissions and try again.',
+        geolocDeniedShort: 'Permission denied. Enable location for this site in browser settings.',
+        geolocUnavailableShort: 'Unable to retrieve your location.',
+        selectGeofence: 'Select a geofence.',
+        selectVehicles: 'Select at least one vehicle.',
+        vehicleLabel: 'Vehicle',
+        myLocation: 'My location',
+        locating: 'Locating...',
+        accuracy: 'Accuracy',
+        deleteGeofence: 'Delete',
+        thisGeofence: 'this geofence',
+        geofenceCreated: 'Geofence created successfully.',
+        monitoringSaved: 'Monitoring saved successfully.',
+        geofenceDeleted: 'Geofence deleted successfully.',
+        geofenceLocationUpdated: 'Geofence and location updated successfully.',
+        geofenceLocationDeleted: 'Geofence and location deleted successfully.',
+        zoneNameRequired: 'Zone name is required.',
+        drawZoneRequired: 'Draw a zone (square/polygon) on the map.',
+        noMatchingGeofence: 'No matching geofence found for this row.',
+        locationNameRequired: 'Location name is required.',
+        confirmDeleteBoth: 'Delete geofence and location',
+        updateLocation: 'Update location',
+        close: 'Close',
+        cancel: 'Cancel',
+        save: 'Save',
+        saving: 'Saving...',
+        map: 'Map',
+        newGeofence: 'New Geofence',
+        createGeofence: 'Create Geofence',
+        createAZone: 'Create a geofence',
+        drawZone: 'Draw your zone',
+        name: 'Name',
+        notes: 'Notes',
+        contactEmail: 'Contact email',
+        contactPhone: 'Contact phone',
+        address: 'Address',
+        onEnterAlertLevel: 'On enter alert level',
+        onExitAlertLevel: 'On exit alert level',
+        low: 'Low',
+        medium: 'Medium',
+        critical: 'Critical',
+        createZone: 'Create Zone',
+        creating: 'Creating...',
+        createHint: 'Enter the name and draw the zone before creating.',
+        createHintTitle: 'Enter the name + draw the zone first',
+        monitoringTitle: 'Monitoring - in-app alerts',
+        selectGeofencePlaceholder: 'Select a geofence...',
+        monitoringEnable: 'Enable monitoring',
+        deleting: 'Deleting...',
+        deleteSelectedArea: 'Delete selected area',
+        selectGeofenceFirst: 'Select a geofence first',
+        selectGeofenceDeleteHint: 'Select a geofence to delete',
+        monitoringHint: 'Select a zone to enable monitoring. In-app alerts are automatically triggered each time a vehicle exits the zone.',
+        monitoredVehicles: 'Monitored vehicles',
+        notAvailable: 'N/A',
+        refresh: 'Refresh',
+        actions: 'Actions',
+        onEnter: 'On Enter',
+        onExit: 'On Exit',
+        noLocations: 'No locations to display',
+        update: 'Update',
+        delete: 'Delete',
+      };
   const queryClient = useQueryClient();
   // Main map (bottom page)
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -136,19 +281,19 @@ export function GeofencesPage() {
               fillColor: '#3b82f6',
               fillOpacity: 0.9,
               weight: 2,
-            }).bindPopup('My location').addTo(map);
+            }).bindPopup(text.myLocation).addTo(map);
           }
         },
         (error) => {
           console.error('Geolocation error:', error.message);
           if (error.code === 1) {
-            alert('❌ Permission refusée. Veuillez autoriser la localisation dans les paramètres du navigateur.');
+            alert(text.geolocDenied);
           }
         },
         geoOptions
       );
     } else {
-      alert('⚠️ Géolocalisation non supportée par votre navigateur.');
+      alert(text.geolocUnsupported);
     }
 
     return () => {
@@ -269,10 +414,10 @@ export function GeofencesPage() {
         fillColor: '#20bf6b',
         fillOpacity: 0.9,
       })
-        .bindPopup(`<strong>Vehicle ${p.vehicle_id}${plateLabel}</strong><br/>${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}`)
+          .bindPopup(`<strong>${locale === 'fr' ? 'Vehicule' : 'Vehicle'} ${p.vehicle_id}${plateLabel}</strong><br/>${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}`)
         .addTo(vehicleLayer);
     });
-  }, [vehiclePositionsQuery.data, vehiclesQuery.data]);
+        }, [vehiclePositionsQuery.data, vehiclesQuery.data, locale]);
 
   const createMutation = useMutation({
     mutationFn: async (payload: {
@@ -294,14 +439,14 @@ export function GeofencesPage() {
       setDrawnPolygon([]);
       if (modalDrawLayerRef.current) modalDrawLayerRef.current.clearLayers();
       setCreateError('');
-      setCreateFeedback('Geocloture creee avec succes.');
+      setCreateFeedback(text.geofenceCreated);
       queryClient.invalidateQueries({ queryKey: ['geofences'] });
       queryClient.invalidateQueries({ queryKey: ['locations', 'geofences-page'] });
       setTimeout(() => setCreateFeedback(''), 3000);
     },
     onError: (error) => {
       setCreateFeedback('');
-      setCreateError(getErrorMessage(error));
+      setCreateError(getErrorMessage(error, text.operationFailed));
     },
   });
 
@@ -310,12 +455,12 @@ export function GeofencesPage() {
     onSuccess: () => {
       setSelectedVehicles([]);
       setSetupError('');
-      setSetupFeedback('Monitoring sauvegarde avec succes.');
+      setSetupFeedback(text.monitoringSaved);
       setTimeout(() => setSetupFeedback(''), 3000);
     },
     onError: (error) => {
       setSetupFeedback('');
-      setSetupError(getErrorMessage(error));
+      setSetupError(getErrorMessage(error, text.operationFailed));
     },
   });
 
@@ -347,13 +492,13 @@ export function GeofencesPage() {
       setEditLocationId(null);
       setEditGeofenceId(null);
       setLocationActionError('');
-      setLocationActionFeedback('Geofence and location updated successfully.');
+      setLocationActionFeedback(text.geofenceLocationUpdated);
       queryClient.invalidateQueries({ queryKey: ['geofences'] });
       queryClient.invalidateQueries({ queryKey: ['locations', 'geofences-page'] });
     },
     onError: (error) => {
       setLocationActionFeedback('');
-      setLocationActionError(getErrorMessage(error));
+      setLocationActionError(getErrorMessage(error, text.operationFailed));
     },
   });
 
@@ -364,13 +509,13 @@ export function GeofencesPage() {
     },
     onSuccess: () => {
       setLocationActionError('');
-      setLocationActionFeedback('Geofence and location deleted successfully.');
+      setLocationActionFeedback(text.geofenceLocationDeleted);
       queryClient.invalidateQueries({ queryKey: ['geofences'] });
       queryClient.invalidateQueries({ queryKey: ['locations', 'geofences-page'] });
     },
     onError: (error) => {
       setLocationActionFeedback('');
-      setLocationActionError(getErrorMessage(error));
+      setLocationActionError(getErrorMessage(error, text.operationFailed));
     },
   });
 
@@ -392,11 +537,11 @@ export function GeofencesPage() {
     const polygon = drawnPolygon.length > 0 ? drawnPolygon : extractDrawnPolygons();
 
     if (!zoneName.trim()) {
-      setCreateError('Le nom de la zone est requis.');
+      setCreateError(text.zoneNameRequired);
       return;
     }
     if (polygon.length < 3) {
-      setCreateError('Dessinez une zone (carre/polygone) sur la carte.');
+      setCreateError(text.drawZoneRequired);
       return;
     }
 
@@ -438,11 +583,11 @@ export function GeofencesPage() {
     setLoading: (loading: boolean) => void
   ) => {
     if (!navigator.geolocation) {
-      alert('Geolocation is not supported by this browser.');
+      alert(text.geolocUnsupportedBrowser);
       return;
     }
     if (!map) {
-      alert('Map is still loading. Please try again in a second.');
+      alert(text.mapLoading);
       return;
     }
 
@@ -464,7 +609,7 @@ export function GeofencesPage() {
         }).bindPopup(popupLabel).addTo(map);
       }
 
-      markerRef.current.bindPopup(`${popupLabel}<br/>Accuracy: ~${Math.round(pos.coords.accuracy)}m`);
+      markerRef.current.bindPopup(`${popupLabel}<br/>${text.accuracy}: ~${Math.round(pos.coords.accuracy)}m`);
       setLoading(false);
     };
 
@@ -472,7 +617,7 @@ export function GeofencesPage() {
       navigator.geolocation.getCurrentPosition(
         applyPosition,
         () => {
-          alert('Unable to retrieve your location. Check GPS/permission and try again.');
+          alert(text.geolocUnavailable);
           setLoading(false);
         },
         {
@@ -492,9 +637,9 @@ export function GeofencesPage() {
         }
 
         if (error.code === error.PERMISSION_DENIED) {
-          alert('Permission denied. Enable location for this site in browser settings.');
+          alert(text.geolocDeniedShort);
         } else {
-          alert('Unable to retrieve your location.');
+          alert(text.geolocUnavailableShort);
         }
         setLoading(false);
       },
@@ -509,11 +654,11 @@ export function GeofencesPage() {
   const handleSetupMonitoring = () => {
     setSetupError('');
     if (!selectedGeofenceId) {
-      setSetupError('Selectionnez une geocloture.');
+      setSetupError(text.selectGeofence);
       return;
     }
     if (selectedVehicles.length === 0) {
-      setSetupError('Selectionnez au moins un vehicule.');
+      setSetupError(text.selectVehicles);
       return;
     }
     setupMutation.mutate({
@@ -526,16 +671,16 @@ export function GeofencesPage() {
   const handleDeleteSelectedGeofence = () => {
     if (!selectedGeofenceId) return;
     const selectedGeofence = geofences.find((g) => g.id === selectedGeofenceId);
-    const zoneLabel = selectedGeofence?.name ?? 'cette geocloture';
+    const zoneLabel = selectedGeofence?.name ?? text.thisGeofence;
 
-    if (!window.confirm(`Supprimer ${zoneLabel} ?`)) return;
+    if (!window.confirm(`${text.deleteGeofence} ${zoneLabel} ?`)) return;
 
     deleteMutation.mutate(selectedGeofenceId, {
       onSuccess: () => {
         setSelectedGeofenceId('');
         setSelectedVehicles([]);
         setSetupError('');
-        setSetupFeedback('Geocloture supprimee avec succes.');
+        setSetupFeedback(text.geofenceDeleted);
         queryClient.invalidateQueries({ queryKey: ['geofences'] });
       },
     });
@@ -547,6 +692,15 @@ export function GeofencesPage() {
   const polygonForCreate = drawnPolygon.length > 0 ? drawnPolygon : extractDrawnPolygons();
   const isCreateFormValid = zoneName.trim().length > 0 && polygonForCreate.length >= 3;
   const isMonitoringFormValid = Boolean(selectedGeofenceId) && selectedVehicles.length > 0;
+
+  const formatAlertLevel = (value?: string) => {
+    if (!value) return '-';
+    const normalized = value.toLowerCase();
+    if (normalized === 'low') return text.low;
+    if (normalized === 'medium') return text.medium;
+    if (normalized === 'critical') return text.critical;
+    return value;
+  };
 
   const startEditLocation = (item: LocationItem) => {
     const matchedGeofence = geofences.find(
@@ -570,12 +724,12 @@ export function GeofencesPage() {
     if (!editLocationId) return;
     if (!editGeofenceId) {
       setLocationActionFeedback('');
-      setLocationActionError('No matching geofence found for this row.');
+      setLocationActionError(text.noMatchingGeofence);
       return;
     }
     if (!editLocationName.trim()) {
       setLocationActionFeedback('');
-      setLocationActionError('Location name is required.');
+      setLocationActionError(text.locationNameRequired);
       return;
     }
 
@@ -600,18 +754,18 @@ export function GeofencesPage() {
     );
     if (!matchedGeofence) {
       setLocationActionFeedback('');
-      setLocationActionError('No matching geofence found for this row.');
+      setLocationActionError(text.noMatchingGeofence);
       return;
     }
 
-    if (!window.confirm(`Delete geofence and location "${item.name}" ?`)) return;
+    if (!window.confirm(`${text.confirmDeleteBoth} "${item.name}" ?`)) return;
     deleteLocationMutation.mutate({ locationId: item.id, geofenceId: matchedGeofence.id });
   };
 
   return (
     <section>
-      <h2>Geofences</h2>
-      <p className="subtitle">Dessinez une zone sur la carte — une alerte in-app sera déclenchée automatiquement à chaque sortie de zone.</p>
+      <h2>{text.title}</h2>
+      <p className="subtitle">{text.subtitle}</p>
 
       {editLocationId && (
         <div
@@ -638,31 +792,31 @@ export function GeofencesPage() {
         >
           <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 980, padding: 24 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ margin: 0 }}>Update location</h3>
+              <h3 style={{ margin: 0 }}>{text.updateLocation}</h3>
               <button className="btn-link" type="button" onClick={() => {
                 setEditLocationId(null);
                 setEditGeofenceId(null);
-              }}>Close</button>
+              }}>{text.close}</button>
             </div>
             <div className="toolbar-row" style={{ marginBottom: 10 }}>
-              <input className="toolbar-input" placeholder="Name" value={editLocationName} onChange={(e) => setEditLocationName(e.target.value)} />
-              <input className="toolbar-input" placeholder="Notes" value={editLocationNotes} onChange={(e) => setEditLocationNotes(e.target.value)} />
-              <input className="toolbar-input" placeholder="Contact email" value={editLocationEmail} onChange={(e) => setEditLocationEmail(e.target.value)} />
-              <input className="toolbar-input" placeholder="Contact phone" value={editLocationPhone} onChange={(e) => setEditLocationPhone(e.target.value)} />
+              <input className="toolbar-input" placeholder={text.name} value={editLocationName} onChange={(e) => setEditLocationName(e.target.value)} />
+              <input className="toolbar-input" placeholder={text.notes} value={editLocationNotes} onChange={(e) => setEditLocationNotes(e.target.value)} />
+              <input className="toolbar-input" placeholder={text.contactEmail} value={editLocationEmail} onChange={(e) => setEditLocationEmail(e.target.value)} />
+              <input className="toolbar-input" placeholder={text.contactPhone} value={editLocationPhone} onChange={(e) => setEditLocationPhone(e.target.value)} />
             </div>
             <div className="toolbar-row" style={{ marginBottom: 16 }}>
-              <input className="toolbar-input" placeholder="Address" value={editLocationAddress} onChange={(e) => setEditLocationAddress(e.target.value)} />
+              <input className="toolbar-input" placeholder={text.address} value={editLocationAddress} onChange={(e) => setEditLocationAddress(e.target.value)} />
               <select className="toolbar-input" value={editLocationOnEnter} onChange={(e) => setEditLocationOnEnter(e.target.value)}>
-                <option value="">On enter alert level</option>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="critical">Critical</option>
+                <option value="">{text.onEnterAlertLevel}</option>
+                <option value="low">{text.low}</option>
+                <option value="medium">{text.medium}</option>
+                <option value="critical">{text.critical}</option>
               </select>
               <select className="toolbar-input" value={editLocationOnExit} onChange={(e) => setEditLocationOnExit(e.target.value)}>
-                <option value="">On exit alert level</option>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="critical">Critical</option>
+                <option value="">{text.onExitAlertLevel}</option>
+                <option value="low">{text.low}</option>
+                <option value="medium">{text.medium}</option>
+                <option value="critical">{text.critical}</option>
               </select>
             </div>
             {locationActionError && <p className="form-error">{locationActionError}</p>}
@@ -670,9 +824,9 @@ export function GeofencesPage() {
               <button className="btn-secondary" type="button" onClick={() => {
                 setEditLocationId(null);
                 setEditGeofenceId(null);
-              }}>Cancel</button>
+              }}>{text.cancel}</button>
               <button className="btn-primary" type="button" onClick={handleUpdateLocation} disabled={updateLocationMutation.isPending}>
-                {updateLocationMutation.isPending ? 'Saving...' : 'Save'}
+                {updateLocationMutation.isPending ? text.saving : text.save}
               </button>
             </div>
           </div>
@@ -682,19 +836,19 @@ export function GeofencesPage() {
       {/* MAIN PAGE MAP */}
       <div className="panel table-shell" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <h3>Map</h3>
+          <h3>{text.map}</h3>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <button className="btn-secondary" onClick={() => setShowCreateModal(true)}>
-              ➕ New Geofence
+              ➕ {text.newGeofence}
             </button>
             <button
               className="btn-secondary"
               onClick={() => {
-                centerToCurrentLocation(mapRef.current, userMarkerRef, 'My location', setIsLocatingMain);
+                centerToCurrentLocation(mapRef.current, userMarkerRef, text.myLocation, setIsLocatingMain);
               }}
               disabled={isLocatingMain}
             >
-              {isLocatingMain ? 'Locating...' : '📍 My Location'}
+              {isLocatingMain ? text.locating : `📍 ${text.myLocation}`}
             </button>
           </div>
         </div>
@@ -739,7 +893,7 @@ export function GeofencesPage() {
           >
             {/* MODAL HEADER */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ margin: 0 }}>Create Geofence</h3>
+              <h3 style={{ margin: 0 }}>{text.createGeofence}</h3>
               <button
                 onClick={() => {
                   setShowCreateModal(false);
@@ -768,21 +922,21 @@ export function GeofencesPage() {
             {/* SECTION 1: CREER GEOCLOTURE */}
             <div style={{ marginBottom: 24, paddingBottom: 24, borderBottom: '1px solid #eee' }}>
               <h3 style={{ marginTop: 0, marginBottom: 12 }}>
-Create a geofence</h3>
+{text.createAZone}</h3>
               <div>
                 <label style={{ display: 'block', marginBottom: 8, fontWeight: 500, fontSize: 14 }}>
-                  Draw your zone
+                  {text.drawZone}
                 </label>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
                   <button
                     className="btn-secondary"
                     onClick={() => {
-                      centerToCurrentLocation(modalMapRef.current, modalUserMarkerRef, 'Ma localisation', setIsLocatingModal);
+                      centerToCurrentLocation(modalMapRef.current, modalUserMarkerRef, text.myLocation, setIsLocatingModal);
                     }}
                     disabled={isLocatingModal}
                     style={{ fontSize: 12, padding: '6px 12px' }}
                   >
-                    {isLocatingModal ? 'Locating...' : '📍 Ma localisation'}
+                    {isLocatingModal ? text.locating : `📍 ${text.myLocation}`}
                   </button>
                 </div>
                 <div
@@ -799,12 +953,12 @@ Create a geofence</h3>
 
                 <div style={{ marginTop: 14 }}>
                   <label style={{ display: 'block', marginBottom: 8, fontWeight: 500, fontSize: 14 }}>
-                    Name
+                    {text.name}
                   </label>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
                     <input
                       className="toolbar-input"
-                      placeholder="Name"
+                      placeholder={text.name}
                       value={zoneName}
                       onChange={(e) => setZoneName(e.target.value)}
                       style={{ flex: 1 }}
@@ -813,21 +967,21 @@ Create a geofence</h3>
                   <div className="toolbar-row" style={{ flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
                     <input
                       className="toolbar-input"
-                      placeholder="Notes"
+                      placeholder={text.notes}
                       value={zoneNotes}
                       onChange={(e) => setZoneNotes(e.target.value)}
                       style={{ flex: '1 1 220px' }}
                     />
                     <input
                       className="toolbar-input"
-                      placeholder="Contact email"
+                      placeholder={text.contactEmail}
                       value={zoneContactEmail}
                       onChange={(e) => setZoneContactEmail(e.target.value)}
                       style={{ flex: '1 1 220px' }}
                     />
                     <input
                       className="toolbar-input"
-                      placeholder="Contact phone"
+                      placeholder={text.contactPhone}
                       value={zoneContactPhone}
                       onChange={(e) => setZoneContactPhone(e.target.value)}
                       style={{ flex: '1 1 220px' }}
@@ -836,22 +990,22 @@ Create a geofence</h3>
                   <div className="toolbar-row" style={{ flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
                     <input
                       className="toolbar-input"
-                      placeholder="Address"
+                      placeholder={text.address}
                       value={zoneAddress}
                       onChange={(e) => setZoneAddress(e.target.value)}
                       style={{ flex: '2 1 280px' }}
                     />
                     <select className="toolbar-input" value={zoneOnEnter} onChange={(e) => setZoneOnEnter(e.target.value)} style={{ flex: '1 1 180px' }}>
-                      <option value="">On enter alert level</option>
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="critical">Critical</option>
+                      <option value="">{text.onEnterAlertLevel}</option>
+                      <option value="low">{text.low}</option>
+                      <option value="medium">{text.medium}</option>
+                      <option value="critical">{text.critical}</option>
                     </select>
                     <select className="toolbar-input" value={zoneOnExit} onChange={(e) => setZoneOnExit(e.target.value)} style={{ flex: '1 1 180px' }}>
-                      <option value="">On exit alert level</option>
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="critical">Critical</option>
+                      <option value="">{text.onExitAlertLevel}</option>
+                      <option value="low">{text.low}</option>
+                      <option value="medium">{text.medium}</option>
+                      <option value="critical">{text.critical}</option>
                     </select>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
@@ -859,17 +1013,17 @@ Create a geofence</h3>
                       className="btn-primary"
                       onClick={handleCreateGeofence}
                       disabled={createMutation.isPending || !isCreateFormValid}
-                      title={!isCreateFormValid ? 'Enter the name + draw the zone first' : undefined}
+                      title={!isCreateFormValid ? text.createHintTitle : undefined}
                       style={{ minWidth: 140, width: 'auto' }}
                     >
-                      {createMutation.isPending ? 'Creating...' : 'Create Zone'}
+                      {createMutation.isPending ? text.creating : text.createZone}
                     </button>
                   </div>
                 </div>
 
                 {!isCreateFormValid && (
                   <p className="muted-note" style={{ marginTop: 0, marginBottom: 10 }}>
-                    Enter the name and draw the zone before creating.
+                    {text.createHint}
                   </p>
                 )}
 
@@ -880,7 +1034,7 @@ Create a geofence</h3>
 
             {/* SECTION 2: MONITORING */}
             <div style={{ marginBottom: 24, paddingBottom: 24, borderBottom: '1px solid #eee' }}>
-              <h3 style={{ marginTop: 0, marginBottom: 12 }}>Monitoring — alertes in-app</h3>
+              <h3 style={{ marginTop: 0, marginBottom: 12 }}>{text.monitoringTitle}</h3>
               <div className="toolbar-row" style={{ flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
                 <select
                   className="toolbar-input"
@@ -888,7 +1042,7 @@ Create a geofence</h3>
                   onChange={(e) => setSelectedGeofenceId(e.target.value)}
                   style={{ flex: '1 1 220px' }}
                 >
-                  <option value="">Select a geofence...</option>
+                  <option value="">{text.selectGeofencePlaceholder}</option>
                   {geofences.map((g) => (
                     <option key={g.id} value={g.id}>
                       {g.name}
@@ -899,30 +1053,30 @@ Create a geofence</h3>
                   className="btn-primary"
                   onClick={handleSetupMonitoring}
                   disabled={setupMutation.isPending || !isMonitoringFormValid}
-                  title={!selectedGeofenceId ? 'Selectionnez une geocloture d abord' : undefined}
+                  title={!selectedGeofenceId ? text.selectGeofenceFirst : undefined}
                 >
-                  {setupMutation.isPending ? 'Sauvegarde...' : 'Activer monitoring'}
+                  {setupMutation.isPending ? text.saving : text.monitoringEnable}
                 </button>
                 <button
                   className="btn-link"
                   onClick={handleDeleteSelectedGeofence}
                   disabled={!selectedGeofenceId || deleteMutation.isPending}
                   style={{ color: 'var(--danger, #dc3545)' }}
-                  title={!selectedGeofenceId ? 'Selectionnez une geocloture a supprimer' : undefined}
+                  title={!selectedGeofenceId ? text.selectGeofenceDeleteHint : undefined}
                 >
-                  {deleteMutation.isPending ? 'Suppression...' : 'Delete selected area'}
+                  {deleteMutation.isPending ? text.deleting : text.deleteSelectedArea}
                 </button>
               </div>
 
               {!selectedGeofenceId && (
                 <p className="muted-note" style={{ marginTop: 0, marginBottom: 10 }}>
-                 Sélectionnez une zone pour activer le monitoring. Les alertes in-app sont déclenchées automatiquement à chaque sortie de zone.
+                 {text.monitoringHint}
                 </p>
               )}
 
               {selectedGeofenceId && (
                 <div style={{ marginBottom: 12, padding: 12, background: '#f7f7f7', borderRadius: 6 }}>
-                  <strong>Monitored Vehicles:</strong>
+                  <strong>{text.monitoredVehicles}:</strong>
                   <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', marginTop: 8 }}>
                     {vehicles.map((v) => (
                       <label key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
@@ -931,7 +1085,7 @@ Create a geofence</h3>
                           checked={selectedVehicles.includes(v.id)}
                           onChange={() => toggleVehicleSelection(v.id)}
                         />
-                        <span>Vehicle {v.id} - {v.license_plate || 'N/A'}</span>
+                        <span>{text.vehicleLabel} {v.id} - {v.license_plate || text.notAvailable}</span>
                       </label>
                     ))}
                   </div>
@@ -962,7 +1116,7 @@ Create a geofence</h3>
                   setCreateError('');
                 }}
               >
-                close 
+                {text.close}
               </button>
             </div>
           </div>
@@ -979,7 +1133,7 @@ Create a geofence</h3>
             type="button"
             onClick={() => queryClient.invalidateQueries({ queryKey: ['locations', 'geofences-page'] })}
           >
-            Refresh
+            {text.refresh}
           </button>
         </div>
 
@@ -988,20 +1142,20 @@ Create a geofence</h3>
         <table className="vehicles-table">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Notes</th>
-              <th>Contact Email</th>
-              <th>Contact Phone</th>
-              <th>Address</th>
-              <th>On Enter</th>
-              <th>On Exit</th>
-              <th>Actions</th>
+              <th>{text.name}</th>
+              <th>{text.notes}</th>
+              <th>{text.contactEmail}</th>
+              <th>{text.contactPhone}</th>
+              <th>{text.address}</th>
+              <th>{text.onEnter}</th>
+              <th>{text.onExit}</th>
+              <th>{text.actions}</th>
             </tr>
           </thead>
           <tbody>
             {locations.length === 0 && (
               <tr>
-                <td colSpan={8} className="empty-cell">No locations to display</td>
+                <td colSpan={8} className="empty-cell">{text.noLocations}</td>
               </tr>
             )}
             {locations.map((item) => (
@@ -1011,10 +1165,10 @@ Create a geofence</h3>
                 <td>{item.contactEmail ?? '-'}</td>
                 <td>{item.contactPhone ?? '-'}</td>
                 <td>{item.address ?? (item.latitude != null && item.longitude != null ? `${item.latitude}, ${item.longitude}` : '-')}</td>
-                <td>{item.onEnter ?? '-'}</td>
-                <td>{item.onExit ?? '-'}</td>
+                <td>{formatAlertLevel(item.onEnter)}</td>
+                <td>{formatAlertLevel(item.onExit)}</td>
                 <td style={{ whiteSpace: 'nowrap' }}>
-                  <button className="btn-link" type="button" onClick={() => startEditLocation(item)}>Update</button>
+                  <button className="btn-link" type="button" onClick={() => startEditLocation(item)}>{text.update}</button>
                   <button
                     className="btn-link"
                     type="button"
@@ -1022,7 +1176,7 @@ Create a geofence</h3>
                     onClick={() => handleDeleteLocation(item)}
                     disabled={deleteLocationMutation.isPending}
                   >
-                    {deleteLocationMutation.isPending ? 'Deleting...' : 'Delete'}
+                    {deleteLocationMutation.isPending ? text.deleting : text.delete}
                   </button>
                 </td>
               </tr>

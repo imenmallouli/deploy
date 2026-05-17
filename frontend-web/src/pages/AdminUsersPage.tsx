@@ -1,8 +1,45 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { deleteUserByAdmin, listUsers, resetUserPasswordByAdmin } from '../lib/api/endpoints';
+import { useI18n } from '../lib/i18n';
 
 export function AdminUsersPage() {
+  const { locale } = useI18n();
+  const text = locale === 'fr'
+    ? {
+        resetFailed: 'Reinitialisation impossible',
+        resetDone: 'Mot de passe reinitialise',
+        deleteFailed: 'Suppression impossible',
+        deleteDone: 'Utilisateur supprime',
+        title: 'Gestion des utilisateurs',
+        subtitle: 'Espace admin cache pour gerer les comptes et les roles.',
+        listTitle: 'Liste des utilisateurs',
+        accounts: 'comptes',
+        loading: 'Chargement...',
+        noUsers: 'Aucun utilisateur.',
+        phone: 'Telephone',
+        newPassword: 'Nouveau mot de passe',
+        resetPassword: 'Reinitialiser mot de passe',
+        delete: 'Supprimer',
+        confirmDelete: 'Supprimer',
+      }
+    : {
+        resetFailed: 'Password reset failed',
+        resetDone: 'Password reset successfully',
+        deleteFailed: 'Delete failed',
+        deleteDone: 'User deleted',
+        title: 'User Management',
+        subtitle: 'Hidden admin area to manage accounts and roles.',
+        listTitle: 'Users List',
+        accounts: 'accounts',
+        loading: 'Loading...',
+        noUsers: 'No users.',
+        phone: 'Phone',
+        newPassword: 'New password',
+        resetPassword: 'Reset password',
+        delete: 'Delete',
+        confirmDelete: 'Delete',
+      };
   const queryClient = useQueryClient();
   const usersQuery = useQuery({ queryKey: ['admin-users'], queryFn: listUsers });
   const [message, setMessage] = useState<string | null>(null);
@@ -15,44 +52,44 @@ export function AdminUsersPage() {
     mutationFn: ({ userId, newPassword }: { userId: number; newPassword: string }) => resetUserPasswordByAdmin(userId, { new_password: newPassword }),
     onSuccess: (result, variables) => {
       if (result.status !== 'success') {
-        setError(result.message ?? 'Reinitialisation impossible');
+        setError(result.message ?? text.resetFailed);
         return;
       }
-      setMessage('Mot de passe reinitialise');
+      setMessage(text.resetDone);
       setError(null);
       setPasswordDrafts((current) => ({ ...current, [variables.userId]: '' }));
     },
-    onError: () => setError('Reinitialisation impossible'),
+    onError: () => setError(text.resetFailed),
   });
 
   const deleteMutation = useMutation({
     mutationFn: ({ userId }: { userId: number }) => deleteUserByAdmin(userId),
     onSuccess: (result) => {
       if (result.status !== 'success') {
-        setError(result.message ?? 'Suppression impossible');
+        setError(result.message ?? text.deleteFailed);
         return;
       }
-      setMessage('Utilisateur supprime');
+      setMessage(text.deleteDone);
       setError(null);
       refreshUsers();
     },
-    onError: () => setError('Suppression impossible'),
+    onError: () => setError(text.deleteFailed),
   });
 
   const users = usersQuery.data?.items ?? [];
 
   return (
     <section>
-      <h2>Gestion des utilisateurs</h2>
-      <p className="subtitle">Espace admin cache pour gerer les comptes et les roles.</p>
+      <h2>{text.title}</h2>
+      <p className="subtitle">{text.subtitle}</p>
 
       <article className="panel">
         <div className="panel-title-row">
-          <h3>Liste des utilisateurs</h3>
-          <span className="muted-note">{usersQuery.data?.count ?? 0} comptes</span>
+          <h3>{text.listTitle}</h3>
+          <span className="muted-note">{usersQuery.data?.count ?? 0} {text.accounts}</span>
         </div>
-        {usersQuery.isLoading ? <p>Chargement...</p> : null}
-        {!usersQuery.isLoading && users.length === 0 ? <p>Aucun utilisateur.</p> : null}
+        {usersQuery.isLoading ? <p>{text.loading}</p> : null}
+        {!usersQuery.isLoading && users.length === 0 ? <p>{text.noUsers}</p> : null}
         {users.map((user) => {
           const passwordValue = passwordDrafts[user.user_id] ?? '';
           return (
@@ -64,11 +101,11 @@ export function AdminUsersPage() {
                 </div>
                 <span className="muted-note">{user.role}</span>
               </div>
-              <p>Telephone: {user.phone ?? '-'}</p>
+              <p>{text.phone}: {user.phone ?? '-'}</p>
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                 <input
                   type="password"
-                  placeholder="Nouveau mot de passe"
+                  placeholder={text.newPassword}
                   value={passwordValue}
                   onChange={(event) => setPasswordDrafts((current) => ({ ...current, [user.user_id]: event.target.value }))}
                 />
@@ -77,18 +114,18 @@ export function AdminUsersPage() {
                   disabled={!passwordValue}
                   onClick={() => resetPasswordMutation.mutate({ userId: user.user_id, newPassword: passwordValue })}
                 >
-                  Reinitialiser mot de passe
+                  {text.resetPassword}
                 </button>
                 <button
                   type="button"
                   onClick={() => {
-                    const shouldDelete = window.confirm(`Supprimer ${user.email} ?`);
+                    const shouldDelete = window.confirm(`${text.confirmDelete} ${user.email} ?`);
                     if (shouldDelete) {
                       deleteMutation.mutate({ userId: user.user_id });
                     }
                   }}
                 >
-                  Supprimer
+                  {text.delete}
                 </button>
               </div>
             </div>

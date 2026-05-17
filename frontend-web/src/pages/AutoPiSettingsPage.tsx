@@ -48,7 +48,10 @@ export function AutoPiSettingsPage() {
         keepPassword: 'Laisser vide pour garder le mot de passe actuel',
         password: 'Mot de passe',
         dongleId: 'ID reel du dongle',
-        mqttUser: 'MQTT username',
+        mqttHost: 'Hote MQTT',
+        mqttPort: 'Port MQTT',
+        mqttUser: 'Utilisateur MQTT',
+        mqttPassword: 'Mot de passe MQTT',
         optional: 'Optionnel',
         keepMqttPassword: 'Laisser vide pour garder le mot de passe MQTT actuel',
         verboseLogs: 'Activer les logs detailles du bridge',
@@ -78,7 +81,10 @@ export function AutoPiSettingsPage() {
         keepPassword: 'Leave empty to keep current password',
         password: 'Password',
         dongleId: 'Real dongle ID',
+        mqttHost: 'MQTT host',
+        mqttPort: 'MQTT port',
         mqttUser: 'MQTT username',
+        mqttPassword: 'MQTT password',
         optional: 'Optional',
         keepMqttPassword: 'Leave empty to keep current MQTT password',
         verboseLogs: 'Enable verbose bridge logs',
@@ -223,7 +229,7 @@ export function AutoPiSettingsPage() {
               </label>
 
               <label className="autopi-field">
-                <span>MQTT host</span>
+                <span>{text.mqttHost}</span>
                 <input
                   value={form.mqtt_host}
                   onChange={(event) => setForm((current) => ({ ...current, mqtt_host: event.target.value }))}
@@ -232,7 +238,7 @@ export function AutoPiSettingsPage() {
               </label>
 
               <label className="autopi-field">
-                <span>MQTT port</span>
+                <span>{text.mqttPort}</span>
                 <input
                   type="number"
                   value={form.mqtt_port}
@@ -263,7 +269,7 @@ export function AutoPiSettingsPage() {
               </label>
 
               <label className="autopi-field">
-                <span>MQTT password</span>
+                <span>{text.mqttPassword}</span>
                 <input
                   type="password"
                   value={form.mqtt_password}
@@ -292,20 +298,6 @@ export function AutoPiSettingsPage() {
           {message && <p className="autopi-message">{message}</p>}
         </article>
 
-        <article className="autopi-card autopi-help-card">
-          <h3>{text.howItWorks}</h3>
-          <ul className="autopi-help-list">
-            <li>{text.step1}</li>
-            <li>{text.step2}</li>
-            <li>{text.step3}</li>
-            <li>{text.step4}</li>
-          </ul>
-
-          <div className="autopi-note-box">
-            <strong>{text.important}</strong>
-            <p>{text.note}</p>
-          </div>
-        </article>
       </div>
     </section>
   );

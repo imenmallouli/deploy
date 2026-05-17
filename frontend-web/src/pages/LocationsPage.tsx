@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { listGeofenceVehiclePositions, listVehicles } from '../lib/api/endpoints';
 import type { Vehicle } from '../lib/api/types';
+import { useI18n } from '../lib/i18n';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -42,15 +43,20 @@ function formatDateTime(value?: string | null) {
   return `${String(parsed.getDate()).padStart(2, '0')}/${String(parsed.getMonth() + 1).padStart(2, '0')}/${parsed.getFullYear()} ${String(parsed.getHours()).padStart(2, '0')}:${String(parsed.getMinutes()).padStart(2, '0')}`;
 }
 
-function formatRelativeTime(value?: string | null) {
+function formatRelativeTime(value: string | null | undefined, locale: 'fr' | 'en') {
   if (!value) return '-';
   const parsed = Date.parse(value);
   if (Number.isNaN(parsed)) return value;
 
   const deltaSeconds = Math.max(0, Math.round((Date.now() - parsed) / 1000));
-  if (deltaSeconds < 60) return `il y a ${deltaSeconds} s`;
-  if (deltaSeconds < 3600) return `il y a ${Math.round(deltaSeconds / 60)} min`;
-  return `il y a ${Math.round(deltaSeconds / 3600)} h`;
+  if (locale === 'fr') {
+    if (deltaSeconds < 60) return `il y a ${deltaSeconds} s`;
+    if (deltaSeconds < 3600) return `il y a ${Math.round(deltaSeconds / 60)} min`;
+    return `il y a ${Math.round(deltaSeconds / 3600)} h`;
+  }
+  if (deltaSeconds < 60) return `${deltaSeconds}s ago`;
+  if (deltaSeconds < 3600) return `${Math.round(deltaSeconds / 60)} min ago`;
+  return `${Math.round(deltaSeconds / 3600)} h ago`;
 }
 
 function isFreshTimestamp(value?: string | null, thresholdMs = 5 * 60 * 1000) {
@@ -61,6 +67,70 @@ function isFreshTimestamp(value?: string | null, thresholdMs = 5 * 60 * 1000) {
 }
 
 export function LocationsPage() {
+  const { locale } = useI18n();
+  const text = locale === 'fr'
+    ? {
+        connected: 'Connecte',
+        offline: 'Hors ligne',
+        unavailable: 'indisponible',
+        noDongle: 'Aucun dongle',
+        speedUnit: 'km/h',
+        myPosition: 'Ma position',
+        donglePosition: 'Position dongle',
+        dongleLastPosition: 'Derniere position dongle (hors ligne)',
+        geolocUnsupported: 'La geolocalisation n\'est pas prise en charge par ce navigateur.',
+        geolocFailed: 'Impossible de recuperer la position actuelle.',
+        title: 'Positions',
+        mapTitle: 'Carte des positions',
+        locating: 'Localisation...',
+        useMyLocation: 'Utiliser ma position',
+        refresh: 'Actualiser',
+        noDongleDetected: 'Aucun dongle detecte',
+        dongleConnected: 'Dongle connecte',
+        dongleDisconnected: 'Dongle non connecte',
+        vehicle: 'Vehicule',
+        plate: 'Plaque',
+        position: 'Position',
+        sync: 'Sync',
+        lastPosition: 'Derniere position',
+        lastSync: 'Derniere synchro',
+        timestamp: 'Horodatage',
+        dongle: 'Dongle',
+        locationAccuracy: 'Precision de localisation',
+        limitedAccuracy: '(WiFi/IP — precision limitee sur PC)',
+        goodAccuracy: '(bonne)',
+      }
+    : {
+        connected: 'Connected',
+        offline: 'Offline',
+        unavailable: 'unavailable',
+        noDongle: 'No dongle',
+        speedUnit: 'km/h',
+        myPosition: 'My location',
+        donglePosition: 'Dongle position',
+        dongleLastPosition: 'Last dongle position (offline)',
+        geolocUnsupported: 'Geolocation is not supported by this browser.',
+        geolocFailed: 'Unable to fetch current location.',
+        title: 'Locations',
+        mapTitle: 'Locations map',
+        locating: 'Locating...',
+        useMyLocation: 'Use my location',
+        refresh: 'Refresh',
+        noDongleDetected: 'No dongle detected',
+        dongleConnected: 'Dongle connected',
+        dongleDisconnected: 'Dongle disconnected',
+        vehicle: 'Vehicle',
+        plate: 'Plate',
+        position: 'Position',
+        sync: 'Sync',
+        lastPosition: 'Last position',
+        lastSync: 'Last sync',
+        timestamp: 'Timestamp',
+        dongle: 'Dongle',
+        locationAccuracy: 'Location accuracy',
+        limitedAccuracy: '(WiFi/IP - limited accuracy on PC)',
+        goodAccuracy: '(good)',
+      };
   const queryClient = useQueryClient();
   const mapRef = useRef<L.Map | null>(null);
   const mapNodeRef = useRef<HTMLDivElement | null>(null);
@@ -104,17 +174,17 @@ export function LocationsPage() {
     return dongleRows.find((row) => row.position) ?? dongleRows[0];
   }, [dongleRows]);
 
-  const selectedDongleStatusLabel = selectedDongle?.isConnected ? 'Connecte' : 'Hors ligne';
-  const selectedDongleSyncLabel = formatRelativeTime(selectedDongle?.lastSeen);
+  const selectedDongleStatusLabel = selectedDongle?.isConnected ? text.connected : text.offline;
+  const selectedDongleSyncLabel = formatRelativeTime(selectedDongle?.lastSeen, locale);
   const selectedDonglePositionLabel = selectedDongle?.position
     ? `${selectedDongle.position.latitude.toFixed(5)}, ${selectedDongle.position.longitude.toFixed(5)}`
-    : 'indisponible';
+    : text.unavailable;
   const selectedDongleVehicleLabel = selectedDongle
     ? `${selectedDongle.vehicle.make} ${selectedDongle.vehicle.model}`
-    : 'Aucun dongle';
+    : text.noDongle;
   const selectedDonglePlateLabel = selectedDongle?.vehicle.license_plate ?? '-';
   const selectedDongleSpeedLabel = selectedDongle?.position?.speed != null
-    ? `${Math.round(selectedDongle.position.speed)} km/h`
+    ? `${Math.round(selectedDongle.position.speed)} ${text.speedUnit}`
     : '-';
 
   useEffect(() => {
@@ -172,7 +242,7 @@ export function LocationsPage() {
           fillColor: '#3b82f6',
           fillOpacity: 0.95,
           weight: 2,
-        }).addTo(map).bindPopup('Ma position');
+        }).addTo(map).bindPopup(text.myPosition);
       } else {
         userMarkerRef.current.setLatLng([myPosition.latitude, myPosition.longitude]);
       }
@@ -185,7 +255,7 @@ export function LocationsPage() {
       const isOnline = Boolean(selectedDongle?.isConnected);
       const strokeColor = '#15803d';
       const fillColor = '#22c55e';
-      const popupText = isOnline ? 'Position dongle' : 'Derniere position dongle (hors ligne)';
+      const popupText = isOnline ? text.donglePosition : text.dongleLastPosition;
       if (!dongleMarkerRef.current) {
         dongleMarkerRef.current = L.circleMarker([dLat, dLng], {
           radius: 7,
@@ -222,7 +292,7 @@ export function LocationsPage() {
 
   const handleUseMyLocation = () => {
     if (!navigator.geolocation) {
-      setLocationError('Geolocation is not supported by this browser.');
+      setLocationError(text.geolocUnsupported);
       return;
     }
 
@@ -237,7 +307,7 @@ export function LocationsPage() {
         setIsLocating(false);
       },
       (error) => {
-        setLocationError(error.message || 'Unable to fetch current location.');
+        setLocationError(error.message || text.geolocFailed);
         setIsLocating(false);
       },
       {
@@ -255,50 +325,50 @@ export function LocationsPage() {
 
   return (
     <section>
-      <h2>Locations</h2>
+      <h2>{text.title}</h2>
 
       <div className="panel map-panel locations-map-panel">
         <div className="panel-title-row">
-          <h3>Locations map</h3>
+          <h3>{text.mapTitle}</h3>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn-link" type="button" onClick={handleUseMyLocation} disabled={isLocating}>
-              {isLocating ? 'Locating...' : 'Use my location'}
+              {isLocating ? text.locating : text.useMyLocation}
             </button>
-            <button className="btn-link" type="button" onClick={handleRefresh}>Refresh</button>
+            <button className="btn-link" type="button" onClick={handleRefresh}>{text.refresh}</button>
           </div>
         </div>
         <div className="locations-map-shell">
-          <div title="Locations map" className="fleet-map locations-hero-map" ref={mapNodeRef} />
+          <div title={text.mapTitle} className="fleet-map locations-hero-map" ref={mapNodeRef} />
           <div className="locations-overlay-card locations-overlay-bottom-left locations-overlay-main">
             {!selectedDongle ? (
               <div>
-                <strong>Aucun dongle detecte</strong>
+                <strong>{text.noDongleDetected}</strong>
               </div>
             ) : selectedDongle.isConnected ? (
               <div>
-                <div className="locations-status locations-status-online">Dongle connecte</div>
+                <div className="locations-status locations-status-online">{text.dongleConnected}</div>
                 <div className="locations-status-grid">
-                  <span>Vehicule</span>
+                  <span>{text.vehicle}</span>
                   <strong>{selectedDongleVehicleLabel}</strong>
-                  <span>Plaque</span>
+                  <span>{text.plate}</span>
                   <strong>{selectedDonglePlateLabel}</strong>
-                  <span>Position</span>
+                  <span>{text.position}</span>
                   <strong>{selectedDonglePositionLabel}</strong>
-                  <span>Sync</span>
+                  <span>{text.sync}</span>
                   <strong>{selectedDongleSyncLabel}</strong>
                 </div>
               </div>
             ) : (
               <div>
-                <div className="locations-status locations-status-offline">Dongle non connecte</div>
+                <div className="locations-status locations-status-offline">{text.dongleDisconnected}</div>
                 <div className="locations-status-grid">
-                  <span>Vehicule</span>
+                  <span>{text.vehicle}</span>
                   <strong>{selectedDongleVehicleLabel}</strong>
-                  <span>Derniere position</span>
+                  <span>{text.lastPosition}</span>
                   <strong>{selectedDonglePositionLabel}</strong>
-                  <span>Derniere synchro</span>
+                  <span>{text.lastSync}</span>
                   <strong>{selectedDongleSyncLabel}</strong>
-                  <span>Horodatage</span>
+                  <span>{text.timestamp}</span>
                   <strong>{formatDateTime(selectedDongle.lastSeen)}</strong>
                 </div>
               </div>
@@ -308,11 +378,11 @@ export function LocationsPage() {
           <div className="locations-overlay-card locations-overlay-bottom-right locations-overlay-legend">
             <div className="locations-legend-item">
               <span className="locations-legend-dot locations-legend-dot-user" />
-              <span>Ma position</span>
+              <span>{text.myPosition}</span>
             </div>
             <div className="locations-legend-item">
               <span className="locations-legend-dot locations-legend-dot-dongle" />
-              <span>Dongle</span>
+              <span>{text.dongle}</span>
             </div>
           </div>
         </div>
@@ -320,7 +390,7 @@ export function LocationsPage() {
 
       {locationError && <p className="form-error">{locationError}</p>}
       {locationAccuracy !== null && (
-        <p className="muted-note">📍 Location accuracy: ~{locationAccuracy}m {locationAccuracy > 100 ? '(WiFi/IP — limited accuracy on PC)' : '(good)'}</p>
+        <p className="muted-note">📍 {text.locationAccuracy}: ~{locationAccuracy}m {locationAccuracy > 100 ? text.limitedAccuracy : text.goodAccuracy}</p>
       )}
     </section>
   );

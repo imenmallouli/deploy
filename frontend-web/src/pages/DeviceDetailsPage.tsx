@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { listDevices } from '../lib/api/endpoints';
+import { useI18n } from '../lib/i18n';
 
 type DeviceItem = {
   id: string;
@@ -30,20 +31,40 @@ const loggerRows = [
   ['ODOMETER', 'Odometer'],
 ] as const;
 
-const tabs = [
-  { key: 'Overview', label: 'Overview' },
-  { key: 'Key State', label: 'Dashboard' },
-  { key: 'Vehicle', label: 'Jobs' },
-  { key: 'CAN Bus', label: 'Custom Code' },
-  { key: 'SIM', label: 'Geofences' },
-  { key: 'Services', label: 'Services' },
-  { key: 'Events', label: 'Events' },
-  { key: 'CAN Analyzer', label: 'CAN Analyzer' },
-  { key: 'Loggers', label: 'Loggers' },
-  { key: 'Change History', label: 'Change History' },
-  { key: 'Open Alerts', label: '+ 5 more' },
-] as const;
-type DeviceTab = (typeof tabs)[number]['key'];
+const baseTabs = ['Overview', 'Key State', 'Vehicle', 'CAN Bus', 'SIM', 'Services', 'Events', 'CAN Analyzer', 'Loggers', 'Change History', 'Open Alerts'] as const;
+type DeviceTab = (typeof baseTabs)[number];
+
+function getTabs(locale: 'fr' | 'en') {
+  if (locale === 'fr') {
+    return [
+      { key: 'Overview' as const, label: 'Apercu' },
+      { key: 'Key State' as const, label: 'Tableau de bord' },
+      { key: 'Vehicle' as const, label: 'Taches' },
+      { key: 'CAN Bus' as const, label: 'Code personnalise' },
+      { key: 'SIM' as const, label: 'Geofences' },
+      { key: 'Services' as const, label: 'Services' },
+      { key: 'Events' as const, label: 'Evenements' },
+      { key: 'CAN Analyzer' as const, label: 'Analyseur CAN' },
+      { key: 'Loggers' as const, label: 'Loggers' },
+      { key: 'Change History' as const, label: 'Historique' },
+      { key: 'Open Alerts' as const, label: '+ 5 de plus' },
+    ];
+  }
+
+  return [
+    { key: 'Overview' as const, label: 'Overview' },
+    { key: 'Key State' as const, label: 'Dashboard' },
+    { key: 'Vehicle' as const, label: 'Jobs' },
+    { key: 'CAN Bus' as const, label: 'Custom Code' },
+    { key: 'SIM' as const, label: 'Geofences' },
+    { key: 'Services' as const, label: 'Services' },
+    { key: 'Events' as const, label: 'Events' },
+    { key: 'CAN Analyzer' as const, label: 'CAN Analyzer' },
+    { key: 'Loggers' as const, label: 'Loggers' },
+    { key: 'Change History' as const, label: 'Change History' },
+    { key: 'Open Alerts' as const, label: '+ 5 more' },
+  ];
+}
 
 function getStatusClass(status?: string) {
   const normalized = String(status ?? 'offline').toLowerCase();
@@ -57,8 +78,29 @@ function readLastCommunication(device?: DeviceItem) {
 }
 
 export function DeviceDetailsPage() {
+  const { locale } = useI18n();
+  const text = locale === 'fr'
+    ? {
+        pageTitle: 'Appareil',
+        backToDevices: 'Retour aux appareils',
+        loadingDetails: 'Chargement des details de l\'appareil...',
+        notFound: 'Appareil introuvable.',
+        name: 'Nom',
+        status: 'Statut',
+        lastCommunication: 'Derniere communication',
+      }
+    : {
+        pageTitle: 'Device',
+        backToDevices: 'Back to devices',
+        loadingDetails: 'Loading device details...',
+        notFound: 'Device not found.',
+        name: 'Name',
+        status: 'Status',
+        lastCommunication: 'Last communication',
+      };
   const { deviceId = '' } = useParams();
   const [activeTab, setActiveTab] = useState<DeviceTab>('Overview');
+  const tabs = getTabs(locale);
   const detailsQuery = useQuery({ queryKey: ['device-details', deviceId], queryFn: () => listDevices(deviceId || undefined) });
 
   const items = detailsQuery.data?.items as DeviceItem[] | undefined;
@@ -67,15 +109,15 @@ export function DeviceDetailsPage() {
   return (
     <section>
       <div className="panel-title-row" style={{ marginBottom: 12 }}>
-        <h2>Device {deviceId}</h2>
-        <Link className="btn-link" to="/devices/list">Back to devices</Link>
+        <h2>{text.pageTitle} {deviceId}</h2>
+        <Link className="btn-link" to="/devices/list">{text.backToDevices}</Link>
       </div>
 
-      {detailsQuery.isLoading && <p className="muted-note">Loading device details...</p>}
+      {detailsQuery.isLoading && <p className="muted-note">{text.loadingDetails}</p>}
 
       {!detailsQuery.isLoading && !device && (
         <div className="panel table-shell">
-          <p className="muted-note">Device not found.</p>
+          <p className="muted-note">{text.notFound}</p>
         </div>
       )}
 
@@ -84,15 +126,15 @@ export function DeviceDetailsPage() {
           <div className="panel table-shell">
             <div className="device-details-head">
               <div>
-                <p className="muted-note" style={{ margin: 0 }}>Name</p>
+                <p className="muted-note" style={{ margin: 0 }}>{text.name}</p>
                 <h3 style={{ margin: '4px 0 0' }}>{device.device_id}</h3>
               </div>
               <div>
-                <p className="muted-note" style={{ margin: 0 }}>Status</p>
+                <p className="muted-note" style={{ margin: 0 }}>{text.status}</p>
                 <span className={`status-pill ${getStatusClass(device.status)}`}>{String(device.status ?? 'offline')}</span>
               </div>
               <div>
-                <p className="muted-note" style={{ margin: 0 }}>Last communication</p>
+                <p className="muted-note" style={{ margin: 0 }}>{text.lastCommunication}</p>
                 <p style={{ margin: '4px 0 0' }}>{readLastCommunication(device)}</p>
               </div>
             </div>
