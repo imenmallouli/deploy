@@ -248,3 +248,24 @@ class UserService:
             "last_name": user.last_name,
             "phone": user.phone
         }
+
+    @staticmethod
+    def impersonate_user_by_admin(db: Session, target_user_id: int, admin_user_id: int | None = None):
+        target_user = db.query(User).filter(User.id == target_user_id).first()
+        if not target_user:
+            return {"status": "error", "message": "Utilisateur non trouve"}
+
+        normalized_role = UserService.normalize_role(target_user.role)
+
+        return {
+            "status": "success",
+            "message": "Impersonation activee",
+            "user_id": target_user.id,
+            "email": target_user.email,
+            "role": normalized_role,
+            "first_name": target_user.first_name,
+            "access_token": UserService.create_access_token(target_user.email, target_user.id, normalized_role),
+            "token_type": "bearer",
+            "expires_in_minutes": JWT_EXPIRE_MINUTES,
+            "impersonated_by": admin_user_id,
+        }

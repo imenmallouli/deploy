@@ -149,6 +149,20 @@ def delete_user_by_admin(
     )
 
 
+@router.post("/impersonate/{user_id}")
+def impersonate_user_by_admin(
+    user_id: int,
+    admin_payload: dict = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    requester_user_id = admin_payload.get("user_id")
+    return UserService.impersonate_user_by_admin(
+        db=db,
+        target_user_id=user_id,
+        admin_user_id=requester_user_id,
+    )
+
+
 @router.post("/forgot-password")
 def forgot_password(
     payload: UserForgotPassword,
