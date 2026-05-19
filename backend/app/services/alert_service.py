@@ -11,6 +11,32 @@ from app.models.vehicle import Vehicle
 
 class AlertService:
     @staticmethod
+    def _get_accessible_alert(db: Session, role: str, user_id: int, alert_id: int):
+        role = (role or "user").strip().lower()
+
+        if role not in {"admin", "manager", "user", "driver"}:
+            return None, {"status": "error", "message": "Accès refusé"}
+
+        alert = db.query(Alert).filter(Alert.id == alert_id).first()
+        if not alert:
+            return None, {"status": "error", "message": "Alerte non trouvée"}
+
+        if role == "manager":
+            vehicle = db.query(Vehicle).filter(Vehicle.id == alert.vehicle_id).first()
+            if not vehicle:
+                return None, {"status": "error", "message": "Véhicule non trouvé"}
+            fleet = db.query(Fleet).filter(Fleet.id == vehicle.fleet_id).first()
+            if not fleet or fleet.manager_id != user_id:
+                return None, {"status": "error", "message": "Accès refusé"}
+
+        if role in {"user", "driver"}:
+            vehicle = db.query(Vehicle).filter(Vehicle.id == alert.vehicle_id).first()
+            if not vehicle or vehicle.driver_id != user_id:
+                return None, {"status": "error", "message": "Accès refusé"}
+
+        return alert, None
+
+    @staticmethod
     def create_alert(
         db: Session,
         role: str,
@@ -99,25 +125,16 @@ class AlertService:
     def ack_alert(db: Session, role: str, user_id: int, alert_id: int, note: str | None = None):
         role = (role or "user").strip().lower()
 
-        if role not in {"admin", "manager", "user", "driver"}:
-            return {"status": "error", "message": "Accès refusé"}
+        alert, error = AlertService._get_accessible_alert(db, role, user_id, alert_id)
+        if error:
+            return error
 
-        alert = db.query(Alert).filter(Alert.id == alert_id).first()
-        if not alert:
-            return {"status": "error", "message": "Alerte non trouvée"}
-
-        if role == "manager":
-            vehicle = db.query(Vehicle).filter(Vehicle.id == alert.vehicle_id).first()
-            if not vehicle:
-                return {"status": "error", "message": "Véhicule non trouvé"}
-            fleet = db.query(Fleet).filter(Fleet.id == vehicle.fleet_id).first()
-            if not fleet or fleet.manager_id != user_id:
-                return {"status": "error", "message": "Accès refusé"}
-
-        if role in {"user", "driver"}:
-            vehicle = db.query(Vehicle).filter(Vehicle.id == alert.vehicle_id).first()
-            if not vehicle or vehicle.driver_id != user_id:
-                return {"status": "error", "message": "Accès refusé"}
+        if alert.status == "resolved":
+            return {
+                "status": "success",
+                "message": "Alerte déjà résolue",
+                "alert": AlertService._to_dict(alert),
+            }
 
         alert.status = "acknowledged"
         alert.acknowledged_by = user_id
@@ -131,9 +148,63 @@ class AlertService:
             "status": "success",
             "id": alert.id,
             "alert_id": alert.id,
+            "message": "Alerte marquée comme lue",
+            "alert": AlertService._to_dict(alert),
+        }
+
+    @staticmethod
+    def resolve_alert(db: Session, role: str, user_id: int, alert_id: int, note: str | None = None):
+        role = (role or "user").strip().lower()
+
+        alert, error = AlertService._get_accessible_alert(db, role, user_id, alert_id)
+        if error:
+            return error
+
+        if alert.status == "resolved":
+            return {
+                "status": "success",
+                "message": "Alerte déjà résolue",
+                "alert": AlertService._to_dict(alert),
+            }
+
+        if alert.acknowledged_at is None:
+            alert.acknowledged_at = datetime.utcnow()
+        if alert.acknowledged_by is None:
+            alert.acknowledged_by = user_id
+
+        alert.status = "resolved"
+        alert.note = note
+
+        db.commit()
+        db.refresh(alert)
+
+        return {
+            "status": "success",
+            "id": alert.id,
+            "alert_id": alert.id,
+            "message": "Alerte résolue avec succès",
+            "status_value": alert.status,
             "acknowledged_at": alert.acknowledged_at.isoformat() if alert.acknowledged_at else None,
             "acknowledged_by": alert.acknowledged_by,
             "note": alert.note,
+            "alert": AlertService._to_dict(alert),
+        }
+
+    @staticmethod
+    def delete_alert(db: Session, role: str, user_id: int, alert_id: int):
+        role = (role or "user").strip().lower()
+
+        alert, error = AlertService._get_accessible_alert(db, role, user_id, alert_id)
+        if error:
+            return error
+
+        db.delete(alert)
+        db.commit()
+
+        return {
+            "status": "success",
+            "alert_id": alert_id,
+            "message": "Alerte supprimée avec succès",
         }
 
     @staticmethod

@@ -1,7 +1,13 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
-import { ackAlert, getAiRiskScore, listAlerts } from '../lib/api/endpoints';
+import { ackAlert, deleteAlert, getAiRiskScore, listAlerts, listVehicles, resolveAlert } from '../lib/api/endpoints';
 import { useI18n } from '../lib/i18n';
+
+type SearchAliasRule = {
+  key: string;
+  synonyms: string[];
+  signals: string[];
+};
 
 function getErrorMessage(error: unknown, fallback = 'Request failed.') {
   const data = (error as { response?: { data?: { message?: string; detail?: string } } })?.response?.data;
@@ -40,6 +46,71 @@ function formatRelative(value: string | null | undefined, t: (key: string) => st
   if (hours < 24) return t('time.hoursAgo').replace('{value}', String(hours));
   const days = Math.floor(hours / 24);
   return t('time.daysAgo').replace('{value}', String(days));
+}
+
+function normalizeSearchText(value: unknown) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function matchesNormalizedQuery(source: string, query: string) {
+  if (!query) return true;
+  const words = normalizeSearchText(source)
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+  return words.some((word) => word.startsWith(query));
+}
+
+const SEARCH_ALIAS_RULES: SearchAliasRule[] = [
+  {
+    key: 'temperature',
+    synonyms: ['temperature', 'temp', 'thermique', 'thermal', 'surchauffe', 'refroidissement', 'cooling'],
+    signals: ['temperature', 'temp', 'thermal', 'thermique', 'surchauffe', 'cooling', 'refroid', 'engine over-temperature', 'device_cpu_temp', 'ambient_air_temp', 'intake_temp', 'engine_temp'],
+  },
+  {
+    key: 'battery',
+    synonyms: ['battery', 'batterie', 'voltage', 'tension', 'charge batterie'],
+    signals: ['battery', 'batterie', 'voltage', 'tension', 'nominal_voltage', 'battery_voltage', 'battery_charge_level', 'system voltage low'],
+  },
+];
+
+function buildAliasTokens(raw: string) {
+  const text = normalizeSearchText(raw);
+  if (!text) return '';
+
+  const aliases = SEARCH_ALIAS_RULES
+    .filter((rule) => rule.signals.some((signal) => text.includes(normalizeSearchText(signal))))
+    .flatMap((rule) => [rule.key, ...rule.synonyms]);
+
+  if (!aliases.length) return '';
+  return normalizeSearchText(aliases.join(' '));
+}
+
+function resolveAliasKeys(raw: string) {
+  const text = normalizeSearchText(raw);
+  if (!text) return [] as string[];
+
+  return SEARCH_ALIAS_RULES
+    .filter((rule) => rule.signals.some((signal) => text.includes(normalizeSearchText(signal))))
+    .map((rule) => rule.key);
+}
+
+function resolveQueryAliasKey(query: string) {
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) return null;
+
+  const matchedRule = SEARCH_ALIAS_RULES.find((rule) =>
+    rule.synonyms.some((synonym) => {
+      const normalizedSynonym = normalizeSearchText(synonym);
+      return normalizedSynonym.startsWith(normalizedQuery) || normalizedQuery.startsWith(normalizedSynonym);
+    }),
+  );
+
+  return matchedRule?.key ?? null;
 }
 
 function localizeAlertType(rawType: string | undefined, locale: 'fr' | 'en') {
@@ -81,7 +152,26 @@ function localizeAlertMessage(rawMessage: string | undefined, locale: 'fr' | 'en
     'High CPU temperature detected': 'Temperature CPU elevee detectee',
   };
 
-  return translations[message] ?? message;
+  const normalizedTranslations = Object.entries(translations).reduce<Record<string, string>>((acc, [key, value]) => {
+    acc[key.trim().toLowerCase()] = value;
+    return acc;
+  }, {});
+
+  const translateCore = (input: string) => {
+    const clean = input.replace(/\s+/g, ' ').trim();
+    const lower = clean.toLowerCase();
+    return normalizedTranslations[lower] ?? clean;
+  };
+
+  // Handles messages like "P0087: Fuel rail/system pressure too low".
+  const dtcPrefixed = message.match(/^([A-Za-z]\d{4})\s*:\s*(.+)$/);
+  if (dtcPrefixed) {
+    const code = dtcPrefixed[1].toUpperCase();
+    const translatedCore = translateCore(dtcPrefixed[2]);
+    return `${code}: ${translatedCore}`;
+  }
+
+  return translateCore(message);
 }
 
 function formatAlertTitle(
@@ -93,27 +183,77 @@ function formatAlertTitle(
   return `${severityBadge(severity, t).toUpperCase()} - ${localizeAlertType(type, locale)}`;
 }
 
+function alertStateLabel(state: string | null | undefined, t: (key: string) => string) {
+  const normalized = String(state ?? 'pending').trim().toLowerCase();
+  if (normalized === 'resolved') return t('alerts.status.resolved');
+  if (normalized === 'acknowledged') return t('alerts.status.acknowledged');
+  return t('alerts.status.pending');
+}
+
 export function AlertsPage() {
   const queryClient = useQueryClient();
   const { t, locale } = useI18n();
-  const [searchInput, setSearchInput] = useState('');
-  const [search, setSearch] = useState('');
+  const [selectedVehicleFilter, setSelectedVehicleFilter] = useState('all');
   const [activeTab, setActiveTab] = useState<'all' | 'critical' | 'warning' | 'resolved'>('all');
-  const [rules, setRules] = useState({
-    engineTemp: true,
-    dtcDetected: true,
-    lowFuel: true,
-    revisionReminder: false,
-  });
   const [actionMessage, setActionMessage] = useState('');
   const [actionError, setActionError] = useState('');
 
-  const alertsQuery = useQuery({ queryKey: ['alerts'], queryFn: listAlerts });
+  const syncAlertInCache = (updatedAlert: { id: number; [key: string]: unknown }) => {
+    queryClient.setQueryData(['alerts'], (current: { alerts?: Array<Record<string, unknown>> } | undefined) => {
+      if (!current?.alerts) return current;
+      return {
+        ...current,
+        alerts: current.alerts.map((item) => (item.id === updatedAlert.id ? { ...item, ...updatedAlert } : item)),
+      };
+    });
+  };
+
+  const removeAlertFromCache = (alertId: number) => {
+    queryClient.setQueryData(['alerts'], (current: { alerts?: Array<Record<string, unknown>> } | undefined) => {
+      if (!current?.alerts) return current;
+      return {
+        ...current,
+        alerts: current.alerts.filter((item) => item.id !== alertId),
+      };
+    });
+  };
+
+  const alertsQuery = useQuery({ queryKey: ['alerts'], queryFn: listAlerts, refetchInterval: 10000 });
+  const vehiclesQuery = useQuery({ queryKey: ['alerts-vehicle-filter'], queryFn: listVehicles, staleTime: 60_000 });
   const ackMutation = useMutation({
     mutationFn: ackAlert,
-    onSuccess: () => {
+    onSuccess: (response: { alert?: { id: number; [key: string]: unknown } }) => {
       setActionError('');
       setActionMessage(t('alerts.message.acknowledged'));
+      if (response?.alert) syncAlertInCache(response.alert);
+      queryClient.invalidateQueries({ queryKey: ['alerts'] });
+    },
+    onError: (error) => {
+      setActionMessage('');
+      setActionError(getErrorMessage(error, t('alerts.requestFailed')));
+    },
+  });
+
+  const resolveMutation = useMutation({
+    mutationFn: resolveAlert,
+    onSuccess: (response: { alert?: { id: number; [key: string]: unknown } }) => {
+      setActionError('');
+      setActionMessage(t('alerts.message.resolved'));
+      if (response?.alert) syncAlertInCache(response.alert);
+      queryClient.invalidateQueries({ queryKey: ['alerts'] });
+    },
+    onError: (error) => {
+      setActionMessage('');
+      setActionError(getErrorMessage(error, t('alerts.requestFailed')));
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteAlert,
+    onSuccess: (response: { alert_id?: number }) => {
+      setActionError('');
+      setActionMessage(t('alerts.message.deleted'));
+      if (typeof response?.alert_id === 'number') removeAlertFromCache(response.alert_id);
       queryClient.invalidateQueries({ queryKey: ['alerts'] });
     },
     onError: (error) => {
@@ -130,13 +270,38 @@ export function AlertsPage() {
         .filter((id): id is number => Number.isFinite(id)),
     ),
   );
+  const allVehicleOptions = (vehiclesQuery.data?.items ?? [])
+    .filter((vehicle) => Number.isFinite(vehicle.id))
+    .sort((a, b) => a.id - b.id);
+  const vehicleFilterOptions = allVehicleOptions.length
+    ? allVehicleOptions.map((vehicle) => ({
+      id: vehicle.id,
+      label: vehicle.license_plate ? vehicle.license_plate : `${t('alerts.item.vehicle')} ${vehicle.id}`,
+    }))
+    : [...vehicleIds].sort((a, b) => a - b).map((id) => ({ id, label: `${t('alerts.item.vehicle')} ${id}` }));
+
+  const vehicleSearchIndex = useMemo(() => {
+    const index = new Map<number, string>();
+    allVehicleOptions.forEach((vehicle) => {
+      const blob = [
+        vehicle.license_plate,
+        vehicle.make,
+        vehicle.model,
+        String(vehicle.year ?? ''),
+        String(vehicle.id),
+      ].join(' ');
+      index.set(vehicle.id, normalizeSearchText(blob));
+    });
+    return index;
+  }, [allVehicleOptions]);
 
   const aiRiskQueries = useQueries({
     queries: vehicleIds.map((vehicleId) => ({
       queryKey: ['ai-risk-score', vehicleId],
       queryFn: () => getAiRiskScore(vehicleId),
       retry: false,
-      staleTime: 60_000,
+      staleTime: 10_000,
+      refetchInterval: 15000,
     })),
   });
 
@@ -184,26 +349,15 @@ export function AlertsPage() {
   const alerts = allAlerts.filter((item) => {
     const stateValue = (item.status ?? 'pending').toLowerCase().trim();
     const severityValue = normalizeSeverity(item.severity);
-    const typeValue = (item.type ?? '').toLowerCase();
-    const vehicleValue = String(item.vehicle_id ?? '');
-    const titleValue = (item.title ?? '').toLowerCase();
-    const messageValue = (item.message ?? '').toLowerCase();
-    const query = search.trim().toLowerCase();
 
     const tabMatch = activeTab === 'all'
       || (activeTab === 'critical' && severityValue === 'critical')
       || (activeTab === 'warning' && severityValue === 'warning')
       || (activeTab === 'resolved' && stateValue === 'resolved');
 
-    const queryMatch = !query
-      || typeValue.includes(query)
-      || titleValue.includes(query)
-      || messageValue.includes(query)
-      || vehicleValue.includes(query)
-      || String(severityValue).includes(query)
-      || stateValue.includes(query);
+    const vehicleMatch = selectedVehicleFilter === 'all' || String(item.vehicle_id) === selectedVehicleFilter;
 
-    return tabMatch && queryMatch;
+    return tabMatch && vehicleMatch;
   });
 
   const criticalVisible = alerts.filter((item) => normalizeSeverity(item.severity) === 'critical').length;
@@ -269,10 +423,6 @@ export function AlertsPage() {
 
   const maxStackValue = Math.max(1, ...chartData.map((item) => item.critical + item.warning + item.info));
 
-  const handleSearch = () => {
-    setSearch(searchInput.trim());
-  };
-
   const handleRefreshAi = () => {
     setActionError('');
     setActionMessage(t('alerts.message.refreshing'));
@@ -283,13 +433,6 @@ export function AlertsPage() {
       setActionMessage('');
       setActionError(getErrorMessage(error, t('alerts.requestFailed')));
     });
-  };
-
-  const handleSearchKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      handleSearch();
-    }
   };
 
   const acknowledgeVisible = async () => {
@@ -309,14 +452,36 @@ export function AlertsPage() {
     }
   };
 
-  const toggleRule = (key: keyof typeof rules) => {
-    setRules((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
   const rowAck = (id: number) => {
     setActionError('');
     setActionMessage('');
     ackMutation.mutate({ alert_id: id });
+  };
+
+  const rowResolve = (id: number, currentNote?: string | null) => {
+    const defaultValue = currentNote ?? '';
+    const note = window.prompt(t('alerts.resolvePrompt'), defaultValue);
+    if (note === null) return;
+
+    const trimmedNote = note.trim();
+    if (!trimmedNote) {
+      setActionMessage('');
+      setActionError(t('alerts.resolveNoteRequired'));
+      return;
+    }
+
+    setActionError('');
+    setActionMessage('');
+    resolveMutation.mutate({ alert_id: id, note: trimmedNote });
+  };
+
+  const rowDelete = (id: number) => {
+    if (deleteMutation.isPending) return;
+    const confirmed = window.confirm(t('alerts.confirmDelete'));
+    if (!confirmed) return;
+    setActionError('');
+    setActionMessage('');
+    deleteMutation.mutate(id);
   };
 
   return (
@@ -329,16 +494,6 @@ export function AlertsPage() {
         <div className="ai-alerts-header-actions">
           <span className="ai-alerts-status-pill">{t('alerts.activeMonitoring')}</span>
           <button type="button" className="ai-alerts-btn" onClick={acknowledgeVisible} disabled={ackMutation.isPending}>{t('alerts.markAllRead')}</button>
-          <button
-            type="button"
-            className="ai-alerts-btn"
-            onClick={() => {
-              const node = document.getElementById('ai-rules-panel');
-              if (node) node.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }}
-          >
-            {t('alerts.configureRules')}
-          </button>
         </div>
       </div>
 
@@ -375,14 +530,6 @@ export function AlertsPage() {
         <button type="button" className={`ai-tab-btn ${activeTab === 'critical' ? 'active' : ''}`} onClick={() => setActiveTab('critical')}>{t('alerts.tabs.critical')} ({criticalVisible})</button>
         <button type="button" className={`ai-tab-btn ${activeTab === 'warning' ? 'active' : ''}`} onClick={() => setActiveTab('warning')}>{t('alerts.tabs.warning')} ({warningVisible})</button>
         <button type="button" className={`ai-tab-btn ${activeTab === 'resolved' ? 'active' : ''}`} onClick={() => setActiveTab('resolved')}>{t('alerts.tabs.resolved')} ({resolvedVisible})</button>
-        <input
-          className="ai-alerts-search"
-          placeholder={t('alerts.searchPlaceholder')}
-          value={searchInput}
-          onChange={(event) => setSearchInput(event.target.value)}
-          onKeyDown={handleSearchKeyDown}
-        />
-        <button type="button" className="ai-search-btn" onClick={handleSearch}>{t('alerts.searchButton')}</button>
       </div>
 
       {actionError && <p className="form-error">{actionError}</p>}
@@ -395,7 +542,19 @@ export function AlertsPage() {
               <h3>{t('alerts.feed.title')}</h3>
               <p>{t('alerts.feed.sortedBy')} · {alerts.length} {t('alerts.feed.count')}</p>
             </div>
-            <button type="button" className="ai-alerts-btn">{t('alerts.feed.export')}</button>
+            <select
+              className="ai-alerts-vehicle-select"
+              value={selectedVehicleFilter}
+              onChange={(event) => setSelectedVehicleFilter(event.target.value)}
+              aria-label={t('alerts.feed.vehicleFilterLabel')}
+            >
+              <option value="all">{t('alerts.feed.vehicleAll')}</option>
+              {vehicleFilterOptions.map((vehicle) => (
+                <option key={vehicle.id} value={String(vehicle.id)}>
+                  {vehicle.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="ai-alerts-feed-list">
@@ -406,23 +565,37 @@ export function AlertsPage() {
               const tone = normalizeSeverity(alert.severity);
               const risk = aiRiskByVehicleId[alert.vehicle_id] ?? null;
               const score = typeof risk?.predicted_risk_score === 'number' ? risk.predicted_risk_score.toFixed(1) : '0.0';
+              const state = (alert.status ?? 'pending').toLowerCase();
+              const stateTone = state === 'resolved' ? 'resolved' : state === 'acknowledged' ? 'acknowledged' : 'pending';
 
               return (
                 <article key={alert.id} className={`ai-alert-row ${tone}`}>
                   <div className="ai-alert-row-main">
                     <div className="ai-alert-title-row">
                       <h4>{formatAlertTitle(alert.severity, alert.type, locale, t)}</h4>
-                      <span className={`ai-severity-pill ${tone}`}>{severityBadge(alert.severity, t)}</span>
+                      <div className="ai-alert-badges">
+                        <span className={`ai-alert-state-pill ${stateTone}`}>{alertStateLabel(state, t)}</span>
+                        <span className={`ai-severity-pill ${tone}`}>{severityBadge(alert.severity, t)}</span>
+                      </div>
                     </div>
                     <p className="ai-alert-message">{localizeAlertMessage(alert.message, locale) || t('alerts.item.noDetail')}</p>
+                    {alert.note ? <p className="ai-alert-note"><strong>{t('alerts.item.noteLabel')}</strong> {alert.note}</p> : null}
                     <div className="ai-alert-meta">
                       <span>{formatRelative(alert.created_at, t)}</span>
-                      <span className="ai-vehicle-chip">{t('alerts.item.vehicle')} {alert.vehicle_id}</span>
                     </div>
                   </div>
                   <div className="ai-alert-side">
                     <span>{t('alerts.item.aiScore')}: {score}/100</span>
-                    <button type="button" className="inline-link-btn" onClick={() => rowAck(alert.id)}>{t('alerts.item.markRead')}</button>
+                    {state === 'pending' ? (
+                      <>
+                        <button type="button" className="inline-link-btn" onClick={() => rowAck(alert.id)}>{t('alerts.item.markRead')}</button>
+                        <button type="button" className="inline-link-btn" onClick={() => rowResolve(alert.id, alert.note)}>{t('alerts.item.resolve')}</button>
+                      </>
+                    ) : null}
+                    {state === 'acknowledged' ? (
+                      <button type="button" className="inline-link-btn" onClick={() => rowResolve(alert.id, alert.note)}>{t('alerts.item.resolve')}</button>
+                    ) : null}
+                    <button type="button" className="inline-link-btn" onClick={() => rowDelete(alert.id)} disabled={deleteMutation.isPending}>{t('alerts.item.delete')}</button>
                   </div>
                 </article>
               );
@@ -454,53 +627,19 @@ export function AlertsPage() {
             <button type="button" className="ai-insight-link">{t('alerts.insights.deepAnalysis')}</button>
           </section>
 
-          <section className="panel ai-rules-panel" id="ai-rules-panel">
-            <h3>{t('alerts.rules.title')}</h3>
-            <div className="ai-rules-list">
-              <label className="ai-rule-item">
-                <div>
-                  <strong>{t('alerts.rules.engineTempLabel')}</strong>
-                  <p>{t('alerts.rules.engineTempDesc')}</p>
-                </div>
-                <input type="checkbox" checked={rules.engineTemp} onChange={() => toggleRule('engineTemp')} />
-              </label>
-              <label className="ai-rule-item">
-                <div>
-                  <strong>{t('alerts.rules.dtcLabel')}</strong>
-                  <p>{t('alerts.rules.dtcDesc')}</p>
-                </div>
-                <input type="checkbox" checked={rules.dtcDetected} onChange={() => toggleRule('dtcDetected')} />
-              </label>
-              <label className="ai-rule-item">
-                <div>
-                  <strong>{t('alerts.rules.fuelLabel')}</strong>
-                  <p>{t('alerts.rules.fuelDesc')}</p>
-                </div>
-                <input type="checkbox" checked={rules.lowFuel} onChange={() => toggleRule('lowFuel')} />
-              </label>
-              <label className="ai-rule-item">
-                <div>
-                  <strong>{t('alerts.rules.revisionLabel')}</strong>
-                  <p>{t('alerts.rules.revisionDesc')}</p>
-                </div>
-                <input type="checkbox" checked={rules.revisionReminder} onChange={() => toggleRule('revisionReminder')} />
-              </label>
-            </div>
-          </section>
-
           <section className="panel ai-chart-panel">
             <h3>{t('alerts.chart.title')}</h3>
             <div className="ai-bars">
               {chartData.map((entry) => {
                 const stackTotal = entry.critical + entry.warning + entry.info;
                 const scale = stackTotal / maxStackValue;
-                const criticalH = Math.max(0, Math.round((entry.critical / Math.max(1, stackTotal)) * 100));
-                const warningH = Math.max(0, Math.round((entry.warning / Math.max(1, stackTotal)) * 100));
-                const infoH = Math.max(0, 100 - criticalH - warningH);
+                const criticalH = stackTotal > 0 ? Math.max(0, Math.round((entry.critical / stackTotal) * 100)) : 0;
+                const warningH = stackTotal > 0 ? Math.max(0, Math.round((entry.warning / stackTotal) * 100)) : 0;
+                const infoH = stackTotal > 0 ? Math.max(0, 100 - criticalH - warningH) : 0;
 
                 return (
                   <div key={entry.key} className="ai-bar-col">
-                    <div className="ai-bar-stack" style={{ height: `${Math.max(6, Math.round(88 * scale))}%` }}>
+                    <div className="ai-bar-stack" style={{ height: stackTotal > 0 ? `${Math.round(88 * scale)}%` : '6%', opacity: stackTotal > 0 ? 1 : 0.15 }}>
                       <span className="critical" style={{ height: `${criticalH}%` }} />
                       <span className="warning" style={{ height: `${warningH}%` }} />
                       <span className="info" style={{ height: `${infoH}%` }} />
