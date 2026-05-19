@@ -1,16 +1,20 @@
 import os
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlencode
 
 import jwt
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 from app.models.user import User
+from app.services.email_service import EmailService
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-this-secret-key")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "60"))
+PASSWORD_RESET_EXPIRE_MINUTES = int(os.getenv("PASSWORD_RESET_EXPIRE_MINUTES", "30"))
+EXPOSE_RESET_LINK_IN_RESPONSE = os.getenv("EXPOSE_RESET_LINK_IN_RESPONSE", "true").strip().lower() in {"1", "true", "yes", "on"}
 
 
 class UserService:
@@ -36,11 +40,37 @@ class UserService:
         return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
     @staticmethod
+    def create_password_reset_token(email: str, user_id: int) -> str:
+        now = datetime.now(timezone.utc)
+        payload = {
+            "sub": email,
+            "user_id": user_id,
+            "purpose": "password_reset",
+            "iat": int(now.timestamp()),
+            "exp": int((now + timedelta(minutes=PASSWORD_RESET_EXPIRE_MINUTES)).timestamp())
+        }
+        return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+
+    @staticmethod
     def decode_access_token(token: str) -> dict:
         try:
             if token.lower().startswith("bearer "):
                 token = token.split(" ", 1)[1].strip()
             return jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        except jwt.ExpiredSignatureError as exc:
+            raise ValueError("Token expiré") from exc
+        except jwt.InvalidTokenError as exc:
+            raise ValueError("Token invalide") from exc
+
+    @staticmethod
+    def decode_password_reset_token(token: str) -> dict:
+        try:
+            if token.lower().startswith("bearer "):
+                token = token.split(" ", 1)[1].strip()
+            payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+            if payload.get("purpose") != "password_reset":
+                raise ValueError("Token invalide")
+            return payload
         except jwt.ExpiredSignatureError as exc:
             raise ValueError("Token expiré") from exc
         except jwt.InvalidTokenError as exc:
@@ -225,9 +255,48 @@ class UserService:
                 "message": "Si ce compte existe, un email de reinitialisation sera envoye"
             }
 
-        return {
+        token = UserService.create_password_reset_token(user.email, user.id)
+        query = urlencode({"token": token})
+        reset_link = f"{EmailService.APP_URL.rstrip('/')}/reset-password?{query}"
+
+        sent = EmailService.send_password_reset_email(recipient_email=user.email, reset_link=reset_link)
+
+        response = {
             "status": "success",
             "message": "Si ce compte existe, un email de reinitialisation sera envoye",
+            "email": user.email,
+            "email_sent": sent,
+            "expires_in_minutes": PASSWORD_RESET_EXPIRE_MINUTES,
+        }
+        if EXPOSE_RESET_LINK_IN_RESPONSE:
+            response["reset_link"] = reset_link
+        return response
+
+    @staticmethod
+    def reset_password_with_token(db: Session, token: str, new_password: str):
+        if not new_password or len(new_password.strip()) < 6:
+            return {"status": "error", "message": "Le mot de passe doit contenir au moins 6 caracteres"}
+
+        try:
+            payload = UserService.decode_password_reset_token(token)
+        except ValueError as exc:
+            return {"status": "error", "message": str(exc)}
+
+        user_id = payload.get("user_id")
+        if not user_id:
+            return {"status": "error", "message": "Token invalide"}
+
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return {"status": "error", "message": "Utilisateur non trouvé"}
+
+        user.password_hash = UserService.hash_password(new_password)
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": "Mot de passe reinitialise",
+            "user_id": user.id,
             "email": user.email,
         }
 

@@ -13,6 +13,49 @@ class EmailService:
         APP_URL = os.getenv("APP_URL", "http://localhost:5173")
 
         @staticmethod
+        def send_password_reset_email(recipient_email: str, reset_link: str) -> bool:
+            if not EmailService.BREVO_API_KEY:
+                print("[EMAIL] BREVO_API_KEY not configured, reset link:", reset_link)
+                return False
+
+            try:
+                payload = {
+                    "sender": {"email": EmailService.SENDER_EMAIL},
+                    "to": [{"email": recipient_email}],
+                    "subject": "Reset your password",
+                    "htmlContent": (
+                        "<p>You requested a password reset.</p>"
+                        f"<p><a href=\"{reset_link}\">Reset password</a></p>"
+                        "<p>If you did not request this, you can ignore this email.</p>"
+                    ),
+                    "textContent": (
+                        "You requested a password reset.\n"
+                        f"Open this link: {reset_link}\n"
+                        "If you did not request this, you can ignore this email."
+                    ),
+                }
+                headers = {
+                    "accept": "application/json",
+                    "content-type": "application/json",
+                    "api-key": EmailService.BREVO_API_KEY,
+                }
+                response = requests.post(
+                    EmailService.BREVO_API_URL,
+                    json=payload,
+                    headers=headers,
+                    timeout=20,
+                )
+                if response.status_code >= 400:
+                    print(f"[EMAIL] Brevo API error {response.status_code}: {response.text}")
+                    return False
+
+                print(f"[EMAIL] Password reset email sent to {recipient_email}")
+                return True
+            except Exception as exc:
+                print(f"[EMAIL] Failed to send password reset email to {recipient_email}: {exc}")
+                return False
+
+        @staticmethod
         def send_geofence_exit_notification(
                 recipient_email: str,
                 vehicle_id: int,

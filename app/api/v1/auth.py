@@ -3,7 +3,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.schemas.user import UserForgotPassword, UserLogin, UserRegister, UserResetByAdmin, UserRoleUpdate
+from app.schemas.user import UserForgotPassword, UserLogin, UserRegister, UserResetByAdmin, UserResetPassword, UserRoleUpdate
 from app.services.user_service import UserService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -169,3 +169,20 @@ def forgot_password(
     db: Session = Depends(get_db)
 ):
     return UserService.forgot_password(db=db, email=payload.email)
+
+
+@router.post("/reset-password")
+def reset_password(payload: UserResetPassword, db: Session = Depends(get_db)):
+    result = UserService.reset_password_with_token(
+        db=db,
+        token=payload.token,
+        new_password=payload.new_password,
+    )
+
+    if result.get("status") != "success":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("message") or "Reinitialisation impossible",
+        )
+
+    return result
