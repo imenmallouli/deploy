@@ -1,4 +1,7 @@
 export { AlertsPage } from './AlertsPage';
+export { AdminLoginPage } from './AdminLoginPage';
+export { AdminRegisterPage } from './AdminRegisterPage';
+export { AdminUserAccountPage } from './AdminUserAccountPage';
 export { AdminUsersPage } from './AdminUsersPage';
 export { GetStartedPage } from './GetStartedPage';
 export { AutoPiSettingsPage } from './AutoPiSettingsPage';

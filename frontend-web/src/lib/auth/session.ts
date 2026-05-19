@@ -1,5 +1,22 @@
 const TOKEN_KEY = 'access_token';
 
+function getStorage(): Storage | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  return window.sessionStorage;
+}
+
+function clearLegacyLocalStorage() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.localStorage.removeItem(TOKEN_KEY);
+  window.localStorage.removeItem('role');
+  window.localStorage.removeItem('email');
+  window.localStorage.removeItem('user_id');
+}
+
 type SessionData = {
   accessToken: string;
   role?: string;
@@ -8,21 +25,32 @@ type SessionData = {
 };
 
 export function saveSession(session: SessionData) {
-  localStorage.setItem(TOKEN_KEY, session.accessToken);
-  if (session.role) localStorage.setItem('role', session.role);
-  if (session.email) localStorage.setItem('email', session.email);
-  if (session.userId !== undefined) localStorage.setItem('user_id', String(session.userId));
+  const storage = getStorage();
+  if (!storage) {
+    return;
+  }
+
+  clearLegacyLocalStorage();
+
+  storage.setItem(TOKEN_KEY, session.accessToken);
+  if (session.role) storage.setItem('role', session.role);
+  if (session.email) storage.setItem('email', session.email);
+  if (session.userId !== undefined) storage.setItem('user_id', String(session.userId));
 }
 
 export function clearSession() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem('role');
-  localStorage.removeItem('email');
-  localStorage.removeItem('user_id');
+  const storage = getStorage();
+  storage?.removeItem(TOKEN_KEY);
+  storage?.removeItem('role');
+  storage?.removeItem('email');
+  storage?.removeItem('user_id');
+
+  clearLegacyLocalStorage();
 }
 
 export function getAccessToken() {
-  return localStorage.getItem(TOKEN_KEY);
+  const storage = getStorage();
+  return storage?.getItem(TOKEN_KEY) ?? null;
 }
 
 export function hasSession() {
@@ -30,5 +58,6 @@ export function hasSession() {
 }
 
 export function getRole() {
-  return (localStorage.getItem('role') ?? '').toLowerCase();
+  const storage = getStorage();
+  return (storage?.getItem('role') ?? '').toLowerCase();
 }

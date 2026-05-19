@@ -4,6 +4,7 @@ import { RequireAuth, RequireRole } from './RequireAuth';
 import {
   AdminLoginPage,
   AdminRegisterPage,
+  AdminUserAccountPage,
   AdminUsersPage,
   AlertsPage,
   AutoPiSettingsPage,
@@ -46,6 +47,14 @@ export const router = createBrowserRouter([
         element: (
           <RequireRole allowedRoles={['admin']}>
             <AdminUsersPage />
+          </RequireRole>
+        ),
+      },
+      {
+        path: '/admin/panel/users/:userId',
+        element: (
+          <RequireRole allowedRoles={['admin']}>
+            <AdminUserAccountPage />
           </RequireRole>
         ),
       },

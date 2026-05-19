@@ -132,6 +132,17 @@ export async function deleteUserByAdmin(userId: number) {
   return data as ApiResult<{ user_id?: number }>;
 }
 
+export async function impersonateUserByAdmin(userId: number) {
+  const { data } = await apiClient.post(`/api/v1/auth/impersonate/${userId}`);
+  return data as ApiResult<{
+    access_token?: string;
+    role?: string;
+    email?: string;
+    user_id?: number;
+    first_name?: string;
+  }>;
+}
+
 export async function listVehicles() {
   const { data } = await apiClient.get('/api/v1/vehicles');
   return data as ApiResult<{ items: Vehicle[]; count: number }>;
