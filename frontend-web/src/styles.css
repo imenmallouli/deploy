@@ -1454,6 +1454,16 @@ h2 {
   font-size: 13px;
 }
 
+.ai-alerts-vehicle-select {
+  min-width: 180px;
+  border: 1px solid rgba(31, 79, 143, 0.24);
+  border-radius: 10px;
+  background: #f6f8fb;
+  color: #0f2f57;
+  font-weight: 700;
+  padding: 9px 12px;
+}
+
 .ai-alerts-feed-list {
   display: grid;
   gap: 0;
@@ -1489,10 +1499,39 @@ h2 {
   gap: 10px;
 }
 
+.ai-alert-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .ai-alert-title-row h4 {
   margin: 0;
   color: #0f2f57;
   font-size: 20px;
+}
+
+.ai-alert-state-pill {
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ai-alert-state-pill.pending {
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+.ai-alert-state-pill.acknowledged {
+  background: #e0f2fe;
+  color: #075985;
+}
+
+.ai-alert-state-pill.resolved {
+  background: #dcfce7;
+  color: #166534;
 }
 
 .ai-severity-pill {
@@ -1522,6 +1561,16 @@ h2 {
   color: #2f4466;
 }
 
+.ai-alert-note {
+  margin: 0 0 6px;
+  color: #355070;
+  font-size: 13px;
+}
+
+.ai-alert-note strong {
+  color: #0f2f57;
+}
+
 .ai-alert-meta {
   display: flex;
   align-items: center;
@@ -1529,14 +1578,6 @@ h2 {
   flex-wrap: wrap;
   color: #4a6b90;
   font-size: 13px;
-}
-
-.ai-vehicle-chip {
-  border-radius: 999px;
-  background: #dcebff;
-  color: #2159b8;
-  font-weight: 700;
-  padding: 2px 10px;
 }
 
 .ai-alert-side {
@@ -3999,13 +4040,13 @@ h2 {
    ═══════════════════════════════════════════ */
 
 .tl-page {
-  padding: 16px;
+  padding: 12px;
   background: #ffffff;
   border: 1px solid #b8cfee;
-  border-radius: 16px;
+  border-radius: 14px;
   color: #111827;
   font-family: inherit;
-  max-width: 1500px;
+  max-width: 1380px;
   margin: 0 auto;
   overflow-x: hidden;
 }
@@ -4027,8 +4068,8 @@ h2 {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: 12px;
+  margin-bottom: 18px;
   flex-wrap: wrap;
 }
 
@@ -4043,15 +4084,15 @@ h2 {
   border: 1px solid #b3c9ec;
   color: #111827;
   border-radius: 8px;
-  padding: 7px 12px;
-  font-size: 13px;
+  padding: 6px 10px;
+  font-size: 12px;
   cursor: pointer;
-  min-width: 365px;
+  min-width: 320px;
 }
 
 .tl-title {
   margin: 0;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
   color: #111827;
 }
@@ -4136,15 +4177,15 @@ h2 {
 .tl-kpi-row {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  margin-bottom: 16px;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
 .tl-kpi-card {
   background: #f6f8fb;
   border: 1px solid #b8cfee;
-  border-radius: 14px;
-  padding: 18px 20px 14px;
+  border-radius: 12px;
+  padding: 14px 16px 10px;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -4168,7 +4209,7 @@ h2 {
 }
 
 .tl-kpi-card-compact .tl-kpi-val {
-  font-size: 28px;
+  font-size: 24px;
   margin-top: 2px;
 }
 
@@ -4261,16 +4302,16 @@ h2 {
 .tl-mid {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-  gap: 14px;
-  margin-bottom: 14px;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
 .tl-chart-panel,
 .tl-health-panel {
   background: #f6f8fb;
   border: 1px solid #b8cfee;
-  border-radius: 14px;
-  padding: 18px 20px;
+  border-radius: 12px;
+  padding: 14px 16px;
   box-shadow: 0 4px 14px rgba(37, 99, 235, 0.12);
 }
 
@@ -4317,14 +4358,14 @@ h2 {
   justify-content: space-between;
   align-items: baseline;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   flex-wrap: wrap;
 }
 
 .tl-hbars {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 }
 
 .tl-hbar { display: flex; flex-direction: column; gap: 6px; }
@@ -4360,16 +4401,16 @@ h2 {
 .tl-lower {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  margin-bottom: 14px;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
 .tl-events-panel,
 .tl-stats-panel {
   background: #f6f8fb;
   border: 1px solid #b8cfee;
-  border-radius: 14px;
-  padding: 18px 20px;
+  border-radius: 12px;
+  padding: 14px 16px;
   box-shadow: 0 4px 14px rgba(37, 99, 235, 0.12);
 }
 

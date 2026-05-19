@@ -334,7 +334,6 @@ export function LocationsPage() {
             <button className="btn-link" type="button" onClick={handleUseMyLocation} disabled={isLocating}>
               {isLocating ? text.locating : text.useMyLocation}
             </button>
-            <button className="btn-link" type="button" onClick={handleRefresh}>{text.refresh}</button>
           </div>
         </div>
         <div className="locations-map-shell">

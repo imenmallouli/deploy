@@ -5,6 +5,9 @@ export function RequireAuth() {
   const location = useLocation();
 
   if (!hasSession()) {
+    if (location.pathname === '/admin' || location.pathname.startsWith('/admin/')) {
+      return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
+    }
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
@@ -23,7 +26,7 @@ export function RequireRole({ allowedRoles, children }: RequireRoleProps) {
   if (!role || !allowedRoles.includes(role as 'admin' | 'user')) {
     if (location.pathname === '/admin' || location.pathname.startsWith('/admin/')) {
       clearSession();
-      return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+      return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
     }
 
     return <Navigate to="/get-started" replace />;

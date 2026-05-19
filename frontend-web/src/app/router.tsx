@@ -2,6 +2,8 @@ import { Navigate, createBrowserRouter } from 'react-router-dom';
 import { AppLayout } from './AppLayout';
 import { RequireAuth, RequireRole } from './RequireAuth';
 import {
+  AdminLoginPage,
+  AdminRegisterPage,
   AdminUsersPage,
   AlertsPage,
   AutoPiSettingsPage,
@@ -25,6 +27,30 @@ export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
   { path: '/forgot-password', element: <ForgotPasswordPage /> },
   { path: '/register', element: <RegisterPage /> },
+  { path: '/admin/login', element: <AdminLoginPage /> },
+  { path: '/admin/register', element: <AdminRegisterPage /> },
+  {
+    path: '/admin',
+    element: <RequireAuth />,
+    children: [
+      {
+        path: '/admin',
+        element: (
+          <RequireRole allowedRoles={['admin']}>
+            <Navigate to="/admin/panel" replace />
+          </RequireRole>
+        ),
+      },
+      {
+        path: '/admin/panel',
+        element: (
+          <RequireRole allowedRoles={['admin']}>
+            <AdminUsersPage />
+          </RequireRole>
+        ),
+      },
+    ],
+  },
   {
     path: '/',
     element: <RequireAuth />,
@@ -37,7 +63,7 @@ export const router = createBrowserRouter([
           {
             path: 'get-started',
             element: (
-              <RequireRole allowedRoles={['user', 'admin']}>
+              <RequireRole allowedRoles={['user']}>
                 <GetStartedPage />
               </RequireRole>
             ),
@@ -45,7 +71,7 @@ export const router = createBrowserRouter([
           {
             path: 'overview',
             element: (
-              <RequireRole allowedRoles={['user', 'admin']}>
+              <RequireRole allowedRoles={['user']}>
                 <DashboardPage />
               </RequireRole>
             ),
@@ -54,7 +80,7 @@ export const router = createBrowserRouter([
           {
             path: 'vehicles/list',
             element: (
-              <RequireRole allowedRoles={['user', 'admin']}>
+              <RequireRole allowedRoles={['user']}>
                 <VehiclesPage />
               </RequireRole>
             ),
@@ -62,7 +88,7 @@ export const router = createBrowserRouter([
           {
             path: 'vehicles/:vehicleId',
             element: (
-              <RequireRole allowedRoles={['user', 'admin']}>
+              <RequireRole allowedRoles={['user']}>
                 <VehicleDetailsPage />
               </RequireRole>
             ),
@@ -70,7 +96,7 @@ export const router = createBrowserRouter([
           {
             path: 'locations',
             element: (
-              <RequireRole allowedRoles={['user', 'admin']}>
+              <RequireRole allowedRoles={['user']}>
                 <LocationsPage />
               </RequireRole>
             ),
@@ -78,7 +104,7 @@ export const router = createBrowserRouter([
           {
             path: 'geofences',
             element: (
-              <RequireRole allowedRoles={['user', 'admin']}>
+              <RequireRole allowedRoles={['user']}>
                 <GeofencesPage />
               </RequireRole>
             ),
@@ -86,31 +112,15 @@ export const router = createBrowserRouter([
           {
             path: 'settings/autopi',
             element: (
-              <RequireRole allowedRoles={['user', 'admin']}>
+              <RequireRole allowedRoles={['user']}>
                 <AutoPiSettingsPage />
-              </RequireRole>
-            ),
-          },
-          {
-            path: 'admin',
-            element: (
-              <RequireRole allowedRoles={['admin']}>
-                <AdminUsersPage />
-              </RequireRole>
-            ),
-          },
-          {
-            path: 'admin/users',
-            element: (
-              <RequireRole allowedRoles={['admin']}>
-                <Navigate to="/admin" replace />
               </RequireRole>
             ),
           },
           {
             path: 'diagnostics',
             element: (
-              <RequireRole allowedRoles={['user', 'admin']}>
+              <RequireRole allowedRoles={['user']}>
                 <DtcPage />
               </RequireRole>
             ),
@@ -118,7 +128,7 @@ export const router = createBrowserRouter([
           {
             path: 'devices/overview',
             element: (
-              <RequireRole allowedRoles={['user', 'admin']}>
+              <RequireRole allowedRoles={['user']}>
                 <DeviceOverviewPage />
               </RequireRole>
             ),
@@ -126,7 +136,7 @@ export const router = createBrowserRouter([
           {
             path: 'devices/list',
             element: (
-              <RequireRole allowedRoles={['user', 'admin']}>
+              <RequireRole allowedRoles={['user']}>
                 <DevicesPage />
               </RequireRole>
             ),
@@ -134,7 +144,7 @@ export const router = createBrowserRouter([
           {
             path: 'devices/:deviceId',
             element: (
-              <RequireRole allowedRoles={['user', 'admin']}>
+              <RequireRole allowedRoles={['user']}>
                 <DeviceDetailsPage />
               </RequireRole>
             ),
@@ -143,7 +153,7 @@ export const router = createBrowserRouter([
           {
             path: 'telemetry',
             element: (
-              <RequireRole allowedRoles={['user', 'admin']}>
+              <RequireRole allowedRoles={['user']}>
                 <TelemetryPage />
               </RequireRole>
             ),
@@ -151,7 +161,7 @@ export const router = createBrowserRouter([
           {
             path: 'dtc',
             element: (
-              <RequireRole allowedRoles={['user', 'admin']}>
+              <RequireRole allowedRoles={['user']}>
                 <DtcPage />
               </RequireRole>
             ),
@@ -159,7 +169,7 @@ export const router = createBrowserRouter([
           {
             path: 'alerts',
             element: (
-              <RequireRole allowedRoles={['user', 'admin']}>
+              <RequireRole allowedRoles={['user']}>
                 <AlertsPage />
               </RequireRole>
             ),

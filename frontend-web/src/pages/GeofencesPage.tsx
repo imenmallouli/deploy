@@ -103,7 +103,6 @@ export function GeofencesPage() {
         monitoringHint: 'Selectionnez une zone pour activer le monitoring. Les alertes in-app sont declenchees automatiquement a chaque sortie de zone.',
         monitoredVehicles: 'Vehicules surveilles',
         notAvailable: 'N/A',
-        refresh: 'Rafraichir',
         actions: 'Actions',
         onEnter: 'A l\'entree',
         onExit: 'A la sortie',
@@ -174,7 +173,6 @@ export function GeofencesPage() {
         monitoringHint: 'Select a zone to enable monitoring. In-app alerts are automatically triggered each time a vehicle exits the zone.',
         monitoredVehicles: 'Monitored vehicles',
         notAvailable: 'N/A',
-        refresh: 'Refresh',
         actions: 'Actions',
         onEnter: 'On Enter',
         onExit: 'On Exit',
@@ -1128,13 +1126,6 @@ export function GeofencesPage() {
       <div className="panel table-shell">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div />
-          <button
-            className="btn-link"
-            type="button"
-            onClick={() => queryClient.invalidateQueries({ queryKey: ['locations', 'geofences-page'] })}
-          >
-            {text.refresh}
-          </button>
         </div>
 
         {locationActionError && <p className="form-error">{locationActionError}</p>}

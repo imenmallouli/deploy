@@ -36,7 +36,7 @@ export function LoginPage() {
       const nextPath = requestedPath && requestedPath.startsWith('/')
         ? requestedPath
         : normalizedRole === 'admin'
-          ? '/get-started'
+          ? '/admin/panel'
           : '/get-started';
 
       navigate(nextPath, { replace: true });

@@ -248,6 +248,16 @@ export async function ackAlert(payload: { alert_id: number; note?: string }) {
   return data;
 }
 
+export async function resolveAlert(payload: { alert_id: number; note?: string }) {
+  const { data } = await apiClient.post('/api/v1/alerts/resolve', payload);
+  return data;
+}
+
+export async function deleteAlert(alertId: number) {
+  const { data } = await apiClient.delete(`/api/v1/alerts/${alertId}`);
+  return data as ApiResult<{ alert_id: number }>;
+}
+
 export async function listDtc(limit = 50) {
   const { data } = await apiClient.get('/api/v1/dtc', { params: { limit } });
   return data as ApiResult<{ items: DtcItem[]; count: number }>;
