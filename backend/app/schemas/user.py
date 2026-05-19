@@ -21,6 +21,11 @@ class UserForgotPassword(BaseModel):
     email: EmailStr
 
 
+class UserResetPassword(BaseModel):
+    token: str
+    new_password: str
+
+
 class UserResetByAdmin(BaseModel):
     new_password: str
 
