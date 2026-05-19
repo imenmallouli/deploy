@@ -55,24 +55,6 @@ def list_alerts(
         alert_status=status_value,
     )
 
-
-@router.get("/{vehicle_id}")
-def list_alerts_by_vehicle(
-    vehicle_id: int,
-    context: dict = Depends(get_current_context),
-    db: Session = Depends(get_db),
-):
-    return AlertService.list_alerts(
-        db=db,
-        role=context["role"],
-        user_id=context["user_id"],
-        vehicle_id=vehicle_id,
-        type=None,
-        severity=None,
-        alert_status=None,
-    )
-
-
 @router.post("")
 def create_alert(
     payload: AlertCreate,
@@ -104,3 +86,53 @@ def ack_alert(
         alert_id=payload.alert_id,
         note=payload.note,
     )
+
+
+@router.post("/resolve")
+def resolve_alert(
+    payload: AlertAck,
+    context: dict = Depends(get_current_context),
+    db: Session = Depends(get_db),
+):
+    return AlertService.resolve_alert(
+        db=db,
+        role=context["role"],
+        user_id=context["user_id"],
+        alert_id=payload.alert_id,
+        note=payload.note,
+    )
+
+
+@router.delete("/{alert_id}")
+def delete_alert(
+    alert_id: int,
+    context: dict = Depends(get_current_context),
+    db: Session = Depends(get_db),
+):
+    return AlertService.delete_alert(
+        db=db,
+        role=context["role"],
+        user_id=context["user_id"],
+        alert_id=alert_id,
+    )
+
+
+@router.get("/{vehicle_id}")
+def list_alerts_by_vehicle(
+    vehicle_id: int,
+    context: dict = Depends(get_current_context),
+    db: Session = Depends(get_db),
+):
+    return AlertService.list_alerts(
+        db=db,
+        role=context["role"],
+        user_id=context["user_id"],
+        vehicle_id=vehicle_id,
+        type=None,
+        severity=None,
+        alert_status=None,
+    )
+
+
+
+
