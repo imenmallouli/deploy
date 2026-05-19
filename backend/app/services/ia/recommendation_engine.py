@@ -330,19 +330,35 @@ def _load_rules_from_dataset(dataset_path: Path) -> dict | None:
 
 @lru_cache(maxsize=1)
 def _load_rules() -> dict:
+    default_rules = {
+        "sensor_rules": [],
+        "maintenance_rules": [],
+        "fallback_rules": [],
+        "score_floor": {
+            "critical_count_ge_2": 85.0,
+            "critical_any": 70.0,
+            "warning_any": 40.0,
+        },
+        "severity_promotion": {
+            "critical_min_score": 70.0,
+            "warning_min_score": 40.0,
+        },
+        "defaults": {
+            "normal_suggestion": {
+                "priority": "low",
+                "title": "Etat normal",
+                "message": "Aucune anomalie detectee actuellement.",
+            }
+        },
+    }
+
     dataset_path = _find_latest_dataset_xlsx()
     if dataset_path is None:
-        raise FileNotFoundError(
-            "No sample_dataset*.xlsx found in backend/data. "
-            "Provide a dataset file containing a recommendation_rules sheet."
-        )
+        return default_rules
 
     dataset_rules = _load_rules_from_dataset(dataset_path)
     if not isinstance(dataset_rules, dict) or not dataset_rules:
-        raise ValueError(
-            f"Dataset '{dataset_path.name}' is missing sheet 'recommendation_rules' "
-            "or cell A2 JSON content."
-        )
+        return default_rules
     return dataset_rules
 
 

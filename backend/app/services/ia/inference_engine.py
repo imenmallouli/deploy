@@ -403,9 +403,11 @@ class AIInferenceService:
         classifier_bundle = load_classifier_bundle()
         feature_names = classifier_bundle.get("feature_names", [])
 
-        for col in feature_names:
-            if col not in featured_last.columns:
-                featured_last[col] = 0.0
+        # Add missing columns efficiently using pd.concat instead of iterative assignment
+        missing_cols = [col for col in feature_names if col not in featured_last.columns]
+        if missing_cols:
+            missing_data = pd.DataFrame([[0.0] * len(missing_cols)], columns=missing_cols, index=featured_last.index)
+            featured_last = pd.concat([featured_last, missing_data], axis=1)
 
         X = featured_last[feature_names].copy() if feature_names else featured_last.select_dtypes(include=["number"]).copy()
         X = X.apply(pd.to_numeric, errors="coerce")
