@@ -14,7 +14,7 @@ JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-this-secret-key")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "60"))
 PASSWORD_RESET_EXPIRE_MINUTES = int(os.getenv("PASSWORD_RESET_EXPIRE_MINUTES", "30"))
-EXPOSE_RESET_LINK_IN_RESPONSE = os.getenv("EXPOSE_RESET_LINK_IN_RESPONSE", "true").strip().lower() in {"1", "true", "yes", "on"}
+EXPOSE_RESET_LINK_IN_RESPONSE = os.getenv("EXPOSE_RESET_LINK_IN_RESPONSE", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
 class UserService:
