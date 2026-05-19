@@ -104,7 +104,12 @@ export async function register(payload: RegisterPayload) {
 
 export async function forgotPassword(payload: { email: string }) {
   const { data } = await apiClient.post('/api/v1/auth/forgot-password', payload);
-  return data as ApiResult<{ email?: string }>;
+  return data as ApiResult<{ email?: string; reset_link?: string; email_sent?: boolean; expires_in_minutes?: number }>;
+}
+
+export async function resetPassword(payload: { token: string; new_password: string }) {
+  const { data } = await apiClient.post('/api/v1/auth/reset-password', payload);
+  return data as ApiResult<{ email?: string; user_id?: number }>;
 }
 
 export async function listUsers() {

@@ -15,6 +15,7 @@ export { GeofencesPage } from './GeofencesPage';
 export { LoginPage } from './LoginPage';
 export { LocationsPage } from './LocationsPage';
 export { RegisterPage } from './RegisterPage';
+export { ResetPasswordPage } from './ResetPasswordPage';
 export { TelemetryPage } from './TelemetryPage';
 export { VehicleDetailsPage } from './VehicleDetailsPage';
 export { VehiclesPage } from './VehiclesPage';

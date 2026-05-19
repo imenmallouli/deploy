@@ -19,6 +19,7 @@ import {
   LoginPage,
   LocationsPage,
   RegisterPage,
+  ResetPasswordPage,
   TelemetryPage,
   VehicleDetailsPage,
   VehiclesPage,
@@ -27,6 +28,7 @@ import {
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
   { path: '/forgot-password', element: <ForgotPasswordPage /> },
+  { path: '/reset-password', element: <ResetPasswordPage /> },
   { path: '/register', element: <RegisterPage /> },
   { path: '/admin/login', element: <AdminLoginPage /> },
   { path: '/admin/register', element: <AdminRegisterPage /> },

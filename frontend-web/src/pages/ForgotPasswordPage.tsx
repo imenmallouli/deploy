@@ -8,7 +8,6 @@ export function ForgotPasswordPage() {
   const { t } = useI18n();
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState<string | null>(null);
-  const [resetLink, setResetLink] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const mutation = useMutation({
@@ -19,7 +18,6 @@ export function ForgotPasswordPage() {
         return;
       }
       setMessage(t('auth.forgot.success'));
-      setResetLink(result.reset_link ?? null);
       setError(null);
     },
     onError: () => {
@@ -30,7 +28,6 @@ export function ForgotPasswordPage() {
   const handleSubmit: React.FormEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
     setMessage(null);
-    setResetLink(null);
     setError(null);
     mutation.mutate({ email });
   };
@@ -47,11 +44,6 @@ export function ForgotPasswordPage() {
           </label>
           {error ? <p className="form-error">{error}</p> : null}
           {message ? <p>{message}</p> : null}
-          {resetLink ? (
-            <p>
-              <a href={resetLink}>{t('auth.forgot.openResetLink')}</a>
-            </p>
-          ) : null}
           <button type="submit" disabled={mutation.isPending}>
             {mutation.isPending ? t('auth.forgot.sending') : t('auth.forgot.submit')}
           </button>
