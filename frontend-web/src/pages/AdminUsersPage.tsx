@@ -13,11 +13,15 @@ export function AdminUsersPage() {
         deleteDone: 'Utilisateur supprime',
         openInterfaceFailed: 'Ouverture interface impossible',
         title: 'Gestion des utilisateurs',
-        subtitle: 'Espace admin cache pour gerer les comptes et les roles.',
+        subtitle: 'Espace admin - gerer les comptes et les roles',
         listTitle: 'Liste des utilisateurs',
         accounts: 'comptes',
         loading: 'Chargement...',
         noUsers: 'Aucun utilisateur.',
+        searchPlaceholder: 'Rechercher...',
+        all: 'Tous',
+        admins: 'Admins',
+        users: 'Users',
         phone: 'Telephone',
         openInterface: 'Ouvrir interface',
         delete: 'Supprimer',
@@ -28,11 +32,15 @@ export function AdminUsersPage() {
         deleteDone: 'User deleted',
         openInterfaceFailed: 'Unable to open user interface',
         title: 'User Management',
-        subtitle: 'Hidden admin area to manage accounts and roles.',
+          subtitle: 'Admin space - manage accounts and roles',
         listTitle: 'Users List',
         accounts: 'accounts',
         loading: 'Loading...',
         noUsers: 'No users.',
+          searchPlaceholder: 'Search...',
+          all: 'All',
+          admins: 'Admins',
+          users: 'Users',
         phone: 'Phone',
         openInterface: 'Open interface',
         delete: 'Delete',
@@ -43,6 +51,8 @@ export function AdminUsersPage() {
   const usersQuery = useQuery({ queryKey: ['admin-users'], queryFn: listUsers });
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+        const [searchTerm, setSearchTerm] = useState('');
+        const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'user'>('all');
   const refreshUsers = () => queryClient.invalidateQueries({ queryKey: ['admin-users'] });
 
   const deleteMutation = useMutation({
@@ -81,39 +91,109 @@ export function AdminUsersPage() {
   });
 
   const users = usersQuery.data?.items ?? [];
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const filteredUsers = users.filter((user) => {
+    const roleMatches = roleFilter === 'all' || (user.role ?? '').toLowerCase() === roleFilter;
+    if (!roleMatches) {
+      return false;
+    }
+
+    if (!normalizedSearch) {
+      return true;
+    }
+
+    const fullName = `${user.first_name ?? ''} ${user.last_name ?? ''}`.toLowerCase();
+    const email = (user.email ?? '').toLowerCase();
+    const phone = (user.phone ?? '').toLowerCase();
+    return fullName.includes(normalizedSearch) || email.includes(normalizedSearch) || phone.includes(normalizedSearch);
+  });
+
+  const getInitials = (firstName?: string | null, lastName?: string | null) => {
+    const first = (firstName ?? '').trim().charAt(0);
+    const last = (lastName ?? '').trim().charAt(0);
+    const value = `${first}${last}`.toUpperCase();
+    return value || 'U';
+  };
+
+  const roleClassName = (role?: string | null) => {
+    return (role ?? '').toLowerCase() === 'admin' ? 'admin-user-role is-admin' : 'admin-user-role is-user';
+  };
 
   return (
-    <section>
-      <h2>{text.title}</h2>
-      <p className="subtitle">{text.subtitle}</p>
-
-      <article className="panel">
-        <div className="panel-title-row">
-          <h3>{text.listTitle}</h3>
-          <span className="muted-note">{usersQuery.data?.count ?? 0} {text.accounts}</span>
+    <section className="admin-users-page">
+      <header className="admin-users-header">
+        <div>
+          <h2>{text.title}</h2>
+          <p className="subtitle">{text.subtitle}</p>
         </div>
+        <span className="admin-users-count">{usersQuery.data?.count ?? 0} {text.accounts}</span>
+      </header>
+
+      <div className="admin-users-toolbar">
+        <input
+          className="admin-users-search"
+          type="search"
+          placeholder={text.searchPlaceholder}
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+        />
+        <div className="admin-users-filters">
+          <button
+            type="button"
+            className={roleFilter === 'all' ? 'active' : ''}
+            onClick={() => setRoleFilter('all')}
+          >
+            {text.all}
+          </button>
+          <button
+            type="button"
+            className={roleFilter === 'admin' ? 'active' : ''}
+            onClick={() => setRoleFilter('admin')}
+          >
+            {text.admins}
+          </button>
+          <button
+            type="button"
+            className={roleFilter === 'user' ? 'active' : ''}
+            onClick={() => setRoleFilter('user')}
+          >
+            {text.users}
+          </button>
+        </div>
+      </div>
+
+      {message ? <p className="admin-users-message">{message}</p> : null}
+      {error ? <p className="admin-users-error">{error}</p> : null}
+
+      <article className="admin-users-list-panel">
+        <h3>{text.listTitle}</h3>
         {usersQuery.isLoading ? <p>{text.loading}</p> : null}
-        {!usersQuery.isLoading && users.length === 0 ? <p>{text.noUsers}</p> : null}
-        {users.map((user) => {
+        {!usersQuery.isLoading && filteredUsers.length === 0 ? <p>{text.noUsers}</p> : null}
+        {filteredUsers.map((user) => {
           return (
-            <div key={user.user_id} className="stat-card" style={{ marginBottom: 16 }}>
-              <div className="panel-title-row">
+            <div key={user.user_id} className="admin-user-card">
+              <div className="admin-user-identity">
+                <div className="admin-user-avatar">{getInitials(user.first_name, user.last_name)}</div>
                 <div>
-                  <strong>{user.first_name} {user.last_name}</strong>
-                  <p className="subtitle" style={{ margin: 0 }}>{user.email}</p>
+                  <p className="admin-user-name">{user.first_name} {user.last_name}</p>
+                  <p className="admin-user-email">{user.email}</p>
+                  <p className="admin-user-phone">{user.phone ?? '-'}</p>
                 </div>
-                <span className="muted-note">{user.role}</span>
               </div>
-              <p>{text.phone}: {user.phone ?? '-'}</p>
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+
+              <div className={roleClassName(user.role)}>{(user.role ?? 'user').toLowerCase()}</div>
+
+              <div className="admin-user-actions">
                 <button
                   type="button"
+                  className="admin-user-btn"
                   onClick={() => impersonateMutation.mutate({ userId: user.user_id })}
                 >
                   {text.openInterface}
                 </button>
                 <button
                   type="button"
+                  className="admin-user-btn"
                   onClick={() => {
                     const shouldDelete = window.confirm(`${text.confirmDelete} ${user.email} ?`);
                     if (shouldDelete) {
