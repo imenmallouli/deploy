@@ -4,7 +4,6 @@ from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import ai, alert, auth, database, dtc, fleet, maintenance, ops, realtime, telemetry, vehicle
-from app.services.autopi_bridge_runner import start_autopi_bridge, stop_autopi_bridge
 # Import les modèles pour enregistrer les tables
 from app.models import alert as alert_model
 from app.models import fleet as fleet_model
@@ -13,11 +12,8 @@ from app.models import user, vehicle as vehicle_model
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    start_autopi_bridge()
-    try:
-        yield
-    finally:
-        stop_autopi_bridge()
+    # AutoPi integration was retired permanently in favor of direct dongle ingestion.
+    yield
 
 
 app = FastAPI(
