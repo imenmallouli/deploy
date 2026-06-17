@@ -353,6 +353,28 @@ Si le backend est indisponible:
 - elle garde temporairement les donnees en buffer,
 - elle reessaye ensuite sans casser le flux.
 
+### 6.8 Etape 8 - Position GNSS (si module GPS active)
+
+Si la position est activee, le flux minimum doit etre:
+1. Lire les trames NMEA disponibles.
+2. Parser uniquement les trames utiles (GGA/VTG ou equivalent).
+3. Convertir en format position metier (lat, lon, alt, sog, cog, nsat, fix).
+4. Filtrer les positions non significatives (pas de changement reel).
+5. Envoyer seulement les positions utiles au backend.
+
+Regle simple recommande:
+- en standstill, ignorer les positions identiques,
+- en mouvement, publier seulement si vecteur vitesse/cap change.
+
+### 6.9 Etape 9 - Supervision runtime du service
+
+Le service doit surveiller son execution en continu et produire des evenements techniques.
+
+Regles minimales:
+1. Deduplication des evenements runtime par timestamp le plus recent.
+2. Retry avec backoff exponentiel en cas de panne technique transitoire.
+3. Evenements de recovery apres reprise normale.
+
 ---
 
 ## 7. Architecture logique de traitement
@@ -534,6 +556,12 @@ Le logging structure permet de:
 18. DONGLE_TIMEOUT - pas de reponse du dongle
 19. DONGLE_BLOCKED - marque comme bloquer apres erreurs
 20. GATEWAY_ERROR - erreur interne gateway
+
+**Evenements additionnels utiles (si modules actifs):**
+- POSITION_MOVING - vehicule en mouvement
+- POSITION_STANDSTILL - vehicule a l'arret
+- POSITION_UNKNOWN - position indisponible/erreur GPS
+- SERVICE_RECOVERED - service redevenu operationnel apres erreur
 
 ### 12.3 Structure JSON du log
 
@@ -778,6 +806,10 @@ Cette section explique ce qu'on garde de la logique existante et ce qu'on ajoute
   - activate
 6. Sender HTTP REST vers backend (telemetry/DTC/position).
 7. Retry + buffer persistant local (si backend indisponible).
+8. Supervision runtime avec:
+  - dedup des evenements techniques par timestamp
+  - retry avec backoff exponentiel
+  - evenement de recovery
 
 ### 13.4 Ce qu'on ajoute pour fiabilite (P1)
 
@@ -788,6 +820,11 @@ Cette section explique ce qu'on garde de la logique existante et ce qu'on ajoute
   - error rate
   - backlog buffer size
 4. Rotation des logs + alertes seuil d'erreurs.
+5. Pipeline GNSS (si GPS disponible):
+  - parse NMEA
+  - conversion vers contrat position
+  - filtre de position significative
+  - etats moving/standstill/unknown
 
 ### 13.5 Ce qu'on ajoute ensuite (P2)
 
@@ -917,3 +954,35 @@ Mode reseau retenu (sans cloud):
 Alternatives rejetees:
 1. Dongle -> Backend direct: rejete (manque de controle, fiabilite et observabilite).
 2. Dependance AutoPi Cloud/MQTT: rejete pour simplifier l'architecture cible et rester en mode local/on-prem.
+
+---
+
+## 15. Complements strictement necessaires avant implementation
+
+Pour respecter la demande "ajouter seulement le necessaire", on garde uniquement les 4 manques bloquants ci-dessous.
+
+### 15.1 Contrat API exact
+
+Figer pour chaque endpoint:
+1. Champs obligatoires de la requete.
+2. Corps de reponse en succes.
+3. Codes erreur minimum: 400, 401, 409, 503.
+
+### 15.2 Politique de buffer persistant
+
+Figer les regles minimales:
+1. Taille max buffer.
+2. Priorite d'envoi: retrying puis pending.
+3. Regle explicite quand buffer plein (mode degrade ou blocage controle).
+
+### 15.3 Regle de temps unique
+
+Figer:
+1. Timestamp unique en UTC ISO-8601.
+2. Synchronisation horloge gateway (NTP).
+
+### 15.4 Version de payload
+
+Figer:
+1. Champ schema_version obligatoire dans chaque message.
+2. Rejet clair des versions non supportees cote backend.
