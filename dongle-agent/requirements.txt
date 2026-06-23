@@ -1,0 +1,4 @@
+# MallouliAuto Dongle Agent - Python Dependencies
+# Installation: pip3 install -r requirements.txt
+
+requests==2.31.0     # HTTP client pour communiquer avec backend

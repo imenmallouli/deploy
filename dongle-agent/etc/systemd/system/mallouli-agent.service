@@ -1,0 +1,35 @@
+[Unit]
+Description=MallouliAuto Dongle Agent
+Documentation=https://mallouliauto.tn
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/opt/mallouli/agent
+
+# Charge la configuration depuis /etc/mallouli/agent.env
+EnvironmentFile=/etc/mallouli/agent.env
+
+# Commande de demarrage
+ExecStart=/usr/bin/python3 /opt/mallouli/agent/main.py
+
+# Redemarrage automatique en cas de crash
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+# Logs separes des logs AutoPi
+StandardOutput=append:/var/log/mallouli/agent.log
+StandardError=append:/var/log/mallouli/agent.err.log
+
+# Securite: pas d'acces a l'internet systemd sauf HTTP/HTTPS
+# (optionnel, activer si votre version systemd le supporte)
+# PrivateTmp=true
+# NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
