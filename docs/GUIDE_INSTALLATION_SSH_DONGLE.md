@@ -510,9 +510,3 @@ sudo journalctl -u mallouli-agent -f
 
 ---
 
-**Questions ?** Consultez la documentation officielle AutoPi:
-- https://docs.autopi.io/developer_guides/local-api-overview/
-- https://docs.autopi.io/getting_started/api/
-- https://docs.autopi.io/developer_guides/how-to-ssh-to-your-device/
-
-Bon déploiement ! 🚀

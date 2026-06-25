@@ -395,6 +395,4 @@ L'agent **NE modifie JAMAIS** :
 
 ---
 
-**✅ Statut**: Tous les fichiers sont prêts pour déploiement !
-
 Voir: [GUIDE_INSTALLATION_SSH_DONGLE.md](GUIDE_INSTALLATION_SSH_DONGLE.md) pour les étapes complètes.

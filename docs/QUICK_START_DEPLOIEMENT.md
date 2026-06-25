@@ -308,16 +308,7 @@ cat /etc/mallouli/agent.env
 | **Permissions insuffisantes** | `Permission denied` | Run avec `sudo systemctl start mallouli-agent` |
 | **Disque plein** | Logs disparaissent | `sudo truncate -s 0 /var/log/mallouli/agent.log` |
 
----
 
-## 📞 SUPPORT
-
-- **Docs AutoPi**: https://docs.autopi.io/
-- **Local API**: https://docs.autopi.io/developer_guides/local-api-overview/
-- **SSH Access**: https://docs.autopi.io/developer_guides/how-to-ssh-to-your-device/
-- **Agent logs**: `sudo journalctl -u mallouli-agent -f`
-
----
 
 ## ✨ RÉSUMÉ
 
@@ -340,5 +331,3 @@ ssh pi@192.168.1.147 "sudo systemctl start mallouli-agent"
 # 5. Vérifier (30 sec)
 ssh pi@192.168.1.147 "sudo systemctl status mallouli-agent"
 ```
-
-**🚀 Agent en production !**
