@@ -13,6 +13,7 @@ load_dotenv(env_path)
 # 1. On cherche d'abord si Render a fourni l'URL globale de production
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+
 # 2. Si DATABASE_URL n'existe pas (sur ton PC en local), on utilise ton localhost
 if not DATABASE_URL:
     POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
@@ -32,7 +33,7 @@ else:
 
 # Créer l'engine SQLAlchemy
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
-
+print("DATABASE_URL =", DATABASE_URL)
 # Créer le SessionLocal pour les transactions
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
