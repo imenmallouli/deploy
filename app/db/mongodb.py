@@ -1,4 +1,5 @@
 import os
+import ssl
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -28,11 +29,16 @@ def get_mongo_client() -> AsyncIOMotorClient:
             mongo_uri = f"mongodb://{MONGO_HOST}:{MONGO_PORT}"
 
     if _client is None:
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
         _client = AsyncIOMotorClient(
             mongo_uri,
             serverSelectionTimeoutMS=5000,
+            tlsCAFile=None,
             tls=True,
-            tlsAllowInvalidCertificates=True
+            tlsAllowInvalidCertificates=True,
+            ssl_context=ssl_context
         )
 
     return _client
@@ -41,3 +47,4 @@ def get_mongo_client() -> AsyncIOMotorClient:
 def get_mongo_db() -> AsyncIOMotorDatabase:
     client = get_mongo_client()
     return client[MONGO_DB]
+
