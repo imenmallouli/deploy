@@ -28,7 +28,12 @@ def get_mongo_client() -> AsyncIOMotorClient:
             mongo_uri = f"mongodb://{MONGO_HOST}:{MONGO_PORT}"
 
     if _client is None:
-        _client = AsyncIOMotorClient(mongo_uri, serverSelectionTimeoutMS=5000)
+        _client = AsyncIOMotorClient(
+            mongo_uri,
+            serverSelectionTimeoutMS=5000,
+            tls=True,
+            tlsAllowInvalidCertificates=True
+        )
 
     return _client
 
