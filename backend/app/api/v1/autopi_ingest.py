@@ -17,12 +17,27 @@ AUTOPI_AUTH_TOKEN = os.getenv("AUTOPI_AUTH_TOKEN", "")
 
 def _check_auth(authorization: str | None):
     if not AUTOPI_AUTH_TOKEN:
+        print("=" * 60)
+        print("DEBUG AUTOPI AUTH")
+        print("❌ AUTOPI_AUTH_TOKEN est vide !")
+        print("=" * 60)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="AUTOPI_AUTH_TOKEN non configuré sur le serveur",
         )
 
     expected = f"Bearer {AUTOPI_AUTH_TOKEN}"
+
+    # ===== DEBUG =====
+    print("=" * 60)
+    print("DEBUG AUTOPI AUTH")
+    print("Authorization reçu :", repr(authorization))
+    print("Expected           :", repr(expected))
+    print("AUTOPI_AUTH_TOKEN  :", repr(AUTOPI_AUTH_TOKEN))
+    print("Authorization == Expected :", authorization == expected)
+    print("=" * 60)
+    # =================
+
     if authorization != expected:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
