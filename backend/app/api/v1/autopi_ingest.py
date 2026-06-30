@@ -9,6 +9,8 @@ from app.models.telemetry import TelemetryMongoModel
 from app.models.dtc import DtcEventModel
 from app.services.dtc_service import DtcService
 from app.services.telemetry_service import TelemetryService
+from typing import Annotated
+from fastapi import Header
 
 router = APIRouter(prefix="/autopi-ingest", tags=["AutoPi Ingest"])
 
@@ -141,7 +143,7 @@ TYPE_HANDLERS = {
 @router.post("")
 async def ingest_autopi_data(
     request: Request,
-    authorization: str | None = Header(default=None),
+    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
 ):
     _check_auth(authorization)
 
