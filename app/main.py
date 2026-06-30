@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import ai, alert, auth, database, dtc, fleet, maintenance, ops, realtime, telemetry, vehicle
+from app.api.v1 import ai, alert, auth, autopi_ingest, database, dtc, fleet, maintenance, ops, realtime, telemetry, vehicle
 # Import les modèles pour enregistrer les tables
 from app.models import alert as alert_model
 from app.models import fleet as fleet_model
@@ -44,6 +44,7 @@ app.include_router(realtime.router, prefix="/api/v1", tags=["Realtime"])
 app.include_router(ai.router, prefix="/api/v1", tags=["AI"])
 app.include_router(maintenance.router, prefix="/api/v1", tags=["Maintenance"])
 app.include_router(ops.router, prefix="/api/v1", tags=["Ops"])
+app.include_router(autopi_ingest.router, prefix="/api/v1", tags=["AutoPi Ingest"])
 
 
 @app.get("/")
