@@ -10,7 +10,7 @@ from app.models.dtc import DtcEventModel
 from app.services.dtc_service import DtcService
 from app.services.telemetry_service import TelemetryService
 from typing import Annotated
-from fastapi import Header
+
 
 router = APIRouter(prefix="/autopi-ingest", tags=["AutoPi Ingest"])
 
@@ -28,19 +28,20 @@ def _check_auth(authorization: str | None):
             detail="AUTOPI_AUTH_TOKEN non configuré sur le serveur",
         )
 
-    expected = f"Bearer {AUTOPI_AUTH_TOKEN}"
+    expected_bearer = f"Bearer {AUTOPI_AUTH_TOKEN}"
+    expected_token = f"token {AUTOPI_AUTH_TOKEN}"
 
     # ===== DEBUG =====
     print("=" * 60)
     print("DEBUG AUTOPI AUTH")
     print("Authorization reçu :", repr(authorization))
-    print("Expected           :", repr(expected))
+    print("Expected Bearer    :", repr(expected_bearer))
+    print("Expected Token     :", repr(expected_token))
     print("AUTOPI_AUTH_TOKEN  :", repr(AUTOPI_AUTH_TOKEN))
-    print("Authorization == Expected :", authorization == expected)
     print("=" * 60)
     # =================
 
-    if authorization != expected:
+    if authorization not in (expected_bearer, expected_token):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token AutoPi invalide",
